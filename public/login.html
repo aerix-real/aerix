@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AERIX | Login</title>
+  <style>
+    :root {
+      --bg-1: #030712;
+      --bg-2: #081120;
+      --card: rgba(8, 15, 28, 0.88);
+      --card-2: rgba(17, 24, 39, 0.92);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --blue: #4f8cff;
+      --cyan: #22d3ee;
+      --green: #22c55e;
+      --red: #ef4444;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(79, 140, 255, 0.22), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.12), transparent 32%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-shell {
+      width: 100%;
+      max-width: 980px;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .login-brand {
+      padding: 48px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(79, 140, 255, 0.2), transparent 28%),
+        linear-gradient(160deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    .brand-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: #dbeafe;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.6);
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 54px);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+    }
+
+    .brand-subtitle {
+      margin: 16px 0 0;
+      max-width: 440px;
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+
+    .brand-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .metric {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .login-panel {
+      padding: 40px 32px;
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .login-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 28px;
+    }
+
+    .login-card h2 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+
+    .login-card p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      height: 52px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--card-2);
+      color: var(--text);
+      padding: 0 16px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .form-input:focus {
+      border-color: rgba(79, 140, 255, 0.8);
+      transform: translateY(-1px);
+    }
+
+    .login-button {
+      width: 100%;
+      height: 54px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(79, 140, 255, 0.24);
+    }
+
+    .login-button:disabled {
+      opacity: 0.7;
+      cursor: wait;
+    }
+
+    .login-feedback {
+      min-height: 22px;
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .login-feedback.error {
+      color: #fca5a5;
+    }
+
+    .login-feedback.success {
+      color: #86efac;
+    }
+
+    .demo-box {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.12);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 880px) {
+      .login-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .brand-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-shell">
+    <section class="login-brand">
+      <div>
+        <div class="brand-chip">
+          <span class="brand-dot"></span>
+          Plataforma online
+        </div>
+
+        <h1 class="brand-title">AERIX<br />Inteligência Operacional</h1>
+        <p class="brand-subtitle">
+          Plataforma com leitura multi-timeframe, motor em tempo real, score operacional
+          e painel premium conectado ao backend institucional.
+        </p>
+      </div>
+
+      <div class="brand-metrics">
+        <div class="metric">
+          <strong>H1 + M15 + M5</strong>
+          <span>Leitura de tendência, confirmação e timing</span>
+        </div>
+        <div class="metric">
+          <strong>IA explicativa</strong>
+          <span>Justificativa clara do sinal gerado</span>
+        </div>
+        <div class="metric">
+          <strong>Tempo real</strong>
+          <span>Atualização viva com engine e dashboard</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card">
+        <h2>Acessar painel</h2>
+        <p>Entre com sua conta para abrir o dashboard em tempo real da AERIX.</p>
+
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label" for="email">Email</label>
+            <input class="form-input" id="email" name="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">Senha</label>
+            <input class="form-input" id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+
+          <button class="login-button" id="loginButton" type="submit">Entrar na AERIX</button>
+          <div class="login-feedback" id="loginFeedback"></div>
+        </form>
+
+        <div class="demo-box">
+          Primeiro acesso: use o admin criado no bootstrap.<br />
+          Exemplo padrão: <strong>admin@aerix.com</strong> / <strong>123456</strong>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/config.js"></script>
+  <script src="/auth.js"></script>
+  <script>
+    const form = document.getElementById("loginForm");
+    const button = document.getElementById("loginButton");
+    const feedback = document.getElementById("loginFeedback");
+
+    if (window.AERIX_AUTH.isAuthenticated()) {
+      window.location.href = "/";
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      feedback.textContent = "Autenticando...";
+      feedback.className = "login-feedback";
+      button.disabled = true;
+
+      try {
+        await window.AERIX_AUTH.login(email, password);
+
+        feedback.textContent = "Login realizado com sucesso. Redirecionando...";
+        feedback.className = "login-feedback success";
+
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 500);
+      } catch (error) {
+        feedback.textContent = error.message || "Falha no login.";
+        feedback.className = "login-feedback error";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

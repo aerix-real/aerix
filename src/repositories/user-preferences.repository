@@ -1,0 +1,116 @@
+const db = require("../config/database");
+
+async function findByUserId(userId) {
+  const result = await db.query(
+    `
+    SELECT
+      id,
+      user_id,
+      trading_mode,
+      preferred_symbols,
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme,
+      updated_at
+    FROM user_preferences
+    WHERE user_id = $1
+    `,
+    [userId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function createDefault(userId) {
+  const result = await db.query(
+    `
+    INSERT INTO user_preferences (
+      user_id,
+      trading_mode,
+      preferred_symbols,
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme
+    )
+    VALUES ($1, 'balanced', '[]'::jsonb, true, true, 'default', 'dark')
+    RETURNING
+      id,
+      user_id,
+      trading_mode,
+      preferred_symbols,
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme,
+      updated_at
+    `,
+    [userId]
+  );
+
+  return result.rows[0];
+}
+
+async function upsertByUserId(userId, payload) {
+  const {
+    trading_mode,
+    preferred_symbols,
+    ai_explanations_enabled,
+    notifications_enabled,
+    panel_layout,
+    theme
+  } = payload;
+
+  const result = await db.query(
+    `
+    INSERT INTO user_preferences (
+      user_id,
+      trading_mode,
+      preferred_symbols,
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme,
+      updated_at
+    )
+    VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+      trading_mode = EXCLUDED.trading_mode,
+      preferred_symbols = EXCLUDED.preferred_symbols,
+      ai_explanations_enabled = EXCLUDED.ai_explanations_enabled,
+      notifications_enabled = EXCLUDED.notifications_enabled,
+      panel_layout = EXCLUDED.panel_layout,
+      theme = EXCLUDED.theme,
+      updated_at = CURRENT_TIMESTAMP
+    RETURNING
+      id,
+      user_id,
+      trading_mode,
+      preferred_symbols,
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme,
+      updated_at
+    `,
+    [
+      userId,
+      trading_mode,
+      JSON.stringify(preferred_symbols || []),
+      ai_explanations_enabled,
+      notifications_enabled,
+      panel_layout,
+      theme
+    ]
+  );
+
+  return result.rows[0];
+}
+
+module.exports = {
+  findByUserId,
+  createDefault,
+  upsertByUserId
+};

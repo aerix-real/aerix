@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS user_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  mode VARCHAR(30) NOT NULL DEFAULT 'equilibrado',
+  preferred_timeframe VARCHAR(20) NOT NULL DEFAULT 'M5',
+  premium_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
