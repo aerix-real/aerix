@@ -8,6 +8,7 @@ require("dotenv").config();
 const routes = require("./routes");
 const { initializeSocket } = require("./websocket/socket");
 const engineRunnerService = require("./services/engine-runner.service");
+const authService = require("./services/auth.service");
 const runtimeConfig = require("./config/runtime");
 
 const app = express();
@@ -68,7 +69,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   console.log("=================================");
   console.log("🚀 AERIX INICIADA");
   console.log("=================================");
@@ -79,6 +80,19 @@ server.listen(PORT, HOST, () => {
   console.log(`🧠 Engine: http://localhost:${PORT}/api/engine`);
   console.log(`⚙ Runtime: http://localhost:${PORT}/api/runtime`);
   console.log("=================================");
+
+  try {
+    const bootstrap = await authService.bootstrapAdmin();
+
+    if (bootstrap?.created) {
+      console.log("👑 Admin bootstrap criado com sucesso.");
+      console.log(`📧 Admin: ${bootstrap.user.email}`);
+    } else {
+      console.log("👑 Admin já existe no banco.");
+    }
+  } catch (error) {
+    console.error("❌ Erro ao criar admin inicial:", error.message || error);
+  }
 
   if (runtimeConfig.AUTO_START_ENGINE) {
     engineRunnerService.start();
