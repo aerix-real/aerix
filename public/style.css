@@ -16,7 +16,6 @@
   --muted-2: #9fb0c9;
 
   --blue: #4da3ff;
-  --blue-2: #68b2ff;
   --purple: #8b5cff;
   --green: #22d39a;
   --red: #ff6b81;
@@ -28,7 +27,6 @@
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 16px;
-  --radius-sm: 12px;
 }
 
 * {
@@ -70,6 +68,8 @@ input {
 .hidden-by-plan {
   display: none !important;
 }
+
+/* APP */
 
 .app-shell {
   width: 100%;
@@ -153,7 +153,6 @@ input {
 .headline {
   font-size: 0.95rem;
   color: var(--text-soft);
-  letter-spacing: 0.01em;
   line-height: 1.4;
 }
 
@@ -218,19 +217,12 @@ input {
 }
 
 @keyframes pulseOnline {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
+  0% { transform: scale(0.95); opacity: 0.8; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
 }
+
+/* LAYOUT */
 
 .main-layout {
   display: grid;
@@ -246,6 +238,18 @@ input {
 .side-panel {
   display: flex;
   flex-direction: column;
+  gap: 18px;
+}
+
+.content-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
   gap: 18px;
 }
 
@@ -281,272 +285,7 @@ input {
   color: var(--text);
 }
 
-.user-panel,
-.premium-panel,
-.mode-panel,
-.market-panel,
-.best-opportunity-panel,
-.ai-panel,
-.trend-panel,
-.chart-panel,
-.metrics-panel,
-.history-panel,
-.ranking-panel,
-.upgrade-panel {
-  padding-bottom: 18px;
-}
-
-.user-box {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 20px 0;
-}
-
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.user-meta strong {
-  font-size: 1rem;
-}
-
-.user-meta span {
-  font-size: 0.84rem;
-  color: var(--muted-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plan-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 16px 20px 0;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-soft);
-}
-
-.plan-badge {
-  min-width: 84px;
-  text-align: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  border: 1px solid transparent;
-}
-
-.plan-badge.free {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-soft);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.plan-badge.premium {
-  background: linear-gradient(135deg, rgba(255, 191, 90, 0.24), rgba(255, 145, 77, 0.18));
-  color: #ffdba5;
-  border-color: rgba(255, 191, 90, 0.25);
-  box-shadow: 0 0 18px rgba(255, 191, 90, 0.12);
-}
-
-.logout-btn,
-.login-btn {
-  width: calc(100% - 40px);
-  margin: 16px 20px 0;
-  height: 48px;
-  border-radius: 16px;
-  font-weight: 700;
-  color: white;
-  background: linear-gradient(135deg, var(--blue), var(--purple));
-  box-shadow: 0 16px 28px rgba(77, 163, 255, 0.18);
-  transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-.logout-btn:hover,
-.login-btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.96;
-}
-
-.login-secondary {
-  width: calc(100% - 40px);
-  margin: 10px 20px 0;
-  height: 42px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-soft);
-  border: 1px solid var(--border);
-  transition: all 0.2s ease;
-}
-
-.login-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateY(-1px);
-}
-
-.premium-status {
-  margin: 16px 20px 0;
-  padding: 14px 16px;
-  border-radius: 18px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--text-soft);
-  border: 1px solid var(--border);
-}
-
-.premium-list {
-  list-style: none;
-  margin: 14px 20px 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-
-.premium-list li {
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.025);
-  color: var(--text-soft);
-  font-size: 0.9rem;
-}
-
-.premium-active .premium-status {
-  background: rgba(255, 191, 90, 0.10);
-  border-color: rgba(255, 191, 90, 0.22);
-  color: #ffd79f;
-}
-
-.mode-switcher {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 16px 20px 0;
-}
-
-.mode-btn {
-  height: 44px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--text-soft);
-  border: 1px solid var(--border);
-  transition: all 0.2s ease;
-}
-
-.mode-btn:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-.mode-btn.active {
-  background: linear-gradient(135deg, rgba(77, 163, 255, 0.18), rgba(139, 92, 255, 0.16));
-  color: white;
-  border-color: rgba(77, 163, 255, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-}
-
-.mode-description {
-  margin: 14px 20px 0;
-  color: var(--text-soft);
-  line-height: 1.55;
-  font-size: 0.92rem;
-}
-
-.market-status-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 16px 20px 0;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.market-pill {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  flex-shrink: 0;
-}
-
-.market-pill.open {
-  background: var(--green);
-  box-shadow: 0 0 10px rgba(34, 211, 154, 0.7);
-}
-
-.market-pill.closed {
-  background: var(--red);
-  box-shadow: 0 0 10px rgba(255, 107, 129, 0.7);
-}
-
-.mini-info-grid,
-.metrics-grid,
-.stats-grid,
-.signal-meta-grid,
-.analytics-grid,
-.bottom-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.mini-info-grid {
-  padding: 14px 20px 0;
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.mini-info-card,
-.metric-card,
-.signal-meta-card,
-.stat-card {
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-  min-width: 0;
-}
-
-.mini-info-card span,
-.metric-card span,
-.signal-meta-card span,
-.stat-card span {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-bottom: 8px;
-  letter-spacing: 0.02em;
-}
-
-.mini-info-card strong,
-.metric-card strong,
-.signal-meta-card strong,
-.stat-card strong {
-  display: block;
-  font-size: 1rem;
-  color: var(--text);
-}
-
-.content-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.hero-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
-  gap: 18px;
-}
+/* SIGNAL */
 
 .signal-card {
   min-height: 100%;
@@ -628,10 +367,6 @@ input {
   transition: background 0.25s ease, transform 0.25s ease;
 }
 
-.signal-card.flash .confidence-ring {
-  transform: scale(1.02);
-}
-
 .confidence-core {
   width: 188px;
   height: 188px;
@@ -659,7 +394,79 @@ input {
 }
 
 .signal-meta-grid {
+  display: grid;
   grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.signal-meta-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+}
+
+.signal-meta-card span {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+
+.signal-meta-card strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.signal-meta-card.highlight {
+  border-color: rgba(77, 163, 255, 0.38);
+  background:
+    radial-gradient(circle at top, rgba(77, 163, 255, 0.12), transparent 55%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 0 0 1px rgba(77, 163, 255, 0.08),
+    0 0 18px rgba(77, 163, 255, 0.12);
+}
+
+/* EXECUTION BADGE */
+
+.execution-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-soft);
+}
+
+.execution-badge.execute {
+  background: rgba(34,211,154,0.16);
+  color: #9bf2cf;
+  border-color: rgba(34,211,154,0.35);
+  box-shadow: 0 0 24px rgba(34,211,154,0.28);
+}
+
+.execution-badge.wait {
+  background: rgba(255,191,90,0.14);
+  color: #ffd79f;
+  border-color: rgba(255,191,90,0.28);
+}
+
+/* RIGHT CARDS */
+
+.best-opportunity-panel,
+.ai-panel {
+  padding-bottom: 18px;
 }
 
 .best-opportunity-box {
@@ -674,22 +481,19 @@ input {
   align-items: center;
 }
 
-.best-opportunity-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.best-opportunity-main strong {
+.best-opportunity-box strong {
+  display: block;
   font-size: 1.25rem;
 }
 
-.best-opportunity-main span {
+.best-opportunity-box span {
+  display: block;
+  margin-top: 6px;
   color: var(--muted-2);
   line-height: 1.5;
 }
 
-.best-opportunity-score {
+#bestScore {
   min-width: 82px;
   height: 82px;
   border-radius: 22px;
@@ -713,210 +517,224 @@ input {
   gap: 12px;
 }
 
-.ai-explanation {
+.priority-wrap span {
+  color: var(--muted);
+}
+
+.priority-wrap strong {
+  color: var(--text);
+}
+
+.ai-box {
   margin: 16px 20px 0;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.ai-status {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cfe3ff;
+  background: rgba(77, 163, 255, 0.11);
+  border-color: rgba(77, 163, 255, 0.2);
+}
+
+.ai-status[data-status="approved"] {
+  color: #9bf2cf;
+  background: rgba(34, 211, 154, 0.11);
+  border-color: rgba(34, 211, 154, 0.2);
+}
+
+.ai-status[data-status="waiting"] {
+  color: #ffd79f;
+  background: rgba(255, 191, 90, 0.1);
+  border-color: rgba(255, 191, 90, 0.18);
+}
+
+.ai-status[data-status="blocked"] {
+  color: #ffb7c3;
+  background: rgba(255, 107, 129, 0.11);
+  border-color: rgba(255, 107, 129, 0.2);
+}
+
+.ai-explanation {
+  margin: 0;
   color: var(--text-soft);
   line-height: 1.7;
   font-size: 0.96rem;
 }
 
-.analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.trend-top {
+.ai-tags {
   display: flex;
-  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.ai-tags span {
+  display: inline-flex;
   align-items: center;
-  margin: 16px 20px 0;
-}
-
-.trend-top strong {
-  font-size: 1.18rem;
-}
-
-.trend-top span {
+  min-height: 32px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
   color: var(--text-soft);
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
-.trend-bar {
-  height: 12px;
-  margin: 16px 20px 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-.trend-bar-fill {
-  width: 0%;
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--blue), var(--green));
-  transition: width 0.35s ease;
-}
-
-.trend-bias {
-  margin: 12px 20px 0;
-  color: var(--muted-2);
-  line-height: 1.5;
-}
-
-.chart-panel {
-  padding-bottom: 14px;
-}
-
-#miniChart {
-  display: block;
-  width: calc(100% - 40px);
-  margin: 18px 20px 0;
-}
-
-.metrics-grid {
-  padding: 16px 20px 0;
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.stats-grid {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-}
-
-.stat-card {
-  min-height: 110px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.bottom-grid {
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-}
-
-.history-list,
-.ranking-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 0;
-}
-
-.history-item,
-.ranking-item {
-  padding: 15px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.history-item {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 100px 110px 90px;
-  gap: 12px;
-  align-items: center;
-}
-
-.history-time,
-.history-score,
-.history-direction {
-  color: var(--text-soft);
-}
-
-.history-asset strong {
-  display: block;
-  font-size: 0.96rem;
-}
-
-.history-asset span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted-2);
-  font-size: 0.84rem;
-}
-
-.result {
-  min-width: 78px;
-  text-align: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 0.78rem;
-}
-
-.result.win {
-  background: rgba(34, 211, 154, 0.12);
+.ai-tags span[data-risk="baixo"] {
   color: #9bf2cf;
-  border: 1px solid rgba(34, 211, 154, 0.18);
+  background: rgba(34, 211, 154, 0.1);
+  border-color: rgba(34, 211, 154, 0.18);
 }
 
-.result.loss {
-  background: rgba(255, 107, 129, 0.12);
+.ai-tags span[data-risk="médio"] {
+  color: #ffd79f;
+  background: rgba(255, 191, 90, 0.1);
+  border-color: rgba(255, 191, 90, 0.18);
+}
+
+.ai-tags span[data-risk="alto"] {
   color: #ffb7c3;
-  border: 1px solid rgba(255, 107, 129, 0.18);
+  background: rgba(255, 107, 129, 0.1);
+  border-color: rgba(255, 107, 129, 0.18);
 }
 
-.result.pending {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-soft);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* SIGNAL STATES */
+
+.signal-card[data-signal="CALL"] {
+  border-color: rgba(34, 211, 154, 0.26);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 0 42px rgba(34, 211, 154, 0.12);
 }
 
-.ranking-item {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 72px;
-  gap: 14px;
-  align-items: center;
+.signal-card[data-signal="PUT"] {
+  border-color: rgba(255, 107, 129, 0.25);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 0 42px rgba(255, 107, 129, 0.12);
 }
 
-.ranking-index {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-soft);
-  font-weight: 900;
+.signal-card.flash {
+  animation: hedgeFundFlash 0.55s ease;
 }
 
-.ranking-main strong {
-  display: block;
-  font-size: 0.95rem;
+@keyframes hedgeFundFlash {
+  0% { transform: scale(1); }
+  38% { transform: scale(1.012); }
+  100% { transform: scale(1); }
 }
 
-.ranking-main span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted-2);
-  font-size: 0.84rem;
+/* COMMERCIAL SIGNAL */
+
+.signal-card.commercial-signal {
+  animation: commercialSignalPulse 1.6s ease;
+  border-color: rgba(77, 163, 255, 0.45);
+  box-shadow:
+    0 0 52px rgba(77, 163, 255, 0.22),
+    0 24px 80px rgba(0, 0, 0, 0.45);
 }
 
-.ranking-score {
-  text-align: right;
-  font-weight: 900;
-  color: var(--text);
+.signal-card.execution-ready {
+  border-color: rgba(34, 211, 154, 0.5);
+  box-shadow:
+    0 0 65px rgba(34, 211, 154, 0.28),
+    0 24px 90px rgba(0, 0, 0, 0.5);
 }
 
-.history-empty,
-.ranking-empty,
-.upgrade-copy {
-  margin: 16px 20px 0;
-  color: var(--muted-2);
-  line-height: 1.6;
+.signal-card.execution-wait {
+  border-color: rgba(255, 191, 90, 0.4);
+  box-shadow:
+    0 0 48px rgba(255, 191, 90, 0.16),
+    0 24px 80px rgba(0, 0, 0, 0.42);
 }
 
-.upgrade-copy strong {
-  display: block;
-  color: var(--text);
-  margin-bottom: 10px;
+@keyframes commercialSignalPulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  40% {
+    transform: scale(1.012);
+    filter: brightness(1.16);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
 }
 
-.locked {
-  opacity: 0.55;
-  filter: saturate(0.8);
+/* AUTO EXECUTION */
+
+.signal-card.flash-execute {
+  animation: autoExecutionFlash 1.5s ease;
+  border-color: rgba(34, 211, 154, 0.55);
+  box-shadow:
+    0 0 70px rgba(34, 211, 154, 0.32),
+    0 24px 90px rgba(0, 0, 0, 0.5);
 }
+
+.signal-card.flash-execute .confidence-ring {
+  transform: scale(1.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 60px rgba(34, 211, 154, 0.35);
+}
+
+@keyframes autoExecutionFlash {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  35% {
+    transform: scale(1.018);
+    filter: brightness(1.22);
+  }
+
+  70% {
+    transform: scale(1.008);
+    filter: brightness(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+body.execution-flash {
+  animation: execFlash 1.2s ease;
+}
+
+@keyframes execFlash {
+  0% {
+    background-color: rgba(34,211,154,0.08);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* LOGIN */
 
 .login-overlay {
   position: fixed;
@@ -1033,39 +851,23 @@ input {
   box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.10);
 }
 
-.login-actions {
-  display: grid;
+.login-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 16px;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  box-shadow: 0 16px 28px rgba(77, 163, 255, 0.18);
+  transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
-.login-note {
-  margin-top: 4px;
-  color: var(--muted-2);
-  text-align: center;
-  font-size: 0.84rem;
+.login-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.96;
 }
 
-body.plan-premium .brand-mark,
-body.plan-premium .user-avatar {
-  background: linear-gradient(135deg, #ffbf5a, #ff8a5b 60%, #8b5cff);
-}
-
-body.mode-conservador .headline-wrap {
-  box-shadow: 0 12px 28px rgba(77, 163, 255, 0.08);
-}
-
-body.mode-agressivo .headline-wrap {
-  box-shadow: 0 12px 28px rgba(255, 107, 129, 0.08);
-}
-
-@media (max-width: 1380px) {
-  .analytics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .bottom-grid {
-    grid-template-columns: 1fr;
-  }
-}
+/* RESPONSIVE */
 
 @media (max-width: 1180px) {
   .main-layout {
@@ -1082,10 +884,6 @@ body.mode-agressivo .headline-wrap {
 
   .hero-grid {
     grid-template-columns: 1fr;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .signal-meta-grid {
@@ -1126,18 +924,8 @@ body.mode-agressivo .headline-wrap {
     align-items: stretch;
   }
 
-  .stats-grid,
-  .mini-info-grid,
-  .metrics-grid {
+  .signal-meta-grid {
     grid-template-columns: 1fr;
-  }
-
-  .history-item {
-    grid-template-columns: 1fr;
-  }
-
-  .ranking-item {
-    grid-template-columns: 46px 1fr 72px;
   }
 
   .confidence-ring {
@@ -1153,23 +941,13 @@ body.mode-agressivo .headline-wrap {
   .confidence-core strong {
     font-size: 2rem;
   }
-}
-
-@media (max-width: 560px) {
-  .signal-meta-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .mode-switcher {
-    grid-template-columns: 1fr;
-  }
 
   .best-opportunity-box {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .best-opportunity-score {
+  #bestScore {
     width: 100%;
     height: 62px;
     border-radius: 18px;
@@ -1179,379 +957,14 @@ body.mode-agressivo .headline-wrap {
     flex-direction: column;
     align-items: flex-start;
   }
+}
 
+@media (max-width: 560px) {
   .login-box {
     padding: 22px 18px;
   }
 
   .auth-tabs {
     grid-template-columns: 1fr;
-  }
-}
-
-/* =========================================================
-   AERIX HEDGE FUND UI — VERSÃO EQUILIBRADA
-   ========================================================= */
-
-.signal-meta-card.highlight {
-  border-color: rgba(77, 163, 255, 0.38);
-  background:
-    radial-gradient(circle at top, rgba(77, 163, 255, 0.12), transparent 55%),
-    rgba(255, 255, 255, 0.035);
-  box-shadow:
-    inset 0 0 0 1px rgba(77, 163, 255, 0.08),
-    0 0 18px rgba(77, 163, 255, 0.12);
-}
-
-.signal-card[data-signal="CALL"] {
-  border-color: rgba(34, 211, 154, 0.26);
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.38),
-    0 0 42px rgba(34, 211, 154, 0.12);
-}
-
-.signal-card[data-signal="PUT"] {
-  border-color: rgba(255, 107, 129, 0.25);
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.38),
-    0 0 42px rgba(255, 107, 129, 0.12);
-}
-
-.signal-card[data-signal="WAIT"] {
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.signal-card.flash {
-  animation: hedgeFundFlash 0.55s ease;
-}
-
-@keyframes hedgeFundFlash {
-  0% {
-    transform: scale(1);
-  }
-
-  38% {
-    transform: scale(1.012);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.signal-card.signal-blocked {
-  filter: saturate(0.92);
-}
-
-.signal-card[data-signal="CALL"] .confidence-ring {
-  background: conic-gradient(
-    var(--green) 0deg,
-    var(--green) 260deg,
-    rgba(255, 255, 255, 0.08) 260deg
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 14px 46px rgba(34, 211, 154, 0.16);
-}
-
-.signal-card[data-signal="PUT"] .confidence-ring {
-  background: conic-gradient(
-    var(--red) 0deg,
-    var(--red) 260deg,
-    rgba(255, 255, 255, 0.08) 260deg
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 14px 46px rgba(255, 107, 129, 0.14);
-}
-
-.signal-card[data-signal="WAIT"] .confidence-ring {
-  background: conic-gradient(
-    var(--blue) 0deg,
-    var(--blue) 120deg,
-    rgba(255, 255, 255, 0.08) 120deg
-  );
-}
-
-.ai-box {
-  margin: 16px 20px 0;
-  padding: 16px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background:
-    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 42%),
-    rgba(255, 255, 255, 0.03);
-}
-
-.ai-status {
-  width: fit-content;
-  max-width: 100%;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.ai-status[data-status="approved"] {
-  color: #9bf2cf;
-  background: rgba(34, 211, 154, 0.11);
-  border-color: rgba(34, 211, 154, 0.2);
-}
-
-.ai-status[data-status="waiting"] {
-  color: #cfe3ff;
-  background: rgba(77, 163, 255, 0.11);
-  border-color: rgba(77, 163, 255, 0.2);
-}
-
-.ai-status[data-status="blocked"] {
-  color: #ffb7c3;
-  background: rgba(255, 107, 129, 0.11);
-  border-color: rgba(255, 107, 129, 0.2);
-}
-
-.ai-box .ai-explanation {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.7;
-  font-size: 0.96rem;
-}
-
-.ai-tags {
-  display: flex;
-  gap: 10px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-
-.ai-tags span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 7px 11px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  color: var(--text-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.ai-tags span[data-risk="baixo"] {
-  color: #9bf2cf;
-  background: rgba(34, 211, 154, 0.1);
-  border-color: rgba(34, 211, 154, 0.18);
-}
-
-.ai-tags span[data-risk="médio"] {
-  color: #ffd79f;
-  background: rgba(255, 191, 90, 0.1);
-  border-color: rgba(255, 191, 90, 0.18);
-}
-
-.ai-tags span[data-risk="alto"] {
-  color: #ffb7c3;
-  background: rgba(255, 107, 129, 0.1);
-  border-color: rgba(255, 107, 129, 0.18);
-}
-
-/* =========================================================
-   AERIX HEDGE FUND EXTREME MODE
-   ========================================================= */
-
-.signal-card.extreme-ready {
-  border-color: rgba(34, 211, 154, 0.42);
-  box-shadow:
-    0 0 55px rgba(34, 211, 154, 0.18),
-    0 24px 80px rgba(0, 0, 0, 0.45);
-}
-
-.signal-card.extreme-danger {
-  border-color: rgba(255, 107, 129, 0.38);
-  box-shadow:
-    0 0 55px rgba(255, 107, 129, 0.18),
-    0 24px 80px rgba(0, 0, 0, 0.45);
-}
-
-.signal-card.extreme-wait {
-  opacity: 0.92;
-}
-
-.signal-card.sniper-window {
-  animation: sniperPulse 1s infinite ease-in-out;
-}
-
-@keyframes sniperPulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 40px rgba(77, 163, 255, 0.12);
-  }
-
-  50% {
-    transform: scale(1.015);
-    box-shadow: 0 0 70px rgba(34, 211, 154, 0.24);
-  }
-}
-
-.signal-meta-card.sniper-hot {
-  border-color: rgba(34, 211, 154, 0.45);
-  background: rgba(34, 211, 154, 0.09);
-}
-
-.signal-meta-card.sniper-danger {
-  border-color: rgba(255, 191, 90, 0.45);
-  background: rgba(255, 191, 90, 0.08);
-}
-
-.ai-status.extreme-approved {
-  color: #9bf2cf;
-  background: rgba(34, 211, 154, 0.14);
-  border-color: rgba(34, 211, 154, 0.3);
-}
-
-.ai-status.extreme-blocked {
-  color: #ffb7c3;
-  background: rgba(255, 107, 129, 0.14);
-  border-color: rgba(255, 107, 129, 0.3);
-}
-
-.ai-status.extreme-sniper {
-  color: #d9f7ff;
-  background: rgba(77, 163, 255, 0.16);
-  border-color: rgba(77, 163, 255, 0.35);
-  animation: sniperTextPulse 1s infinite ease-in-out;
-}
-
-@keyframes sniperTextPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.72; }
-}
-
-/* =========================================================
-   AERIX AUTO EXECUTION — ENTRADA AUTOMÁTICA
-   ========================================================= */
-
-.signal-card.flash-execute {
-  animation: autoExecutionFlash 1.5s ease;
-  border-color: rgba(34, 211, 154, 0.55);
-  box-shadow:
-    0 0 70px rgba(34, 211, 154, 0.32),
-    0 24px 90px rgba(0, 0, 0, 0.5);
-}
-
-.signal-card.flash-execute .confidence-ring {
-  transform: scale(1.04);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 0 60px rgba(34, 211, 154, 0.35);
-}
-
-@keyframes autoExecutionFlash {
-  0% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-
-  35% {
-    transform: scale(1.018);
-    filter: brightness(1.22);
-  }
-
-  70% {
-    transform: scale(1.008);
-    filter: brightness(1.08);
-  }
-
-  100% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-}
-
-/* =========================================================
-   AERIX AUTO EXECUTION — ENTRADA AUTOMÁTICA
-   ========================================================= */
-
-.signal-card.flash-execute {
-  animation: autoExecutionFlash 1.5s ease;
-  border-color: rgba(34, 211, 154, 0.55);
-  box-shadow:
-    0 0 70px rgba(34, 211, 154, 0.32),
-    0 24px 90px rgba(0, 0, 0, 0.5);
-}
-
-.signal-card.flash-execute .confidence-ring {
-  transform: scale(1.04);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 0 60px rgba(34, 211, 154, 0.35);
-}
-
-@keyframes autoExecutionFlash {
-  0% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-
-  35% {
-    transform: scale(1.018);
-    filter: brightness(1.22);
-  }
-
-  70% {
-    transform: scale(1.008);
-    filter: brightness(1.08);
-  }
-
-  100% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-}
-
-/* =========================================================
-   AERIX COMMERCIAL SIGNAL — MODO COMERCIAL REAL
-   ========================================================= */
-
-.signal-card.commercial-signal {
-  animation: commercialSignalPulse 1.6s ease;
-  border-color: rgba(77, 163, 255, 0.45);
-  box-shadow:
-    0 0 52px rgba(77, 163, 255, 0.22),
-    0 24px 80px rgba(0, 0, 0, 0.45);
-}
-
-.signal-card.execution-ready {
-  border-color: rgba(34, 211, 154, 0.5);
-  box-shadow:
-    0 0 65px rgba(34, 211, 154, 0.28),
-    0 24px 90px rgba(0, 0, 0, 0.5);
-}
-
-.signal-card.execution-wait {
-  border-color: rgba(255, 191, 90, 0.4);
-  box-shadow:
-    0 0 48px rgba(255, 191, 90, 0.16),
-    0 24px 80px rgba(0, 0, 0, 0.42);
-}
-
-@keyframes commercialSignalPulse {
-  0% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-
-  40% {
-    transform: scale(1.012);
-    filter: brightness(1.16);
-  }
-
-  100% {
-    transform: scale(1);
-    filter: brightness(1);
   }
 }

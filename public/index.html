@@ -6,9 +6,10 @@
   <title>AERIX</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
+
 <body class="mode-equilibrado plan-free">
 
-  <!-- LOGIN (inalterado) -->
+  <!-- LOGIN -->
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
       <div class="login-brand">
@@ -28,12 +29,12 @@
 
       <form id="loginForm" class="login-form">
         <div class="field">
-          <label for="loginUser">E-mail</label>
+          <label>E-mail</label>
           <input id="loginUser" type="email" placeholder="Digite seu e-mail" />
         </div>
 
         <div class="field">
-          <label for="loginPass">Senha</label>
+          <label>Senha</label>
           <input id="loginPass" type="password" placeholder="Digite sua senha" />
         </div>
 
@@ -47,6 +48,7 @@
     <!-- TOPO -->
     <header class="topbar">
       <div class="topbar-left">
+
         <div class="brand">
           <div class="brand-mark">A</div>
           <div class="brand-copy">
@@ -56,10 +58,11 @@
         </div>
 
         <div class="headline-wrap">
-          <div class="headline">
+          <div class="headline" id="headlineText">
             Fluxo operacional em tempo real • Modo equilibrado
           </div>
         </div>
+
       </div>
 
       <div class="topbar-right">
@@ -74,18 +77,20 @@
 
     <main class="main-layout">
 
-      <!-- SIDEBAR (inalterado) -->
+      <!-- SIDEBAR -->
       <aside class="side-panel"></aside>
 
       <!-- CONTEÚDO -->
       <section class="content-panel">
 
-        <!-- HERO -->
         <section class="hero-grid">
 
-          <!-- SINAL PRINCIPAL -->
+          <!-- 🔥 SINAL PRINCIPAL -->
           <div class="signal-column">
             <div class="signal-card panel" id="signalCard">
+
+              <!-- 🔥 NOVO BADGE -->
+              <div class="execution-badge" id="executionBadge">STANDBY</div>
 
               <div class="signal-top">
                 <div class="signal-mode" id="signalMode">STANDBY</div>
@@ -98,7 +103,7 @@
               </div>
 
               <div class="signal-center">
-                <div class="confidence-ring">
+                <div class="confidence-ring" id="confidenceRing">
                   <div class="confidence-core">
                     <span>Confiança</span>
                     <strong id="signalConfidence">0%</strong>
@@ -118,7 +123,6 @@
                   <strong id="signalExpiry">--</strong>
                 </div>
 
-                <!-- 🔥 AGORA É TIMING -->
                 <div class="signal-meta-card highlight">
                   <span>Timing</span>
                   <strong id="signalCountdown">--</strong>
@@ -133,9 +137,10 @@
             </div>
           </div>
 
-          <!-- COLUNA DIREITA -->
+          <!-- 🔥 COLUNA DIREITA -->
           <div class="info-column">
 
+            <!-- MELHOR OPORTUNIDADE -->
             <div class="panel best-opportunity-panel">
               <div class="panel-header">
                 <h3>Melhor oportunidade</h3>
@@ -155,7 +160,7 @@
               </div>
             </div>
 
-            <!-- 🔥 NOVA IA -->
+            <!-- 🔥 IA PROFISSIONAL -->
             <div class="panel ai-panel">
               <div class="panel-header">
                 <h3>Leitura IA</h3>
