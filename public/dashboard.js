@@ -130,17 +130,74 @@
   }
 
   function updateHeroVisual(bestOpportunity, engineRunning) {
+    const signalCard = qs("signalCard");
     const heroCard = qs("heroCard");
     const heroSignal = bestOpportunity?.signal || "WAIT";
+    const statusClass = buildHeroStatusClass(heroSignal);
+
+    if (signalCard) {
+      signalCard.dataset.signal = statusClass;
+      signalCard.classList.toggle("hero-paused", !engineRunning);
+    }
 
     if (heroCard) {
-      heroCard.dataset.signal = buildHeroStatusClass(heroSignal);
+      heroCard.dataset.signal = statusClass;
       heroCard.classList.toggle("hero-paused", !engineRunning);
     }
 
     const subtitle = qs("heroSubtitle");
     if (subtitle) {
       subtitle.textContent = buildHeroSubtitle(bestOpportunity, engineRunning);
+    }
+  }
+
+  function applyHedgeFundVisual(best, engineRunning) {
+    const card = qs("signalCard");
+    const signal = best?.signal || "WAIT";
+    const confidence = Number(best?.confidence || 0);
+
+    if (card) {
+      card.dataset.signal = buildHeroStatusClass(signal);
+
+      card.classList.remove("flash");
+      void card.offsetWidth;
+      card.classList.add("flash");
+
+      card.classList.toggle("signal-blocked", !engineRunning || signal === "WAIT");
+    }
+
+    const aiStatus = qs("aiStatus");
+    const aiRisk = qs("aiRisk");
+    const aiConfidence = qs("aiConfidence");
+
+    if (aiStatus) {
+      if (!engineRunning) {
+        aiStatus.textContent = "Engine parada";
+        aiStatus.dataset.status = "blocked";
+      } else if (!best) {
+        aiStatus.textContent = "Monitorando mercado";
+        aiStatus.dataset.status = "waiting";
+      } else if (signal === "WAIT") {
+        aiStatus.textContent = "Aguardando confirmação";
+        aiStatus.dataset.status = "waiting";
+      } else {
+        aiStatus.textContent = "Entrada validada pela IA";
+        aiStatus.dataset.status = "approved";
+      }
+    }
+
+    if (aiRisk) {
+      let risk = "ALTO";
+
+      if (confidence >= 85) risk = "BAIXO";
+      else if (confidence >= 75) risk = "MÉDIO";
+
+      aiRisk.textContent = "Risco: " + risk;
+      aiRisk.dataset.risk = risk.toLowerCase();
+    }
+
+    if (aiConfidence) {
+      aiConfidence.textContent = "Confiança: " + formatConfidence(confidence);
     }
   }
 
@@ -155,11 +212,20 @@
 
     setText("liveStatusText", engineRunning ? "Tempo real" : "Engine parada");
     setText("marketStatusText", buildMarketStatus(best, engineRunning));
+
     setText("heroSignal", formatSignalLabel(best?.signal));
     setText("heroSymbol", best?.symbol || "SEM ATIVO");
     setText("heroConfidence", formatConfidence(best?.confidence || 0));
     setText("heroPriority", buildPriority(best?.confidence || 0));
     setText("heroMode", userPreferences.mode_config?.label || "Equilibrado");
+
+    setText("signalAsset", best?.symbol || "SEM ATIVO");
+    setText("signalDirection", formatSignalLabel(best?.signal));
+    setText("signalConfidence", formatConfidence(best?.confidence || 0));
+    setText("signalScore", formatConfidence(best?.confidence || 0));
+    setText("signalTime", formatTime(connection.lastCycleAt));
+    setText("signalMode", engineRunning ? "TEMPO REAL" : "STANDBY");
+
     setText("lastCycleAt", formatTime(connection.lastCycleAt));
     setText(
       "rateLimitInfo",
@@ -176,7 +242,7 @@
     setHTML("rankingList", renderRanking(data.ranking || []));
     setHTML("historyList", renderHistory(data.history || []));
 
-    const explanationEl = qs("signalExplanation");
+    const explanationEl = qs("signalExplanation") || qs("aiExplanation");
     if (explanationEl) {
       explanationEl.textContent =
         best?.explanation ||
@@ -191,6 +257,7 @@
     }
 
     updateHeroVisual(best, engineRunning);
+    applyHedgeFundVisual(best, engineRunning);
   }
 
   async function loadDashboard() {
@@ -198,6 +265,108 @@
       method: "GET"
     });
 
+function applyExtremeMode(best, engineRunning) {
+  const card = qs("signalCard");
+  const countdownEl = qs("signalCountdown");
+  const aiStatus = qs("aiStatus");
+  const aiRisk = qs("aiRisk");
+  const aiConfidence = qs("aiConfidence");
+  const directionEl = qs("signalDirection");
+
+  const signal = best?.signal || "WAIT";
+  const confidence = Number(best?.confidence || 0);
+
+  const now = new Date();
+  const seconds = now.getSeconds();
+  const secondsToFlip = 60 - seconds;
+
+  const isRealSignal = signal === "CALL" || signal === "PUT";
+  const isHighConfidence = confidence >= 82;
+  const isSniperWindow = secondsToFlip <= 10 || secondsToFlip >= 58;
+  const isApproved = engineRunning && isRealSignal && isHighConfidence;
+
+  if (countdownEl) {
+    countdownEl.textContent = `${secondsToFlip}s`;
+
+    const metaCard = countdownEl.closest(".signal-meta-card");
+    if (metaCard) {
+      metaCard.classList.remove("sniper-hot", "sniper-danger");
+
+      if (isSniperWindow && isApproved) {
+        metaCard.classList.add("sniper-hot");
+      } else if (secondsToFlip <= 15) {
+        metaCard.classList.add("sniper-danger");
+      }
+    }
+  }
+
+  if (directionEl) {
+    directionEl.classList.remove("buy", "sell", "neutral");
+
+    if (signal === "CALL") directionEl.classList.add("buy");
+    else if (signal === "PUT") directionEl.classList.add("sell");
+    else directionEl.classList.add("neutral");
+  }
+
+  if (card) {
+    card.classList.remove(
+      "extreme-ready",
+      "extreme-danger",
+      "extreme-wait",
+      "sniper-window"
+    );
+
+    if (!engineRunning || signal === "WAIT") {
+      card.classList.add("extreme-wait");
+    } else if (isApproved) {
+      card.classList.add("extreme-ready");
+    } else {
+      card.classList.add("extreme-danger");
+    }
+
+    if (isSniperWindow && isApproved) {
+      card.classList.add("sniper-window");
+    }
+  }
+
+  if (aiStatus) {
+    aiStatus.classList.remove(
+      "extreme-approved",
+      "extreme-blocked",
+      "extreme-sniper"
+    );
+
+    if (!engineRunning) {
+      aiStatus.textContent = "IA bloqueada: engine parada";
+      aiStatus.classList.add("extreme-blocked");
+    } else if (!isRealSignal) {
+      aiStatus.textContent = "IA aguardando confluência real";
+      aiStatus.classList.add("extreme-blocked");
+    } else if (!isHighConfidence) {
+      aiStatus.textContent = "IA bloqueou: score abaixo do ideal";
+      aiStatus.classList.add("extreme-blocked");
+    } else if (isSniperWindow) {
+      aiStatus.textContent = "SNIPER WINDOW: entrada no timing ideal";
+      aiStatus.classList.add("extreme-sniper");
+    } else {
+      aiStatus.textContent = "Entrada validada pela IA";
+      aiStatus.classList.add("extreme-approved");
+    }
+  }
+
+  if (aiRisk) {
+    let risk = "ALTO";
+    if (confidence >= 88) risk = "BAIXO";
+    else if (confidence >= 78) risk = "MÉDIO";
+
+    aiRisk.textContent = "Risco: " + risk;
+    aiRisk.dataset.risk = risk.toLowerCase();
+  }
+
+  if (aiConfidence) {
+    aiConfidence.textContent = "Confiança: " + formatConfidence(confidence);
+  }
+}
     applyDashboard(result.data);
     return result.data;
   }

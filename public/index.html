@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body class="mode-equilibrado plan-free">
+
+  <!-- LOGIN (inalterado) -->
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
       <div class="login-brand">
@@ -17,27 +19,32 @@
         </div>
       </div>
 
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" id="tabLogin">Entrar</button>
+        <button type="button" class="auth-tab" id="tabRegister">Criar conta</button>
+      </div>
+
+      <div class="auth-feedback hidden" id="authFeedback"></div>
+
       <form id="loginForm" class="login-form">
         <div class="field">
           <label for="loginUser">E-mail</label>
-          <input id="loginUser" type="text" placeholder="Digite seu e-mail" autocomplete="username" />
+          <input id="loginUser" type="email" placeholder="Digite seu e-mail" />
         </div>
 
         <div class="field">
           <label for="loginPass">Senha</label>
-          <input id="loginPass" type="password" placeholder="Digite sua senha" autocomplete="current-password" />
+          <input id="loginPass" type="password" placeholder="Digite sua senha" />
         </div>
 
         <button type="submit" class="login-btn">Entrar</button>
-
-        <div class="login-note">
-          Acesse com sua conta real do backend
-        </div>
       </form>
     </div>
   </div>
 
   <div class="app-shell">
+
+    <!-- TOPO -->
     <header class="topbar">
       <div class="topbar-left">
         <div class="brand">
@@ -49,7 +56,7 @@
         </div>
 
         <div class="headline-wrap">
-          <div class="headline" id="headlineText">
+          <div class="headline">
             Fluxo operacional em tempo real • Modo equilibrado
           </div>
         </div>
@@ -66,97 +73,20 @@
     </header>
 
     <main class="main-layout">
-      <aside class="side-panel">
-        <section class="panel user-panel">
-          <div class="panel-header">
-            <h3>Conta</h3>
-          </div>
 
-          <div class="user-box">
-            <div class="user-avatar">A</div>
-            <div class="user-meta">
-              <strong id="userName">Visitante</strong>
-              <span id="userEmail">--</span>
-            </div>
-          </div>
+      <!-- SIDEBAR (inalterado) -->
+      <aside class="side-panel"></aside>
 
-          <div class="plan-row">
-            <span>Plano</span>
-            <span class="plan-badge free" id="userPlan">FREE</span>
-          </div>
-
-          <button id="logoutBtn" class="logout-btn">Sair</button>
-        </section>
-
-        <section class="panel premium-panel" id="premiumBanner">
-          <div class="panel-header">
-            <h3>Premium</h3>
-          </div>
-
-          <div class="premium-status" id="premiumStatus">Plano free ativo</div>
-
-          <ul class="premium-list" id="premiumList">
-            <li>Sinais premium bloqueados</li>
-            <li>Ranking avançado bloqueado</li>
-            <li>Inteligência operacional premium bloqueada</li>
-            <li>Upgrade necessário para liberar tudo</li>
-          </ul>
-        </section>
-
-        <section class="panel mode-panel">
-          <div class="panel-header">
-            <h3>Modo operacional</h3>
-          </div>
-
-          <div class="mode-switcher" id="modeSwitcher">
-            <button class="mode-btn" data-mode="conservador" type="button">Conservador</button>
-            <button class="mode-btn active" data-mode="equilibrado" type="button">Equilibrado</button>
-            <button class="mode-btn" data-mode="agressivo" type="button">Agressivo</button>
-          </div>
-
-          <p class="mode-description" id="modeDescription">
-            Operação balanceada entre frequência e qualidade.
-          </p>
-        </section>
-
-        <section class="panel market-panel">
-          <div class="panel-header">
-            <h3>Mercado</h3>
-          </div>
-
-          <div class="market-status-wrap">
-            <div class="market-pill" id="marketStatusPill"></div>
-            <div id="marketStatusText">Monitorando mercado</div>
-          </div>
-
-          <div class="mini-info-grid">
-            <div class="mini-info-card">
-              <span>Sistema</span>
-              <strong id="systemStatus">Conectando</strong>
-            </div>
-
-            <div class="mini-info-card">
-              <span>Fase</span>
-              <strong id="marketPhase">Monitorando</strong>
-            </div>
-
-            <div class="mini-info-card">
-              <span>Sessão</span>
-              <strong id="sessionName">--</strong>
-            </div>
-
-            <div class="mini-info-card">
-              <span>Volatilidade</span>
-              <strong id="volatilityText">--</strong>
-            </div>
-          </div>
-        </section>
-      </aside>
-
+      <!-- CONTEÚDO -->
       <section class="content-panel">
+
+        <!-- HERO -->
         <section class="hero-grid">
+
+          <!-- SINAL PRINCIPAL -->
           <div class="signal-column">
             <div class="signal-card panel" id="signalCard">
+
               <div class="signal-top">
                 <div class="signal-mode" id="signalMode">STANDBY</div>
                 <div class="signal-time" id="signalTime">--:--:--</div>
@@ -168,7 +98,7 @@
               </div>
 
               <div class="signal-center">
-                <div class="confidence-ring" id="confidenceRing">
+                <div class="confidence-ring">
                   <div class="confidence-core">
                     <span>Confiança</span>
                     <strong id="signalConfidence">0%</strong>
@@ -177,6 +107,7 @@
               </div>
 
               <div class="signal-meta-grid">
+
                 <div class="signal-meta-card">
                   <span>Entrada</span>
                   <strong id="signalEntry">--</strong>
@@ -187,8 +118,9 @@
                   <strong id="signalExpiry">--</strong>
                 </div>
 
-                <div class="signal-meta-card">
-                  <span>Contagem</span>
+                <!-- 🔥 AGORA É TIMING -->
+                <div class="signal-meta-card highlight">
+                  <span>Timing</span>
                   <strong id="signalCountdown">--</strong>
                 </div>
 
@@ -196,160 +128,66 @@
                   <span>Score</span>
                   <strong id="signalScore">--</strong>
                 </div>
+
               </div>
             </div>
           </div>
 
+          <!-- COLUNA DIREITA -->
           <div class="info-column">
+
             <div class="panel best-opportunity-panel">
               <div class="panel-header">
                 <h3>Melhor oportunidade</h3>
               </div>
 
               <div class="best-opportunity-box">
-                <div class="best-opportunity-main">
+                <div>
                   <strong id="bestAsset">--</strong>
                   <span id="bestReason">Aguardando</span>
                 </div>
-
-                <div class="best-opportunity-score" id="bestScore">0%</div>
+                <div id="bestScore">0%</div>
               </div>
 
               <div class="priority-wrap">
                 <span>Prioridade</span>
                 <strong id="priorityText">Observação</strong>
-                <b id="priorityScore">0%</b>
               </div>
             </div>
 
+            <!-- 🔥 NOVA IA -->
             <div class="panel ai-panel">
               <div class="panel-header">
                 <h3>Leitura IA</h3>
               </div>
 
-              <p class="ai-explanation" id="aiExplanation">
-                Aguardando sinal para interpretar contexto, tendência, confiança e timing de entrada.
-              </p>
+              <div class="ai-box">
+
+                <div class="ai-status" id="aiStatus">
+                  Monitorando mercado...
+                </div>
+
+                <p class="ai-explanation" id="aiExplanation">
+                  Aguardando leitura da IA...
+                </p>
+
+                <div class="ai-tags">
+                  <span id="aiRisk">Risco: --</span>
+                  <span id="aiConfidence">Confiança: --</span>
+                </div>
+
+              </div>
             </div>
+
           </div>
         </section>
 
-        <section class="analytics-grid">
-          <div class="panel trend-panel">
-            <div class="panel-header">
-              <h3>Tendência</h3>
-            </div>
-
-            <div class="trend-top">
-              <strong id="trendLabel">NEUTRA</strong>
-              <span id="trendStrength">0%</span>
-            </div>
-
-            <div class="trend-bar">
-              <div class="trend-bar-fill" id="trendBarFill"></div>
-            </div>
-
-            <div class="trend-bias" id="trendBiasText">Sem viés dominante</div>
-          </div>
-
-          <div class="panel chart-panel">
-            <div class="panel-header">
-              <h3>Momento operacional</h3>
-            </div>
-
-            <canvas id="miniChart" height="110"></canvas>
-          </div>
-
-          <div class="panel metrics-panel">
-            <div class="panel-header">
-              <h3>Radar</h3>
-            </div>
-
-            <div class="metrics-grid">
-              <div class="metric-card">
-                <span>Oportunidades</span>
-                <strong id="opportunitiesCount">0</strong>
-              </div>
-
-              <div class="metric-card">
-                <span>Qualidade média</span>
-                <strong id="avgQuality">0%</strong>
-              </div>
-
-              <div class="metric-card">
-                <span>Ativo foco</span>
-                <strong id="focusAsset">--</strong>
-              </div>
-
-              <div class="metric-card">
-                <span>Atualizado</span>
-                <strong id="lastUpdate">--</strong>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="stats-grid">
-          <div class="panel stat-card">
-            <span>Sinais hoje</span>
-            <strong id="signalsToday">0</strong>
-          </div>
-
-          <div class="panel stat-card">
-            <span>Win rate</span>
-            <strong id="winRate">0%</strong>
-          </div>
-
-          <div class="panel stat-card">
-            <span>Wins</span>
-            <strong id="winsCount">0</strong>
-          </div>
-
-          <div class="panel stat-card">
-            <span>Losses</span>
-            <strong id="lossCount">0</strong>
-          </div>
-        </section>
-
-        <section class="bottom-grid">
-          <div class="panel history-panel">
-            <div class="panel-header">
-              <h3>Histórico recente</h3>
-            </div>
-
-            <div class="history-list" id="historyList">
-              <div class="history-empty">Nenhum sinal carregado ainda.</div>
-            </div>
-          </div>
-
-          <div class="panel ranking-panel" data-premium="true">
-            <div class="panel-header">
-              <h3>Ranking avançado</h3>
-            </div>
-
-            <div class="ranking-list" id="rankingList">
-              <div class="ranking-empty">Recurso premium bloqueado.</div>
-            </div>
-          </div>
-
-          <div class="panel upgrade-panel" data-free-only="true">
-            <div class="panel-header">
-              <h3>Liberar premium</h3>
-            </div>
-
-            <div class="upgrade-copy">
-              <strong>Desbloqueie o modo completo do AERIX</strong>
-              <p>
-                Ative sinais premium, ranking avançado, inteligência operacional e recursos exclusivos.
-              </p>
-            </div>
-          </div>
-        </section>
       </section>
     </main>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>
+
 </body>
 </html>

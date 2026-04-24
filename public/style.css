@@ -66,6 +66,7 @@ input {
   outline: none;
 }
 
+.hidden,
 .hidden-by-plan {
   display: none !important;
 }
@@ -115,8 +116,7 @@ input {
   place-items: center;
   font-weight: 800;
   color: white;
-  background:
-    linear-gradient(135deg, var(--blue), var(--purple));
+  background: linear-gradient(135deg, var(--blue), var(--purple));
   box-shadow:
     0 8px 24px rgba(77, 163, 255, 0.24),
     inset 0 0 16px rgba(255, 255, 255, 0.06);
@@ -252,8 +252,7 @@ input {
 .panel {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, var(--panel-1), var(--panel-2));
+  background: linear-gradient(180deg, var(--panel-1), var(--panel-2));
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
@@ -264,8 +263,7 @@ input {
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 22%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 22%);
   pointer-events: none;
 }
 
@@ -379,6 +377,22 @@ input {
   opacity: 0.96;
 }
 
+.login-secondary {
+  width: calc(100% - 40px);
+  margin: 10px 20px 0;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.login-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
 .premium-status {
   margin: 16px 20px 0;
   padding: 14px 16px;
@@ -430,14 +444,14 @@ input {
 
 .mode-btn:hover {
   transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.14);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .mode-btn.active {
   background: linear-gradient(135deg, rgba(77, 163, 255, 0.18), rgba(139, 92, 255, 0.16));
   color: white;
   border-color: rgba(77, 163, 255, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .mode-description {
@@ -462,7 +476,7 @@ input {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.18);
+  background: rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
 }
 
@@ -607,9 +621,9 @@ input {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: conic-gradient(var(--blue) 0deg, rgba(255,255,255,0.08) 0deg);
+  background: conic-gradient(var(--blue) 0deg, rgba(255, 255, 255, 0.08) 0deg);
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 14px 40px rgba(77, 163, 255, 0.12);
   transition: background 0.25s ease, transform 0.25s ease;
 }
@@ -626,9 +640,9 @@ input {
   place-items: center;
   text-align: center;
   background:
-    radial-gradient(circle at top, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 45%, rgba(0,0,0,0.2)),
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 45%, rgba(0, 0, 0, 0.2)),
     linear-gradient(180deg, rgba(9, 14, 24, 0.96), rgba(6, 10, 18, 0.98));
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .confidence-core span {
@@ -653,8 +667,7 @@ input {
   padding: 18px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -693,7 +706,7 @@ input {
   padding: 15px 16px;
   border-radius: 18px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -733,7 +746,7 @@ input {
   height: 12px;
   margin: 16px 20px 0;
   border-radius: 999px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
@@ -795,7 +808,7 @@ input {
   padding: 15px 16px;
   border-radius: 18px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .history-item {
@@ -845,9 +858,9 @@ input {
 }
 
 .result.pending {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-soft);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ranking-item {
@@ -863,7 +876,7 @@ input {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-soft);
   font-weight: 900;
 }
@@ -891,51 +904,31 @@ input {
 .upgrade-copy {
   margin: 16px 20px 0;
   color: var(--muted-2);
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .upgrade-copy strong {
   display: block;
-  font-size: 1.05rem;
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.ranking-panel.locked {
-  opacity: 0.88;
-}
-
-.ranking-panel.locked::after {
-  content: "Premium";
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 191, 90, 0.12);
-  color: #ffd79f;
-  border: 1px solid rgba(255, 191, 90, 0.2);
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+.locked {
+  opacity: 0.55;
+  filter: saturate(0.8);
 }
 
 .login-overlay {
   position: fixed;
   inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 18px;
   background:
-    radial-gradient(circle at center, rgba(77, 163, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(3, 6, 12, 0.84), rgba(3, 6, 12, 0.95));
-  backdrop-filter: blur(10px);
-}
-
-.login-overlay.hidden {
-  display: none;
+    radial-gradient(circle at top, rgba(77, 163, 255, 0.12), transparent 24%),
+    rgba(4, 7, 13, 0.84);
+  backdrop-filter: blur(12px);
 }
 
 .login-box {
@@ -943,8 +936,7 @@ input {
   padding: 28px;
   border-radius: 28px;
   border: 1px solid var(--border-strong);
-  background:
-    linear-gradient(180deg, rgba(13, 20, 32, 0.95), rgba(8, 13, 23, 0.96));
+  background: linear-gradient(180deg, rgba(13, 20, 32, 0.95), rgba(8, 13, 23, 0.96));
   box-shadow: var(--shadow);
 }
 
@@ -963,6 +955,48 @@ input {
 .login-brand p {
   margin: 4px 0 0;
   color: var(--muted-2);
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.auth-tab {
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.auth-tab.active {
+  background: linear-gradient(135deg, rgba(77, 163, 255, 0.18), rgba(139, 92, 255, 0.16));
+  color: white;
+  border-color: rgba(77, 163, 255, 0.2);
+}
+
+.auth-feedback {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.auth-feedback.error {
+  background: rgba(255, 107, 129, 0.12);
+  color: #ffb7c3;
+  border: 1px solid rgba(255, 107, 129, 0.2);
+}
+
+.auth-feedback.success {
+  background: rgba(34, 211, 154, 0.12);
+  color: #9bf2cf;
+  border: 1px solid rgba(34, 211, 154, 0.2);
 }
 
 .login-form {
@@ -986,12 +1020,21 @@ input {
   padding: 0 16px;
   border-radius: 16px;
   color: var(--text);
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .field input::placeholder {
   color: var(--muted);
+}
+
+.field input:focus {
+  border-color: rgba(77, 163, 255, 0.34);
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.10);
+}
+
+.login-actions {
+  display: grid;
 }
 
 .login-note {
@@ -1139,5 +1182,376 @@ body.mode-agressivo .headline-wrap {
 
   .login-box {
     padding: 22px 18px;
+  }
+
+  .auth-tabs {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   AERIX HEDGE FUND UI — VERSÃO EQUILIBRADA
+   ========================================================= */
+
+.signal-meta-card.highlight {
+  border-color: rgba(77, 163, 255, 0.38);
+  background:
+    radial-gradient(circle at top, rgba(77, 163, 255, 0.12), transparent 55%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 0 0 1px rgba(77, 163, 255, 0.08),
+    0 0 18px rgba(77, 163, 255, 0.12);
+}
+
+.signal-card[data-signal="CALL"] {
+  border-color: rgba(34, 211, 154, 0.26);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 0 42px rgba(34, 211, 154, 0.12);
+}
+
+.signal-card[data-signal="PUT"] {
+  border-color: rgba(255, 107, 129, 0.25);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 0 42px rgba(255, 107, 129, 0.12);
+}
+
+.signal-card[data-signal="WAIT"] {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.signal-card.flash {
+  animation: hedgeFundFlash 0.55s ease;
+}
+
+@keyframes hedgeFundFlash {
+  0% {
+    transform: scale(1);
+  }
+
+  38% {
+    transform: scale(1.012);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.signal-card.signal-blocked {
+  filter: saturate(0.92);
+}
+
+.signal-card[data-signal="CALL"] .confidence-ring {
+  background: conic-gradient(
+    var(--green) 0deg,
+    var(--green) 260deg,
+    rgba(255, 255, 255, 0.08) 260deg
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 14px 46px rgba(34, 211, 154, 0.16);
+}
+
+.signal-card[data-signal="PUT"] .confidence-ring {
+  background: conic-gradient(
+    var(--red) 0deg,
+    var(--red) 260deg,
+    rgba(255, 255, 255, 0.08) 260deg
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 14px 46px rgba(255, 107, 129, 0.14);
+}
+
+.signal-card[data-signal="WAIT"] .confidence-ring {
+  background: conic-gradient(
+    var(--blue) 0deg,
+    var(--blue) 120deg,
+    rgba(255, 255, 255, 0.08) 120deg
+  );
+}
+
+.ai-box {
+  margin: 16px 20px 0;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.ai-status {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ai-status[data-status="approved"] {
+  color: #9bf2cf;
+  background: rgba(34, 211, 154, 0.11);
+  border-color: rgba(34, 211, 154, 0.2);
+}
+
+.ai-status[data-status="waiting"] {
+  color: #cfe3ff;
+  background: rgba(77, 163, 255, 0.11);
+  border-color: rgba(77, 163, 255, 0.2);
+}
+
+.ai-status[data-status="blocked"] {
+  color: #ffb7c3;
+  background: rgba(255, 107, 129, 0.11);
+  border-color: rgba(255, 107, 129, 0.2);
+}
+
+.ai-box .ai-explanation {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.7;
+  font-size: 0.96rem;
+}
+
+.ai-tags {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.ai-tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ai-tags span[data-risk="baixo"] {
+  color: #9bf2cf;
+  background: rgba(34, 211, 154, 0.1);
+  border-color: rgba(34, 211, 154, 0.18);
+}
+
+.ai-tags span[data-risk="médio"] {
+  color: #ffd79f;
+  background: rgba(255, 191, 90, 0.1);
+  border-color: rgba(255, 191, 90, 0.18);
+}
+
+.ai-tags span[data-risk="alto"] {
+  color: #ffb7c3;
+  background: rgba(255, 107, 129, 0.1);
+  border-color: rgba(255, 107, 129, 0.18);
+}
+
+/* =========================================================
+   AERIX HEDGE FUND EXTREME MODE
+   ========================================================= */
+
+.signal-card.extreme-ready {
+  border-color: rgba(34, 211, 154, 0.42);
+  box-shadow:
+    0 0 55px rgba(34, 211, 154, 0.18),
+    0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.signal-card.extreme-danger {
+  border-color: rgba(255, 107, 129, 0.38);
+  box-shadow:
+    0 0 55px rgba(255, 107, 129, 0.18),
+    0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.signal-card.extreme-wait {
+  opacity: 0.92;
+}
+
+.signal-card.sniper-window {
+  animation: sniperPulse 1s infinite ease-in-out;
+}
+
+@keyframes sniperPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 40px rgba(77, 163, 255, 0.12);
+  }
+
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 0 70px rgba(34, 211, 154, 0.24);
+  }
+}
+
+.signal-meta-card.sniper-hot {
+  border-color: rgba(34, 211, 154, 0.45);
+  background: rgba(34, 211, 154, 0.09);
+}
+
+.signal-meta-card.sniper-danger {
+  border-color: rgba(255, 191, 90, 0.45);
+  background: rgba(255, 191, 90, 0.08);
+}
+
+.ai-status.extreme-approved {
+  color: #9bf2cf;
+  background: rgba(34, 211, 154, 0.14);
+  border-color: rgba(34, 211, 154, 0.3);
+}
+
+.ai-status.extreme-blocked {
+  color: #ffb7c3;
+  background: rgba(255, 107, 129, 0.14);
+  border-color: rgba(255, 107, 129, 0.3);
+}
+
+.ai-status.extreme-sniper {
+  color: #d9f7ff;
+  background: rgba(77, 163, 255, 0.16);
+  border-color: rgba(77, 163, 255, 0.35);
+  animation: sniperTextPulse 1s infinite ease-in-out;
+}
+
+@keyframes sniperTextPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+/* =========================================================
+   AERIX AUTO EXECUTION — ENTRADA AUTOMÁTICA
+   ========================================================= */
+
+.signal-card.flash-execute {
+  animation: autoExecutionFlash 1.5s ease;
+  border-color: rgba(34, 211, 154, 0.55);
+  box-shadow:
+    0 0 70px rgba(34, 211, 154, 0.32),
+    0 24px 90px rgba(0, 0, 0, 0.5);
+}
+
+.signal-card.flash-execute .confidence-ring {
+  transform: scale(1.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 60px rgba(34, 211, 154, 0.35);
+}
+
+@keyframes autoExecutionFlash {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  35% {
+    transform: scale(1.018);
+    filter: brightness(1.22);
+  }
+
+  70% {
+    transform: scale(1.008);
+    filter: brightness(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* =========================================================
+   AERIX AUTO EXECUTION — ENTRADA AUTOMÁTICA
+   ========================================================= */
+
+.signal-card.flash-execute {
+  animation: autoExecutionFlash 1.5s ease;
+  border-color: rgba(34, 211, 154, 0.55);
+  box-shadow:
+    0 0 70px rgba(34, 211, 154, 0.32),
+    0 24px 90px rgba(0, 0, 0, 0.5);
+}
+
+.signal-card.flash-execute .confidence-ring {
+  transform: scale(1.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 60px rgba(34, 211, 154, 0.35);
+}
+
+@keyframes autoExecutionFlash {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  35% {
+    transform: scale(1.018);
+    filter: brightness(1.22);
+  }
+
+  70% {
+    transform: scale(1.008);
+    filter: brightness(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* =========================================================
+   AERIX COMMERCIAL SIGNAL — MODO COMERCIAL REAL
+   ========================================================= */
+
+.signal-card.commercial-signal {
+  animation: commercialSignalPulse 1.6s ease;
+  border-color: rgba(77, 163, 255, 0.45);
+  box-shadow:
+    0 0 52px rgba(77, 163, 255, 0.22),
+    0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.signal-card.execution-ready {
+  border-color: rgba(34, 211, 154, 0.5);
+  box-shadow:
+    0 0 65px rgba(34, 211, 154, 0.28),
+    0 24px 90px rgba(0, 0, 0, 0.5);
+}
+
+.signal-card.execution-wait {
+  border-color: rgba(255, 191, 90, 0.4);
+  box-shadow:
+    0 0 48px rgba(255, 191, 90, 0.16),
+    0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+@keyframes commercialSignalPulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  40% {
+    transform: scale(1.012);
+    filter: brightness(1.16);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
   }
 }

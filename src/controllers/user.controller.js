@@ -35,7 +35,18 @@ async function updateMyProfile(req, res) {
 
 async function getMyPreferences(req, res) {
   try {
-    const preferences = await userService.getMyPreferences(req.user.id);
+    let preferences = await userService.getMyPreferences(req.user.id);
+
+    if (!preferences) {
+      preferences = {
+        trading_mode: "balanced",
+        preferred_symbols: [],
+        ai_explanations_enabled: true,
+        notifications_enabled: true,
+        panel_layout: "default",
+        theme: "dark"
+      };
+    }
 
     return res.status(200).json({
       ok: true,
@@ -94,7 +105,7 @@ async function listUsers(req, res) {
       data: users
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       ok: false,
       message: error.message || "Erro ao listar usuários."
     });
@@ -110,18 +121,20 @@ async function getUserById(req, res) {
       data: user
     });
   } catch (error) {
-    return res.status(error.statusCode || 400).json({
+    return res.status(error.statusCode || 404).json({
       ok: false,
-      message: error.message || "Erro ao buscar usuário."
+      message: error.message || "Usuário não encontrado."
     });
   }
 }
 
 async function updateUserRole(req, res) {
   try {
+    const { role } = req.body;
+
     const user = await userService.updateUserRole(
       Number(req.params.id),
-      req.body.role
+      role
     );
 
     return res.status(200).json({

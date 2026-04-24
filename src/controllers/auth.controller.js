@@ -15,7 +15,6 @@ async function register(req, res) {
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        token: result.accessToken,
         refreshToken: result.refreshToken
       }
     });
@@ -41,7 +40,6 @@ async function login(req, res) {
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        token: result.accessToken,
         refreshToken: result.refreshToken
       }
     });
@@ -56,13 +54,16 @@ async function login(req, res) {
 async function me(req, res) {
   try {
     const userId = req.user?.id;
+
     const user = await authService.getUserById(userId);
 
     return res.status(200).json({
       ok: true,
-      user,
       data: {
-        user
+        user: {
+          ...user,
+          plan: user.plan || "free" // 🔥 garantia
+        }
       }
     });
   } catch (error) {
@@ -94,7 +95,6 @@ async function refresh(req, res) {
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        token: result.accessToken,
         refreshToken: result.refreshToken
       }
     });

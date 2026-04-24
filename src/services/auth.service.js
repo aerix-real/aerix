@@ -8,25 +8,30 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const ACCESS_EXPIRES = "15m";
 const REFRESH_EXPIRES = "7d";
 
+function resolveUserPlan(user) {
+  if (user?.plan) return String(user.plan).toLowerCase();
+  return String(user?.role).toLowerCase() === "admin" ? "premium" : "free";
+}
+
 function buildUserPayload(user) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
-    plan:
-      user.plan ||
-      (String(user.role).toLowerCase() === "admin" ? "premium" : "free")
+    plan: resolveUserPlan(user)
   };
 }
 
 function generateAccessToken(user) {
+  const payload = buildUserPayload(user);
+
   return jwt.sign(
     {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      plan: user.plan || "free"
+      id: payload.id,
+      email: payload.email,
+      role: payload.role,
+      plan: payload.plan
     },
     ACCESS_SECRET,
     { expiresIn: ACCESS_EXPIRES }
@@ -51,7 +56,6 @@ async function comparePassword(password, hash) {
   return bcrypt.compare(password, hash);
 }
 
-// 🔥 NOVO: salvar refresh token
 async function saveRefreshToken(userId, token) {
   await db.query(
     `
@@ -62,14 +66,36 @@ async function saveRefreshToken(userId, token) {
   );
 }
 
+async function deleteRefreshToken(token) {
+  await db.query(
+    `
+    DELETE FROM user_sessions
+    WHERE refresh_token = $1
+    `,
+    [token]
+  );
+}
+
 async function register({ name, email, password }) {
-  if (!name || !email || !password) {
+  const safeName = String(name || "").trim();
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "").trim();
+
+  if (!safeName || !safeEmail || !safePassword) {
     throw { statusCode: 400, message: "Dados inválidos." };
   }
 
+  if (safePassword.length < 6) {
+    throw { statusCode: 400, message: "A senha deve ter pelo menos 6 caracteres." };
+  }
+
   const existing = await db.query(
-    "SELECT id FROM users WHERE email = $1",
-    [email]
+    `
+    SELECT id
+    FROM users
+    WHERE email = $1
+    `,
+    [safeEmail]
   );
 
   if (existing.rows.length > 0) {
@@ -79,19 +105,18 @@ async function register({ name, email, password }) {
     };
   }
 
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await hashPassword(safePassword);
 
   const result = await db.query(
     `
-    INSERT INTO users (name, email, password_hash, role)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, name, email, role
+    INSERT INTO users (name, email, password_hash, role, plan)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, name, email, role, plan
     `,
-    [name, email, passwordHash, "user"]
+    [safeName, safeEmail, passwordHash, "user", "free"]
   );
 
   const user = buildUserPayload(result.rows[0]);
-
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
@@ -101,9 +126,23 @@ async function register({ name, email, password }) {
 }
 
 async function login({ email, password }) {
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "").trim();
+
+  if (!safeEmail || !safePassword) {
+    throw {
+      statusCode: 401,
+      message: "Credenciais inválidas."
+    };
+  }
+
   const result = await db.query(
-    "SELECT * FROM users WHERE email = $1",
-    [email]
+    `
+    SELECT id, name, email, password_hash, role, plan, created_at
+    FROM users
+    WHERE email = $1
+    `,
+    [safeEmail]
   );
 
   if (result.rows.length === 0) {
@@ -114,7 +153,7 @@ async function login({ email, password }) {
   }
 
   const userRow = result.rows[0];
-  const valid = await comparePassword(password, userRow.password_hash);
+  const valid = await comparePassword(safePassword, userRow.password_hash);
 
   if (!valid) {
     throw {
@@ -124,7 +163,6 @@ async function login({ email, password }) {
   }
 
   const user = buildUserPayload(userRow);
-
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
@@ -136,7 +174,7 @@ async function login({ email, password }) {
 async function getUserById(id) {
   const result = await db.query(
     `
-    SELECT id, name, email, role
+    SELECT id, name, email, role, plan, created_at
     FROM users
     WHERE id = $1
     `,
@@ -153,18 +191,28 @@ async function getUserById(id) {
   return buildUserPayload(result.rows[0]);
 }
 
-// 🔥 NOVO: valida refresh token salvo
 async function refreshSession(refreshToken) {
+  if (!refreshToken) {
+    throw {
+      statusCode: 401,
+      message: "Refresh token inválido."
+    };
+  }
+
   try {
     const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
 
     const session = await db.query(
-      "SELECT * FROM user_sessions WHERE refresh_token = $1",
+      `
+      SELECT id, user_id, refresh_token, created_at
+      FROM user_sessions
+      WHERE refresh_token = $1
+      `,
       [refreshToken]
     );
 
     if (session.rows.length === 0) {
-      throw new Error();
+      throw new Error("SESSION_NOT_FOUND");
     }
 
     const user = await getUserById(decoded.id);
@@ -172,6 +220,7 @@ async function refreshSession(refreshToken) {
     const newAccess = generateAccessToken(user);
     const newRefresh = generateRefreshToken(user);
 
+    await deleteRefreshToken(refreshToken);
     await saveRefreshToken(user.id, newRefresh);
 
     return {
@@ -188,36 +237,45 @@ async function refreshSession(refreshToken) {
 }
 
 async function logout(refreshToken) {
-  await db.query(
-    "DELETE FROM user_sessions WHERE refresh_token = $1",
-    [refreshToken]
-  );
+  if (!refreshToken) {
+    return true;
+  }
 
+  await deleteRefreshToken(refreshToken);
   return true;
 }
 
 async function bootstrapAdmin() {
-  const adminEmail = process.env.ADMIN_EMAIL || "admin@aerix.com";
-  const adminPassword = process.env.ADMIN_PASSWORD || "123456";
+  const adminEmail = String(process.env.ADMIN_EMAIL || "admin@aerix.com")
+    .trim()
+    .toLowerCase();
+  const adminPassword = String(process.env.ADMIN_PASSWORD || "123456").trim();
 
   const existing = await db.query(
-    "SELECT id FROM users WHERE email = $1",
+    `
+    SELECT id, name, email, role, plan
+    FROM users
+    WHERE email = $1
+    `,
     [adminEmail]
   );
 
   if (existing.rows.length > 0) {
-    return { created: false };
+    return {
+      created: false,
+      user: buildUserPayload(existing.rows[0])
+    };
   }
 
   const passwordHash = await hashPassword(adminPassword);
 
   const result = await db.query(
     `
-    INSERT INTO users (name, email, password_hash, role)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, name, email, role
+    INSERT INTO users (name, email, password_hash, role, plan)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, name, email, role, plan
     `,
-    ["Administrador", adminEmail, passwordHash, "admin"]
+    ["Administrador", adminEmail, passwordHash, "admin", "premium"]
   );
 
   return {

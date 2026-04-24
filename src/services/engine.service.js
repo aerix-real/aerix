@@ -4,6 +4,7 @@ const { getMarketSnapshot } = require("./market-data.service");
 const { explainSignal } = require("./signal-ai.service");
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { runStrategies } = require("../strategy/strategy-runner.service");
+const adaptiveService = require("./adaptive.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -29,7 +30,8 @@ function summarizeTimeframe(tfIndicators = {}) {
     rsi: tfIndicators.rsi || {},
     stochastic: tfIndicators.stochastic || {},
     bollinger: tfIndicators.bollinger || {},
-    structure: tfIndicators.structure || {}
+    structure: tfIndicators.structure || {},
+    marketContext: tfIndicators.marketContext || {}
   };
 }
 
@@ -94,6 +96,7 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     entryTime,
     expiry: expiryTime,
     expiration: expiryTime,
+    expiryAt: expiry.toISOString(),
     direction: strategyResult.signal,
     signal: strategyResult.signal,
     confidence: strategyResult.confidence,
@@ -106,6 +109,7 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     price: lastM5Candle?.close ?? null,
     strategyName: strategyResult.strategyName || null,
     entryQuality: strategyResult.entryQuality || "weak",
+    adaptiveAdjustments: strategyResult.adaptiveAdjustments || {},
     timestamp: snapshot?.timestamp || new Date().toISOString()
   };
 }
@@ -125,6 +129,7 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       explanation: strategyResult.explanation,
       strategies: strategyResult.strategies,
       mtf: strategyResult.mtf,
+      adaptiveAdjustments: strategyResult.adaptiveAdjustments || {},
       market: {
         h1: snapshot.timeframes.h1,
         m15: snapshot.timeframes.m15,
@@ -285,6 +290,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategyMode
   );
 
+  const adaptive = await adaptiveService.applyAdaptiveScore(
+    strategyResult.finalScore,
+    symbol
+  );
+
   const explanation =
     preferences.ai_explanations_enabled !== false
       ? explainSignal({
@@ -298,6 +308,8 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const finalResult = {
     ...strategyResult,
+    finalScore: adaptive.finalScore,
+    adaptiveAdjustments: adaptive.adjustments,
     explanation
   };
 
@@ -320,6 +332,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     explanation: finalResult.explanation,
     strategies: finalResult.strategies,
     mtf: finalResult.mtf,
+    adaptiveAdjustments: finalResult.adaptiveAdjustments,
     mode: modeConfig,
     strategyMode,
     currentSignal: legacySignal,
@@ -375,7 +388,8 @@ function buildRanking(results = []) {
     signal: item.signal,
     direction: item.signal,
     entryQuality: item.entryQuality,
-    strategyName: item.strategyName
+    strategyName: item.strategyName,
+    adaptiveAdjustments: item.adaptiveAdjustments || {}
   }));
 }
 
@@ -391,6 +405,7 @@ function buildHistory(results = []) {
     result: "pending",
     mode: item.strategyMode || "balanced",
     strategyName: item.strategyName || null,
+    adaptiveAdjustments: item.adaptiveAdjustments || {},
     timestamp: item.timestamp
   }));
 }
@@ -421,6 +436,7 @@ async function analyzePreferredSymbols(userId) {
         strategies: [],
         mtf: {},
         marketContext: {},
+        adaptiveAdjustments: {},
         timestamp: new Date().toISOString()
       });
     }
