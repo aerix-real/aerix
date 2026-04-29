@@ -1526,3 +1526,112 @@ body.mode-agressivo .headline-wrap {
     align-items: flex-start;
   }
 }
+
+/* =========================
+   FRONTEND REFINEMENT 1
+========================= */
+
+.toast-container {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  z-index: 9999;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(8, 18, 34, 0.96);
+  border: 1px solid rgba(82, 184, 255, 0.22);
+  color: var(--text);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.34);
+  animation: toastIn 0.25s ease both;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.toast.success {
+  border-color: rgba(32, 230, 160, 0.35);
+  color: #aaf7d7;
+}
+
+.toast.error {
+  border-color: rgba(255, 79, 109, 0.35);
+  color: #ffc0ca;
+}
+
+.toast.info {
+  border-color: rgba(32, 183, 255, 0.35);
+  color: #dff7ff;
+}
+
+.toast.hide {
+  animation: toastOut 0.25s ease both;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(18px); }
+}
+
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-risk {
+  margin-top: 3px;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  opacity: 0.72;
+}
+
+.signal-card.signal-call {
+  border-color: rgba(32, 230, 160, 0.38);
+  box-shadow:
+    var(--shadow),
+    0 0 42px rgba(32, 230, 160, 0.10);
+}
+
+.signal-card.signal-put {
+  border-color: rgba(255, 79, 109, 0.38);
+  box-shadow:
+    var(--shadow),
+    0 0 42px rgba(255, 79, 109, 0.10);
+}
+
+.signal-card.signal-wait {
+  border-color: rgba(255, 200, 87, 0.26);
+}
+
+.ranking-bar {
+  margin-top: 8px;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.07);
+}
+
+.ranking-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+}
+
+@media (max-width: 560px) {
+  .toast-container {
+    right: 14px;
+    top: 14px;
+  }
+}

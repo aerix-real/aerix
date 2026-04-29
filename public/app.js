@@ -18,11 +18,12 @@ function getHeaders() {
 function logout() {
   localStorage.removeItem("aerix_token");
   localStorage.removeItem("aerix_user");
-  location.reload();
+  toast("Sessão encerrada.", "info");
+  setTimeout(() => location.reload(), 500);
 }
 
 // =========================
-// 🧩 UI HELPERS
+// 🧩 HELPERS
 // =========================
 
 function $(id) {
@@ -34,10 +35,72 @@ function safeText(id, value) {
   if (el) el.innerText = value;
 }
 
+function safeHTML(id, value) {
+  const el = $(id);
+  if (el) el.innerHTML = value;
+}
+
+function formatPercent(value) {
+  const n = Number(value || 0);
+  return `${Math.round(n)}%`;
+}
+
+function formatTime(value) {
+  try {
+    return new Date(value || Date.now()).toLocaleTimeString("pt-BR");
+  } catch (_) {
+    return "--";
+  }
+}
+
+// =========================
+// 🔔 TOAST SYSTEM
+// =========================
+
+function setupToastContainer() {
+  if (document.querySelector(".toast-container")) return;
+
+  const container = document.createElement("div");
+  container.className = "toast-container";
+  document.body.appendChild(container);
+}
+
+function toast(message, type = "info") {
+  setupToastContainer();
+
+  const container = document.querySelector(".toast-container");
+  const item = document.createElement("div");
+
+  item.className = `toast ${type}`;
+  item.innerText = message;
+
+  container.appendChild(item);
+
+  setTimeout(() => {
+    item.classList.add("hide");
+    setTimeout(() => item.remove(), 300);
+  }, 3500);
+}
+
+// =========================
+// 🕒 CLOCK
+// =========================
+
+function updateClock() {
+  safeText("liveClock", new Date().toLocaleTimeString("pt-BR"));
+}
+
+setInterval(updateClock, 1000);
+
+// =========================
+// 🔐 AUTH FEEDBACK
+// =========================
+
 function showAuthFeedback(message, type = "error") {
   const el = $("authFeedback");
+
   if (!el) {
-    alert(message);
+    toast(message, type);
     return;
   }
 
@@ -52,57 +115,6 @@ function clearAuthFeedback() {
   el.className = "auth-feedback hidden";
   el.innerText = "";
 }
-
-function setConnection(status) {
-  const badge = $("connectionBadge");
-  const text = $("connectionText");
-
-  if (badge) badge.className = "connection-badge " + status;
-
-  const map = {
-    online: "Conectado",
-    offline: "Offline",
-    connecting: "Conectando",
-    reconnecting: "Reconectando"
-  };
-
-  if (text) text.innerText = map[status] || "Conectando";
-}
-
-function setPlanUI(plan) {
-  const normalized = String(plan || "free").toLowerCase();
-  const badge = $("userPlan");
-
-  document.body.classList.toggle("plan-premium", normalized === "premium");
-  document.body.classList.toggle("plan-free", normalized !== "premium");
-
-  if (badge) {
-    badge.innerText = normalized === "premium" ? "PREMIUM" : "FREE";
-    badge.className = normalized === "premium" ? "plan-badge premium" : "plan-badge free";
-  }
-
-  const premiumStatus = $("premiumStatus");
-  if (premiumStatus) {
-    premiumStatus.innerText =
-      normalized === "premium"
-        ? "Plano premium ativo"
-        : "Plano free ativo";
-  }
-
-  document.querySelectorAll("[data-premium='true']").forEach((el) => {
-    el.classList.toggle("locked", normalized !== "premium");
-  });
-
-  document.querySelectorAll("[data-free-only='true']").forEach((el) => {
-    el.classList.toggle("hidden-by-plan", normalized === "premium");
-  });
-}
-
-function updateClock() {
-  safeText("liveClock", new Date().toLocaleTimeString("pt-BR"));
-}
-
-setInterval(updateClock, 1000);
 
 // =========================
 // 🔥 AUTH TABS
@@ -151,7 +163,6 @@ function saveSession(data) {
 
 function setupLogin() {
   const form = $("loginForm");
-
   if (!form) return;
 
   form.addEventListener("submit", async (e) => {
@@ -181,10 +192,11 @@ function setupLogin() {
       }
 
       saveSession(json.data);
+      toast("Login realizado com sucesso.", "success");
 
       $("loginOverlay")?.classList.add("hidden");
-      location.reload();
-    } catch (error) {
+      setTimeout(() => location.reload(), 500);
+    } catch (_) {
       showAuthFeedback("Erro ao conectar com o servidor.");
     }
   });
@@ -192,7 +204,6 @@ function setupLogin() {
 
 function setupRegister() {
   const form = $("registerForm");
-
   if (!form) return;
 
   form.addEventListener("submit", async (e) => {
@@ -223,18 +234,44 @@ function setupRegister() {
       }
 
       saveSession(json.data);
+      toast("Conta criada com sucesso.", "success");
 
       $("loginOverlay")?.classList.add("hidden");
-      location.reload();
-    } catch (error) {
+      setTimeout(() => location.reload(), 500);
+    } catch (_) {
       showAuthFeedback("Erro ao conectar com o servidor.");
     }
   });
 }
 
 // =========================
-// 👤 USER
+// 👤 USER / PLAN
 // =========================
+
+function setPlanUI(plan) {
+  const normalized = String(plan || "free").toLowerCase();
+  const isPremium = normalized === "premium";
+
+  document.body.classList.toggle("plan-premium", isPremium);
+  document.body.classList.toggle("plan-free", !isPremium);
+
+  const badge = $("userPlan");
+
+  if (badge) {
+    badge.innerText = isPremium ? "PREMIUM" : "FREE";
+    badge.className = isPremium ? "plan-badge premium" : "plan-badge free";
+  }
+
+  safeText("premiumStatus", isPremium ? "Plano premium ativo" : "Plano free ativo");
+
+  document.querySelectorAll("[data-premium='true']").forEach((el) => {
+    el.classList.toggle("locked", !isPremium);
+  });
+
+  document.querySelectorAll("[data-free-only='true']").forEach((el) => {
+    el.classList.toggle("hidden-by-plan", isPremium);
+  });
+}
 
 async function loadUser() {
   let user = JSON.parse(localStorage.getItem("aerix_user") || "{}");
@@ -258,10 +295,6 @@ async function loadUser() {
   setPlanUI(user.plan || "free");
 }
 
-// =========================
-// 💳 BILLING
-// =========================
-
 async function checkPremiumAccess() {
   try {
     const res = await fetch("/api/billing/status", {
@@ -282,8 +315,14 @@ async function checkPremiumAccess() {
   } catch (_) {}
 }
 
+// =========================
+// 💳 BILLING
+// =========================
+
 async function startCheckout() {
   try {
+    toast("Abrindo checkout seguro...", "info");
+
     const res = await fetch("/api/billing/create-checkout", {
       method: "POST",
       headers: getHeaders()
@@ -302,9 +341,9 @@ async function startCheckout() {
       return;
     }
 
-    alert(data?.message || "Erro ao iniciar pagamento.");
+    toast(data?.message || "Erro ao iniciar pagamento.", "error");
   } catch (_) {
-    alert("Erro ao conectar com o pagamento.");
+    toast("Erro ao conectar com o pagamento.", "error");
   }
 }
 
@@ -326,12 +365,25 @@ function setupModeSwitcher() {
   const headline = $("headlineText");
 
   const descriptions = {
-    conservador: "Operação mais seletiva, priorizando segurança, menor frequência e maior filtro.",
+    conservador: "Operação seletiva, priorizando segurança, menor frequência e maior filtro.",
     equilibrado: "Operação balanceada entre frequência e qualidade.",
-    agressivo: "Operação com maior frequência e tolerância a risco operacional."
+    agressivo: "Operação com maior frequência e tolerância controlada ao risco."
+  };
+
+  const riskLabels = {
+    conservador: "RISCO BAIXO",
+    equilibrado: "RISCO MÉDIO",
+    agressivo: "RISCO ALTO"
   };
 
   buttons.forEach((button) => {
+    if (!button.querySelector(".mode-risk")) {
+      const risk = document.createElement("small");
+      risk.className = "mode-risk";
+      risk.innerText = riskLabels[button.dataset.mode] || "";
+      button.appendChild(risk);
+    }
+
     button.addEventListener("click", () => {
       const mode = button.dataset.mode || "equilibrado";
 
@@ -343,6 +395,8 @@ function setupModeSwitcher() {
 
       if (description) description.innerText = descriptions[mode] || descriptions.equilibrado;
       if (headline) headline.innerText = `Fluxo operacional em tempo real • Modo ${mode}`;
+
+      toast(`Modo ${mode} ativado.`, "info");
     });
   });
 }
@@ -374,12 +428,29 @@ function setupSidebar() {
 }
 
 // =========================
-// 🔌 SOCKET
+// 🔌 CONNECTION / SOCKET
 // =========================
+
+function setConnection(status) {
+  const badge = $("connectionBadge");
+  const text = $("connectionText");
+
+  if (badge) badge.className = "connection-badge " + status;
+
+  const map = {
+    online: "Conectado",
+    offline: "Offline",
+    connecting: "Conectando",
+    reconnecting: "Reconectando"
+  };
+
+  if (text) text.innerText = map[status] || "Conectando";
+}
 
 function connectSocket() {
   if (typeof io !== "function") {
     setConnection("offline");
+    toast("Socket.IO não carregado.", "error");
     return null;
   }
 
@@ -387,8 +458,16 @@ function connectSocket() {
 
   setConnection("connecting");
 
-  socket.on("connect", () => setConnection("online"));
-  socket.on("disconnect", () => setConnection("offline"));
+  socket.on("connect", () => {
+    setConnection("online");
+    toast("Painel conectado em tempo real.", "success");
+  });
+
+  socket.on("disconnect", () => {
+    setConnection("offline");
+    toast("Conexão em tempo real perdida.", "error");
+  });
+
   socket.on("reconnect_attempt", () => setConnection("reconnecting"));
 
   socket.on("signal", updateSignal);
@@ -410,30 +489,39 @@ function updateSignal(data) {
 
   const direction = String(data.signal || data.direction || "WAIT").toUpperCase();
   const dirEl = $("signalDirection");
+  const signalCard = $("signalCard");
+
+  if (signalCard) {
+    signalCard.classList.remove("signal-call", "signal-put", "signal-wait");
+  }
 
   if (dirEl) {
     if (direction === "CALL") {
       dirEl.innerText = "COMPRA";
       dirEl.className = "signal-direction buy";
+      signalCard?.classList.add("signal-call");
     } else if (direction === "PUT") {
       dirEl.innerText = "VENDA";
       dirEl.className = "signal-direction sell";
+      signalCard?.classList.add("signal-put");
     } else {
       dirEl.innerText = "AGUARDANDO";
       dirEl.className = "signal-direction neutral";
+      signalCard?.classList.add("signal-wait");
     }
   }
 
   const score = Number(data.finalScore || data.final_score || data.confidence || 0);
 
-  safeText("signalConfidence", `${Math.round(score)}%`);
+  safeText("signalConfidence", formatPercent(score));
   safeText("signalScore", Math.round(score) || "--");
   safeText("signalEntry", data.timing || "--");
-  safeText("signalExpiry", data.expiry || data.expires_at ? new Date(data.expiry || data.expires_at).toLocaleTimeString("pt-BR") : "--");
+  safeText("signalExpiry", data.expiry || data.expires_at ? formatTime(data.expiry || data.expires_at) : "--");
+
   safeText("bestAsset", data.symbol || "--");
   safeText("bestReason", data.blockReason || data.block_reason || data.timing || "Aguardando");
-  safeText("bestScore", `${Math.round(score)}%`);
-  safeText("priorityScore", `${Math.round(score)}%`);
+  safeText("bestScore", formatPercent(score));
+  safeText("priorityScore", formatPercent(score));
   safeText("priorityText", score >= 85 ? "Alta" : score >= 70 ? "Média" : "Observação");
 
   const ring = $("confidenceRing");
@@ -441,18 +529,18 @@ function updateSignal(data) {
     ring.style.background = `conic-gradient(var(--blue) ${score * 3.6}deg, rgba(255,255,255,0.08) 0deg)`;
   }
 
-  const ai = $("aiExplanation");
-  if (ai) {
-    ai.innerHTML = `<div class="ai-text">${data.explanation || "IA analisando mercado em tempo real..."}</div>`;
-  }
+  safeHTML(
+    "aiExplanation",
+    `<div class="ai-text">${data.explanation || "IA analisando mercado em tempo real..."}</div>`
+  );
 
   updateAiPanel(data);
+  updateMiniChart(score);
 
-  const card = $("signalCard");
-  if (card) {
-    card.classList.remove("flash");
-    void card.offsetWidth;
-    card.classList.add("flash");
+  if (signalCard) {
+    signalCard.classList.remove("flash");
+    void signalCard.offsetWidth;
+    signalCard.classList.add("flash");
   }
 }
 
@@ -462,8 +550,8 @@ function updateAiPanel(data) {
   const adjusted = Number(data.adjustedScore || data.adjusted_score || finalScore);
   const blocked = Boolean(data.blocked || data.signal === "WAIT");
 
-  safeText("ai-base-score", `${Math.round(finalScore)}%`);
-  safeText("ai-adjusted-score", `${Math.round(adjusted)}%`);
+  safeText("ai-base-score", formatPercent(finalScore));
+  safeText("ai-adjusted-score", formatPercent(adjusted));
   safeText("ai-adaptive-adjustment", adaptive > 0 ? `+${adaptive}` : `${adaptive}`);
   safeText("ai-loss-penalty", data.blockReason?.includes("loss") ? "ATIVA" : "--");
   safeText("ai-bad-hour", data.blockReason?.includes("Horário") ? "SIM" : "NÃO");
@@ -485,7 +573,56 @@ function updateAiPanel(data) {
 }
 
 // =========================
-// 📜 HISTORY / ENGINE
+// 📈 MINI CHART
+// =========================
+
+const chartScores = [];
+
+function updateMiniChart(score) {
+  const canvas = $("miniChart");
+  if (!canvas || !canvas.getContext) return;
+
+  chartScores.push(Number(score || 0));
+  if (chartScores.length > 30) chartScores.shift();
+
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width = canvas.offsetWidth;
+  const h = canvas.height = 110;
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < 5; i++) {
+    const y = (h / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  if (chartScores.length < 2) return;
+
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#20b7ff";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+
+  chartScores.forEach((value, index) => {
+    const x = (w / (chartScores.length - 1)) * index;
+    const y = h - (value / 100) * h;
+
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.stroke();
+}
+
+// =========================
+// 📜 HISTORY / RANKING / STATS
 // =========================
 
 function updateHistory(list) {
@@ -508,43 +645,18 @@ function updateHistory(list) {
     const result = String(s.result || "pending").toLowerCase();
 
     div.innerHTML = `
-      <div class="history-time">${new Date(s.created_at || Date.now()).toLocaleTimeString("pt-BR")}</div>
+      <div class="history-time">${formatTime(s.created_at)}</div>
       <div class="history-asset">
         <strong>${s.symbol || "--"}</strong>
         <span>${s.strategy_name || s.strategyName || "AERIX IA"}</span>
       </div>
       <div class="history-direction">${s.signal || s.direction || "WAIT"}</div>
-      <div class="history-score">${Math.round(Number(s.finalScore || s.final_score || s.confidence || 0))}%</div>
+      <div class="history-score">${formatPercent(s.finalScore || s.final_score || s.confidence || 0)}</div>
       <div class="result ${result}">${result.toUpperCase()}</div>
     `;
 
     el.appendChild(div);
   });
-}
-
-function updateEngine(payload) {
-  const state = payload?.data || payload;
-  if (!state) return;
-
-  const connection = state.connection || {};
-  const runtime = state.runtime || {};
-  const analytics = state.analytics || {};
-  const ranking = state.ranking || [];
-
-  safeText("systemStatus", connection.engineRunning ? "ATIVO" : "PARADO");
-  safeText("lastUpdate", new Date().toLocaleTimeString("pt-BR"));
-  safeText("opportunitiesCount", runtime.processedThisCycle || ranking.length || 0);
-
-  if (state.signalCenter?.bestOpportunity) {
-    updateSignal(state.signalCenter.bestOpportunity);
-  }
-
-  if (Array.isArray(ranking)) {
-    updateRanking(ranking);
-  }
-
-  const stats = analytics.historyStats || {};
-  updateStats(stats);
 }
 
 function updateRanking(list) {
@@ -561,6 +673,8 @@ function updateRanking(list) {
   el.innerHTML = "";
 
   list.slice(0, 8).forEach((s, index) => {
+    const score = Number(s.finalScore || s.final_score || s.confidence || 0);
+
     const div = document.createElement("div");
     div.className = "ranking-item";
 
@@ -569,8 +683,9 @@ function updateRanking(list) {
       <div class="ranking-main">
         <strong>${s.symbol || "--"}</strong>
         <span>${s.timing || s.market_regime || "Monitorando"}</span>
+        <div class="ranking-bar"><i style="width:${Math.min(100, score)}%"></i></div>
       </div>
-      <div class="ranking-score">${Math.round(Number(s.finalScore || s.final_score || s.confidence || 0))}%</div>
+      <div class="ranking-score">${formatPercent(score)}</div>
     `;
 
     el.appendChild(div);
@@ -593,11 +708,41 @@ function updateStats(stats) {
 }
 
 // =========================
+// 🧠 ENGINE UPDATE
+// =========================
+
+function updateEngine(payload) {
+  const state = payload?.data || payload;
+  if (!state) return;
+
+  const connection = state.connection || {};
+  const runtime = state.runtime || {};
+  const analytics = state.analytics || {};
+  const ranking = state.ranking || [];
+
+  safeText("systemStatus", connection.engineRunning ? "ATIVO" : "PARADO");
+  safeText("lastUpdate", new Date().toLocaleTimeString("pt-BR"));
+  safeText("opportunitiesCount", runtime.processedThisCycle || ranking.length || 0);
+
+  if (state.signalCenter?.bestOpportunity) {
+    updateSignal(state.signalCenter.bestOpportunity);
+  }
+
+  if (Array.isArray(ranking)) {
+    updateRanking(ranking);
+  }
+
+  updateStats(analytics.historyStats || {});
+}
+
+// =========================
 // 🚀 INIT
 // =========================
 
 async function init() {
   updateClock();
+
+  setupToastContainer();
   setupAuthTabs();
   setupLogin();
   setupRegister();
