@@ -5,6 +5,8 @@ const adaptiveService = require("./adaptive.service");
 const autoTuningService = require("./auto-tuning.service");
 const executionService = require("./execution.service");
 const resultCheckerService = require("./result-checker.service");
+const predictiveAiService = require("./predictive-ai.service");
+
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { explainSignal, applyLossPenalty } = require("./signal-ai.service");
 const { registerAudit } = require("./audit.service");
@@ -20,7 +22,7 @@ class EngineRunnerService {
     this.interval = null;
     this.intervalMs = Number(process.env.ENGINE_INTERVAL_MS || 15000);
 
-    this.symbols = String(process.env.SYMBOLS || "EUR/USD,GBP/USD,USD/JPY,AUD/USD")
+    this.symbols = String(process.env.SYMBOLS || process.env.DEFAULT_SYMBOLS || "EUR/USD,GBP/USD,USD/JPY,AUD/USD")
       .split(",")
       .map((symbol) => symbol.trim())
       .filter(Boolean);
@@ -155,6 +157,67 @@ class EngineRunnerService {
     };
   }
 
+  buildPredictiveBlockedSignal({ symbol, mode, predictiveDecision }) {
+    return this.normalizeForDatabase({
+      symbol,
+      asset: symbol,
+      signal: "WAIT",
+      direction: "WAIT",
+      confidence: 0,
+      finalScore: predictiveDecision.preScore || 0,
+      final_score: predictiveDecision.preScore || 0,
+      adjustedScore: predictiveDecision.preScore || 0,
+      adjusted_score: predictiveDecision.preScore || 0,
+      strategyName: "predictive_ai_gate",
+      strategy_name: "predictive_ai_gate",
+      entryQuality: "blocked",
+      entry_quality: "blocked",
+      institutionalQuality: "pre_signal_block",
+      institutional_quality: "pre_signal_block",
+      mode,
+      blocked: true,
+      blockReason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
+      block_reason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
+      explanation: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
+      timing: "BLOQUEADO ANTES DO SINAL",
+      timing_mode: "PREDICTIVE_AI_BLOCK",
+      timing_confidence: predictiveDecision.preScore || 0,
+      market_regime: "PREDICTIVE_AI_BLOCK",
+      reasons: predictiveDecision.reasons || [],
+      blocks: predictiveDecision.risks || [],
+      predictiveAi: predictiveDecision,
+      predictive_ai: predictiveDecision,
+      preSignalScore: predictiveDecision.preScore || 0,
+      pre_signal_score: predictiveDecision.preScore || 0,
+      result: "pending"
+    });
+  }
+
+  applyPredictiveDecisionToSignal(signal, predictiveDecision) {
+    return {
+      ...signal,
+      predictiveAi: predictiveDecision,
+      predictive_ai: predictiveDecision,
+      preSignalScore: predictiveDecision.preScore || 0,
+      pre_signal_score: predictiveDecision.preScore || 0,
+      reasons: [
+        ...(signal.reasons || []),
+        ...(predictiveDecision.reasons || [])
+      ],
+      blocks: [
+        ...(signal.blocks || []),
+        ...(predictiveDecision.risks || [])
+      ],
+      adaptiveReasons: [
+        ...(signal.adaptiveReasons || []),
+        `Pre-score IA: ${predictiveDecision.preScore || 0}%`
+      ],
+      explanation: signal.explanation
+        ? `${signal.explanation} ${predictiveDecision.explanation || ""}`.trim()
+        : predictiveDecision.explanation || signal.explanation
+    };
+  }
+
   async runCycle() {
     if (this.isProcessing) return;
 
@@ -181,6 +244,26 @@ class EngineRunnerService {
           const snapshot = await marketData.getMarketSnapshot(symbol);
           const indicators = this.buildIndicators(snapshot, mode);
 
+          const predictiveDecision = await predictiveAiService.evaluatePreSignal({
+            symbol,
+            snapshot,
+            mode
+          });
+
+          if (predictiveDecision.blocked) {
+            const blockedSignal = this.buildPredictiveBlockedSignal({
+              symbol,
+              mode,
+              predictiveDecision
+            });
+
+            cycleResults.push(blockedSignal);
+            this.emitBlocked(blockedSignal);
+
+            await this.auditDecision("predictive_ai_pre_block", blockedSignal);
+            continue;
+          }
+
           const strategyResult = runStrategies({
             snapshot,
             mode
@@ -194,6 +277,7 @@ class EngineRunnerService {
             mode
           });
 
+          signal = this.applyPredictiveDecisionToSignal(signal, predictiveDecision);
           signal = await this.applyAdaptiveLayers(signal);
           signal = applyLossPenalty(signal, this.latestResults);
           signal = this.applySniperTiming(signal);

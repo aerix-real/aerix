@@ -1,8 +1,8 @@
-const pool = require("../db/pool");
+const db = require("../config/database");
 
 class AiMemoryRepository {
   async ensureTable() {
-    await pool.query(`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS ai_loss_memory (
         id SERIAL PRIMARY KEY,
         memory_key TEXT UNIQUE NOT NULL,
@@ -22,7 +22,7 @@ class AiMemoryRepository {
   async getMemory(memoryKey) {
     await this.ensureTable();
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT * FROM ai_loss_memory WHERE memory_key = $1 LIMIT 1`,
       [memoryKey]
     );
@@ -45,7 +45,7 @@ class AiMemoryRepository {
       lastResults
     } = data;
 
-    await pool.query(
+    await db.query(
       `
       INSERT INTO ai_loss_memory (
         memory_key,
@@ -62,6 +62,10 @@ class AiMemoryRepository {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
       ON CONFLICT (memory_key)
       DO UPDATE SET
+        symbol = EXCLUDED.symbol,
+        direction = EXCLUDED.direction,
+        strategy = EXCLUDED.strategy,
+        hour = EXCLUDED.hour,
         total = EXCLUDED.total,
         wins = EXCLUDED.wins,
         losses = EXCLUDED.losses,
@@ -85,7 +89,7 @@ class AiMemoryRepository {
   async getBadPatterns(limit = 30) {
     await this.ensureTable();
 
-    const result = await pool.query(
+    const result = await db.query(
       `
       SELECT *
       FROM ai_loss_memory
