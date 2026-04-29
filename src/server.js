@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const http = require("http");
 
 require("dotenv").config();
 
@@ -11,12 +12,29 @@ const { requirePremium } = require("./middlewares/plan.middleware");
 
 const billingController = require("./controllers/billing.controller");
 
+// 🔥 SOCKET
+const { Server } = require("socket.io");
+const { initializeSocket } = require("./websocket/socket");
+
 const app = express();
+const server = http.createServer(app);
+
+// =========================
+// 🔥 SOCKET.IO INIT
+// =========================
+
+const io = new Server(server, {
+  cors: {
+    origin: "*"
+  }
+});
+
+initializeSocket(io);
 
 // =========================
 // 💳 STRIPE WEBHOOK
 // =========================
-// IMPORTANTE: precisa vir ANTES do express.json()
+
 app.post(
   "/api/billing/webhook",
   express.raw({ type: "application/json" }),
@@ -64,7 +82,6 @@ app.get(
   billingController.status
 );
 
-// Compatibilidade com o app.js atual
 app.get(
   "/api/premium/status",
   authMiddleware,
@@ -72,32 +89,10 @@ app.get(
 );
 
 // =========================
-// DASHBOARD PREMIUM
+// DASHBOARD
 // =========================
 
 app.get("/api/dashboard", authMiddleware, requirePremium, (req, res) => {
-  try {
-    const state = engineRunner.getState();
-
-    return res.json({
-      ok: true,
-      data: state
-    });
-  } catch (error) {
-    console.error("Erro ao carregar dashboard:", error.message);
-
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao carregar dashboard"
-    });
-  }
-});
-
-// =========================
-// ENGINE CONTROL PREMIUM
-// =========================
-
-app.get("/api/engine", authMiddleware, requirePremium, (req, res) => {
   try {
     return res.json({
       ok: true,
@@ -106,33 +101,30 @@ app.get("/api/engine", authMiddleware, requirePremium, (req, res) => {
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      message: "Erro ao obter estado da engine."
+      message: "Erro ao carregar dashboard"
     });
   }
+});
+
+// =========================
+// ENGINE CONTROL
+// =========================
+
+app.get("/api/engine", authMiddleware, requirePremium, (req, res) => {
+  return res.json({
+    ok: true,
+    data: engineRunner.getState()
+  });
 });
 
 app.post("/api/engine/start", authMiddleware, requirePremium, (req, res) => {
-  try {
-    engineRunner.start();
-    return res.json({ ok: true });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao iniciar engine."
-    });
-  }
+  engineRunner.start();
+  return res.json({ ok: true });
 });
 
 app.post("/api/engine/stop", authMiddleware, requirePremium, (req, res) => {
-  try {
-    engineRunner.stop();
-    return res.json({ ok: true });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao parar engine."
-    });
-  }
+  engineRunner.stop();
+  return res.json({ ok: true });
 });
 
 // =========================
@@ -148,8 +140,6 @@ app.get("/api/market/status", authMiddleware, async (req, res) => {
       data
     });
   } catch (error) {
-    console.error("Erro ao obter status do mercado:", error.message);
-
     return res.status(500).json({
       ok: false,
       message: "Erro ao obter status do mercado"
@@ -158,7 +148,7 @@ app.get("/api/market/status", authMiddleware, async (req, res) => {
 });
 
 // =========================
-// HEALTHCHECK
+// HEALTH
 // =========================
 
 app.get("/api/health", (req, res) => {
@@ -171,7 +161,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // =========================
-// FRONTEND FALLBACK
+// FRONTEND
 // =========================
 
 app.get("*", (req, res) => {
@@ -179,12 +169,12 @@ app.get("*", (req, res) => {
 });
 
 // =========================
-// START SERVER
+// START SERVER (🔥 CORRETO)
 // =========================
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 AERIX rodando em http://localhost:${PORT}`);
 
   if (String(process.env.AUTO_START_ENGINE).toLowerCase() === "true") {
