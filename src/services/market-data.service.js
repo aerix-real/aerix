@@ -8,10 +8,18 @@ const BASE_URL = "https://api.twelvedata.com";
 const errorMap = new Map();
 
 function normalizeSymbol(symbol) {
-  return String(symbol || "")
-    .replace("/", "")
+  const raw = String(symbol || "")
     .trim()
-    .toUpperCase();
+    .toUpperCase()
+    .replace(/\s+/g, "");
+
+  if (raw.includes("/")) return raw;
+
+  if (/^[A-Z]{6}$/.test(raw)) {
+    return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+  }
+
+  return raw;
 }
 
 function parseNumber(value, fallback = 0) {

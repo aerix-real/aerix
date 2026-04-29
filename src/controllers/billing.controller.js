@@ -1,171 +1,162 @@
 const stripeService = require("../services/stripe.service");
-const userRepository = require("../repositories/user.repository");
+const billingRepository = require("../repositories/billing.repository");
 
-function isPremiumStatus(status) {
-  return ["active", "trialing"].includes(String(status || "").toLowerCase());
-}
+class BillingController {
+  async createCheckout(req, res) {
+    try {
+      const user = req.user;
 
-async function createCheckout(req, res) {
-  try {
-    const user = await userRepository.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        ok: false,
-        message: "Usuário não encontrado."
-      });
-    }
-
-    const session = await stripeService.createCheckoutSession({ user });
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        url: session.url
+      if (!user) {
+        return res.status(401).json({
+          ok: false,
+          message: "Usuário não autenticado."
+        });
       }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: error.message || "Erro ao criar checkout."
-    });
-  }
-}
 
-async function createPortal(req, res) {
-  try {
-    const user = await userRepository.findById(req.user.id);
+      const session = await stripeService.createCheckoutSession({ user });
 
-    if (!user) {
-      return res.status(404).json({
+      return res.json({
+        ok: true,
+        data: {
+          checkoutUrl: session.url,
+          sessionId: session.id
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao criar checkout:", error.message);
+
+      return res.status(500).json({
         ok: false,
-        message: "Usuário não encontrado."
+        message: error.message || "Erro ao criar checkout."
       });
     }
+  }
 
-    if (!user.stripe_customer_id) {
+  async status(req, res) {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({
+          ok: false,
+          message: "Usuário não autenticado."
+        });
+      }
+
+      const status = await billingRepository.getBillingStatus(user.id);
+
+      return res.json({
+        ok: true,
+        data: {
+          premium: String(status?.plan || "").toUpperCase() === "PREMIUM",
+          plan: status?.plan || "FREE",
+          subscriptionStatus: status?.subscription_status || "inactive",
+          premiumUntil: status?.premium_until || null
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao buscar status billing:", error.message);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Erro ao buscar status do plano."
+      });
+    }
+  }
+
+  async handleWebhook(req, res) {
+    let event;
+
+    try {
+      const signature = req.headers["stripe-signature"];
+      event = stripeService.constructWebhookEvent(req.body, signature);
+    } catch (error) {
+      console.error("Webhook Stripe inválido:", error.message);
+
       return res.status(400).json({
         ok: false,
-        message: "Cliente Stripe ainda não vinculado."
+        message: `Webhook inválido: ${error.message}`
       });
     }
 
-    const session = await stripeService.createCustomerPortalSession({
-      customerId: user.stripe_customer_id
-    });
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object;
 
-    return res.status(200).json({
-      ok: true,
-      data: {
-        url: session.url
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: error.message || "Erro ao criar portal do cliente."
-    });
-  }
-}
-
-async function getBillingStatus(req, res) {
-  try {
-    const user = await userRepository.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        ok: false,
-        message: "Usuário não encontrado."
-      });
-    }
-
-    const premium =
-      user.role === "admin" ||
-      String(user.plan || "").toLowerCase() === "premium";
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        plan: user.plan || "free",
-        premium,
-        subscriptionStatus: user.subscription_status || null,
-        stripeCustomerId: user.stripe_customer_id || null,
-        stripeSubscriptionId: user.stripe_subscription_id || null
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: error.message || "Erro ao buscar billing."
-    });
-  }
-}
-
-async function handleWebhook(req, res) {
-  const signature = req.headers["stripe-signature"];
-
-  let event;
-
-  try {
-    event = stripeService.constructWebhookEvent(req.body, signature);
-  } catch (error) {
-    return res.status(400).send(`Webhook Error: ${error.message}`);
-  }
-
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-
-        if (session.mode === "subscription") {
-          const userId = Number(
-            session.client_reference_id || session.metadata?.userId
-          );
+          const userId = session.metadata?.user_id;
+          const customerId = session.customer;
+          const subscriptionId = session.subscription;
 
           if (userId) {
-            await userRepository.updateStripeCustomer(userId, {
-              stripeCustomerId: session.customer || null,
-              stripeSubscriptionId: session.subscription || null,
-              subscriptionStatus: "active",
-              plan: "premium"
+            await billingRepository.activatePremiumByUserId(userId, {
+              customerId,
+              subscriptionId,
+              subscriptionStatus: "active"
             });
           }
+
+          break;
         }
-        break;
+
+        case "customer.subscription.updated": {
+          const subscription = event.data.object;
+
+          const userId = subscription.metadata?.user_id;
+          const customerId = subscription.customer;
+          const subscriptionId = subscription.id;
+          const status = subscription.status;
+
+          if (userId && ["active", "trialing"].includes(status)) {
+            await billingRepository.activatePremiumByUserId(userId, {
+              customerId,
+              subscriptionId,
+              subscriptionStatus: status
+            });
+          }
+
+          if (["canceled", "unpaid", "past_due", "incomplete_expired"].includes(status)) {
+            await billingRepository.downgradeBySubscriptionId(subscriptionId);
+          }
+
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          const invoice = event.data.object;
+
+          if (invoice.subscription) {
+            await billingRepository.downgradeBySubscriptionId(invoice.subscription);
+          } else if (invoice.customer) {
+            await billingRepository.downgradeByCustomerId(invoice.customer);
+          }
+
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const subscription = event.data.object;
+          await billingRepository.downgradeBySubscriptionId(subscription.id);
+          break;
+        }
+
+        default:
+          break;
       }
 
-      case "customer.subscription.updated":
-      case "customer.subscription.created":
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object;
-        const stripeCustomerId = subscription.customer;
-        const status = subscription.status;
-        const plan = isPremiumStatus(status) ? "premium" : "free";
+      return res.json({
+        ok: true,
+        received: true
+      });
+    } catch (error) {
+      console.error("Erro ao processar webhook Stripe:", error.message);
 
-        await userRepository.updateByStripeCustomerId(stripeCustomerId, {
-          stripeSubscriptionId: subscription.id || null,
-          subscriptionStatus: status || null,
-          plan
-        });
-        break;
-      }
-
-      default:
-        break;
+      return res.status(500).json({
+        ok: false,
+        message: "Erro ao processar webhook."
+      });
     }
-
-    return res.status(200).json({ received: true });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: error.message || "Erro ao processar webhook."
-    });
   }
 }
 
-module.exports = {
-  createCheckout,
-  createPortal,
-  getBillingStatus,
-  handleWebhook
-};
+module.exports = new BillingController();

@@ -1,13 +1,13 @@
-const { pool } = require("../db/connection");
+const db = require("../config/database");
 
 async function createAuditLog({
   userId = null,
-  eventType,
-  description,
+  eventType = "system_event",
+  description = "",
   meta = {}
 }) {
   const query = `
-    INSERT INTO audit_logs (
+    INSERT INTO public.audit_logs (
       user_id,
       event_type,
       description,
@@ -24,19 +24,21 @@ async function createAuditLog({
     JSON.stringify(meta || {})
   ];
 
-  const result = await pool.query(query, values);
+  const result = await db.query(query, values);
   return result.rows[0] || null;
 }
 
 async function getRecentAuditLogs(limit = 20) {
-  const query = `
+  const result = await db.query(
+    `
     SELECT *
-    FROM audit_logs
+    FROM public.audit_logs
     ORDER BY created_at DESC
     LIMIT $1
-  `;
+    `,
+    [Number(limit) || 20]
+  );
 
-  const result = await pool.query(query, [Number(limit) || 20]);
   return result.rows;
 }
 

@@ -1,62 +1,58 @@
 const Stripe = require("stripe");
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
-function getAppUrl() {
-  return process.env.APP_URL || "http://localhost:3000";
-}
-
-async function createCheckoutSession({ user }) {
-  const appUrl = getAppUrl();
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    success_url: `${appUrl}/?checkout=success`,
-    cancel_url: `${appUrl}/?checkout=cancel`,
-    line_items: [
-      {
-        price: process.env.STRIPE_PRICE_PREMIUM_MONTHLY,
-        quantity: 1
-      }
-    ],
-    client_reference_id: String(user.id),
-    customer_email: user.email,
-    metadata: {
-      userId: String(user.id),
-      plan: "premium"
+class StripeService {
+  async createCheckoutSession({ user }) {
+    if (!user?.id || !user?.email) {
+      throw new Error("Usuário inválido para checkout.");
     }
-  });
 
-  return session;
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error("STRIPE_SECRET_KEY não configurado.");
+    }
+
+    if (!process.env.STRIPE_PRICE_PREMIUM_MONTHLY) {
+      throw new Error("STRIPE_PRICE_PREMIUM_MONTHLY não configurado.");
+    }
+
+    const appUrl = process.env.APP_URL || "http://localhost:3000";
+
+    return stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer_email: user.email,
+      line_items: [
+        {
+          price: process.env.STRIPE_PRICE_PREMIUM_MONTHLY,
+          quantity: 1
+        }
+      ],
+      success_url: `${appUrl}/?billing=success`,
+      cancel_url: `${appUrl}/?billing=cancel`,
+      metadata: {
+        user_id: String(user.id),
+        email: user.email
+      },
+      subscription_data: {
+        metadata: {
+          user_id: String(user.id),
+          email: user.email
+        }
+      }
+    });
+  }
+
+  constructWebhookEvent(rawBody, signature) {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error("STRIPE_WEBHOOK_SECRET não configurado.");
+    }
+
+    return stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  }
 }
 
-async function createCustomerPortalSession({ customerId }) {
-  const appUrl = getAppUrl();
-
-  const session = await stripe.billingPortal.sessions.create({
-    customer: customerId,
-    return_url: `${appUrl}/`
-  });
-
-  return session;
-}
-
-function constructWebhookEvent(rawBody, signature) {
-  return stripe.webhooks.constructEvent(
-    rawBody,
-    signature,
-    process.env.STRIPE_WEBHOOK_SECRET
-  );
-}
-
-async function retrieveSubscription(subscriptionId) {
-  return stripe.subscriptions.retrieve(subscriptionId);
-}
-
-module.exports = {
-  stripe,
-  createCheckoutSession,
-  createCustomerPortalSession,
-  constructWebhookEvent,
-  retrieveSubscription
-};
+module.exports = new StripeService();

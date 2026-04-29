@@ -2,15 +2,20 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "aerix_access_secret";
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || "aerix_refresh_secret";
 
 const ACCESS_EXPIRES = "15m";
 const REFRESH_EXPIRES = "7d";
 
 function resolveUserPlan(user) {
-  if (user?.plan) return String(user.plan).toLowerCase();
-  return String(user?.role).toLowerCase() === "admin" ? "premium" : "free";
+  const role = String(user?.role || "").toLowerCase();
+  const plan = String(user?.plan || "").toLowerCase();
+
+  if (role === "admin") return "premium";
+  if (plan === "premium") return "premium";
+
+  return "free";
 }
 
 function buildUserPayload(user) {
@@ -18,7 +23,7 @@ function buildUserPayload(user) {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role: user.role || "user",
     plan: resolveUserPlan(user)
   };
 }
@@ -40,9 +45,7 @@ function generateAccessToken(user) {
 
 function generateRefreshToken(user) {
   return jwt.sign(
-    {
-      id: user.id
-    },
+    { id: user.id },
     REFRESH_SECRET,
     { expiresIn: REFRESH_EXPIRES }
   );
@@ -99,10 +102,7 @@ async function register({ name, email, password }) {
   );
 
   if (existing.rows.length > 0) {
-    throw {
-      statusCode: 400,
-      message: "Email já está em uso."
-    };
+    throw { statusCode: 400, message: "Email já está em uso." };
   }
 
   const passwordHash = await hashPassword(safePassword);
@@ -130,10 +130,7 @@ async function login({ email, password }) {
   const safePassword = String(password || "").trim();
 
   if (!safeEmail || !safePassword) {
-    throw {
-      statusCode: 401,
-      message: "Credenciais inválidas."
-    };
+    throw { statusCode: 401, message: "Credenciais inválidas." };
   }
 
   const result = await db.query(
@@ -146,20 +143,14 @@ async function login({ email, password }) {
   );
 
   if (result.rows.length === 0) {
-    throw {
-      statusCode: 401,
-      message: "Credenciais inválidas."
-    };
+    throw { statusCode: 401, message: "Credenciais inválidas." };
   }
 
   const userRow = result.rows[0];
   const valid = await comparePassword(safePassword, userRow.password_hash);
 
   if (!valid) {
-    throw {
-      statusCode: 401,
-      message: "Credenciais inválidas."
-    };
+    throw { statusCode: 401, message: "Credenciais inválidas." };
   }
 
   const user = buildUserPayload(userRow);
@@ -182,10 +173,7 @@ async function getUserById(id) {
   );
 
   if (result.rows.length === 0) {
-    throw {
-      statusCode: 404,
-      message: "Usuário não encontrado."
-    };
+    throw { statusCode: 404, message: "Usuário não encontrado." };
   }
 
   return buildUserPayload(result.rows[0]);
@@ -193,10 +181,7 @@ async function getUserById(id) {
 
 async function refreshSession(refreshToken) {
   if (!refreshToken) {
-    throw {
-      statusCode: 401,
-      message: "Refresh token inválido."
-    };
+    throw { statusCode: 401, message: "Refresh token inválido." };
   }
 
   try {
@@ -216,7 +201,6 @@ async function refreshSession(refreshToken) {
     }
 
     const user = await getUserById(decoded.id);
-
     const newAccess = generateAccessToken(user);
     const newRefresh = generateRefreshToken(user);
 
@@ -229,17 +213,12 @@ async function refreshSession(refreshToken) {
       refreshToken: newRefresh
     };
   } catch (_) {
-    throw {
-      statusCode: 401,
-      message: "Refresh token inválido."
-    };
+    throw { statusCode: 401, message: "Refresh token inválido." };
   }
 }
 
 async function logout(refreshToken) {
-  if (!refreshToken) {
-    return true;
-  }
+  if (!refreshToken) return true;
 
   await deleteRefreshToken(refreshToken);
   return true;
@@ -249,6 +228,7 @@ async function bootstrapAdmin() {
   const adminEmail = String(process.env.ADMIN_EMAIL || "admin@aerix.com")
     .trim()
     .toLowerCase();
+
   const adminPassword = String(process.env.ADMIN_PASSWORD || "123456").trim();
 
   const existing = await db.query(
@@ -288,10 +268,7 @@ async function verifyAccessToken(token) {
   try {
     return jwt.verify(token, ACCESS_SECRET);
   } catch (_) {
-    throw {
-      statusCode: 401,
-      message: "Token inválido ou expirado."
-    };
+    throw { statusCode: 401, message: "Token inválido ou expirado." };
   }
 }
 

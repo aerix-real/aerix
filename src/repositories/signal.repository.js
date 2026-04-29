@@ -38,6 +38,7 @@ async function insertSignal(data) {
     (
       user_id,
       symbol,
+      direction,
       signal,
       confidence,
       final_score,
@@ -56,41 +57,56 @@ async function insertSignal(data) {
       timing,
       entry_in_seconds,
       timing_mode,
-      timing_confidence
+      timing_confidence,
+      market_regime,
+      institutional_quality,
+      adaptive_adjustment,
+      tuning_weight
     )
     VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-      $15,$16,$17,$18,$19,$20,$21
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
+      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
     )
     RETURNING *;
   `;
 
+  const signal = data.signal || data.direction || "WAIT";
+
   const values = [
     data.user_id || 1,
-    data.symbol,
-    data.signal,
+    data.symbol || "UNKNOWN",
+    data.direction || signal,
+    signal,
     normalizeNumber(data.confidence, 0),
-    normalizeNumber(data.final_score, 0),
-    data.entry_quality || "weak",
-    data.strategy_name || null,
+    normalizeNumber(data.final_score ?? data.finalScore, 0),
+    data.entry_quality || data.entryQuality || "weak",
+    data.strategy_name || data.strategyName || data.strategy || null,
     data.result || "pending",
     data.mode || "balanced",
-    data.trend_direction || "neutral",
-    normalizeNumber(data.trend_strength, 0),
+    data.trend_direction || data.trendDirection || "neutral",
+    normalizeNumber(data.trend_strength ?? data.trendStrength, 0),
     normalizeNumber(data.volatility, 0),
-    data.entry_price ?? null,
-    data.expires_at ?? null,
+    data.entry_price ?? data.entryPrice ?? null,
+    data.expires_at ?? data.expiry ?? data.expiration ?? null,
     data.blocked ?? false,
-    data.block_reason ?? null,
+    data.block_reason ?? data.blockReason ?? null,
     data.explanation ?? null,
     data.timing ?? null,
-    normalizeNumber(data.entry_in_seconds, 0),
-    data.timing_mode ?? null,
-    data.timing_confidence ?? null
+    normalizeNumber(data.entry_in_seconds ?? data.entryInSeconds, 0),
+    data.timing_mode ?? data.timingMode ?? null,
+    data.timing_confidence ?? data.timingConfidence ?? null,
+    data.market_regime ?? data.marketRegime ?? null,
+    data.institutional_quality ?? data.institutionalQuality ?? null,
+    normalizeNumber(data.adaptive_adjustment ?? data.adaptiveAdjustment, 0),
+    normalizeNumber(data.tuning_weight ?? data.tuningWeight, 1)
   ];
 
   const result = await db.query(query, values);
   return result.rows[0];
+}
+
+async function save(data) {
+  return insertSignal(data);
 }
 
 async function getLatest(limit = 20) {
@@ -151,6 +167,7 @@ async function getStats() {
     if (!stats.byHour[hour]) stats.byHour[hour] = createStatsBucket();
     if (!stats.byStrategy[strategy]) stats.byStrategy[strategy] = createStatsBucket();
     if (!stats.bySignal[signal]) stats.bySignal[signal] = createStatsBucket();
+
     if (!stats.bySymbolSignal[symbolSignalKey]) {
       stats.bySymbolSignal[symbolSignalKey] = createStatsBucket();
     }
@@ -356,6 +373,7 @@ async function getDirectionalPerformance() {
 
 module.exports = {
   insertSignal,
+  save,
   getLatest,
   getStats,
   getPerformanceBySymbol,
