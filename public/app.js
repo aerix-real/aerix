@@ -1,156 +1,210 @@
 // =========================
-// 🔐 AUTH HELPERS
+// 🔐 AUTH
 // =========================
 
-function saveAuth(data) {
-  if (!data) return;
-
-  const token = data.accessToken || data.token;
-  const user = data.user;
-
-  if (token) {
-    localStorage.setItem("aerix_token", token);
-  }
-
-  if (user) {
-    localStorage.setItem("aerix_user", JSON.stringify(user));
-  }
+function getToken() {
+  return localStorage.getItem("aerix_token");
 }
 
-function getAuthHeaders() {
-  const token = localStorage.getItem("aerix_token");
-
+function getHeaders() {
   return {
     "Content-Type": "application/json",
-    Authorization: token ? `Bearer ${token}` : ""
+    Authorization: `Bearer ${getToken()}`
   };
 }
 
 function logout() {
-  localStorage.removeItem("aerix_token");
-  localStorage.removeItem("aerix_user");
+  localStorage.clear();
   location.reload();
 }
 
 // =========================
-// 🔥 LOGIN CORRETO
+// 🔥 LOGIN
 // =========================
 
 function setupLogin() {
-  const loginForm = document.getElementById("loginForm");
+  const form = document.getElementById("loginForm");
   const overlay = document.getElementById("loginOverlay");
 
-  if (!loginForm) return;
+  if (!form) return;
 
-  loginForm.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const email = document.getElementById("loginUser").value;
     const password = document.getElementById("loginPass").value;
 
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-      });
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
 
-      const json = await res.json();
+    const json = await res.json();
 
-      if (!json.ok) {
-        alert(json.message || "Erro no login");
-        return;
-      }
-
-      const data = json.data;
-
-      saveAuth(data);
-
-      // 🔥 AQUI ESTAVA O PROBLEMA
-      overlay.classList.add("hidden");
-
-      // 🔥 força recarregar já autenticado
-      location.reload();
-
-    } catch (err) {
-      alert("Erro ao conectar com servidor.");
+    if (!json.ok) {
+      alert(json.message);
+      return;
     }
+
+    localStorage.setItem("aerix_token", json.data.accessToken);
+    localStorage.setItem("aerix_user", JSON.stringify(json.data.user));
+
+    overlay.classList.add("hidden");
+
+    location.reload();
   });
 }
 
 // =========================
-// 🔥 FETCH USER
+// 🧠 UI HELPERS
 // =========================
 
-async function fetchMe() {
-  try {
-    const res = await fetch("/api/auth/me", {
-      headers: getAuthHeaders()
-    });
+function setConnection(status) {
+  const badge = document.getElementById("connectionBadge");
+  const text = document.getElementById("connectionText");
 
-    const json = await res.json();
+  badge.className = "connection-badge " + status;
 
-    if (json.ok && json.data?.user) {
-      localStorage.setItem("aerix_user", JSON.stringify(json.data.user));
-      return json.data.user;
-    }
-  } catch (_) {}
+  const map = {
+    online: "Conectado",
+    offline: "Offline",
+    connecting: "Conectando"
+  };
 
-  return null;
+  text.innerText = map[status] || "Conectando";
 }
 
-// =========================
-// 🔥 PREMIUM CHECK
-// =========================
+function setPlanUI(plan) {
+  const body = document.body;
+  const badge = document.getElementById("userPlan");
 
-async function checkPremiumAccess() {
-  try {
-    const res = await fetch("/api/billing/status", {
-      headers: getAuthHeaders()
-    });
-
-    const json = await res.json();
-
-    if (json.ok) {
-      const plan = json.data?.plan || "free";
-
-      const user = JSON.parse(localStorage.getItem("aerix_user") || "{}");
-      user.plan = plan;
-
-      localStorage.setItem("aerix_user", JSON.stringify(user));
-    }
-  } catch (_) {}
-}
-
-// =========================
-// 💳 CHECKOUT
-// =========================
-
-async function startCheckout() {
-  try {
-    const res = await fetch("/api/billing/create-checkout", {
-      method: "POST",
-      headers: getAuthHeaders()
-    });
-
-    const data = await res.json();
-
-    const url = data?.url || data?.checkoutUrl || data?.data?.url;
-
-    if (url) {
-      window.location.href = url;
-      return;
-    }
-
-    alert("Erro ao iniciar pagamento.");
-  } catch {
-    alert("Erro no pagamento.");
+  if (plan === "premium") {
+    body.classList.add("plan-premium");
+    badge.innerText = "PREMIUM";
+    badge.className = "plan-badge premium";
+  } else {
+    body.classList.remove("plan-premium");
+    badge.innerText = "FREE";
+    badge.className = "plan-badge free";
   }
 }
 
-window.startCheckout = startCheckout;
+// =========================
+// 🔌 SOCKET.IO
+// =========================
+
+function connectSocket() {
+  const socket = io();
+
+  setConnection("connecting");
+
+  socket.on("connect", () => {
+    setConnection("online");
+  });
+
+  socket.on("disconnect", () => {
+    setConnection("offline");
+  });
+
+  socket.on("signal", updateSignal);
+  socket.on("history", updateHistory);
+  socket.on("engine:update", updateEngine);
+
+  return socket;
+}
+
+// =========================
+// 📊 UPDATE SIGNAL
+// =========================
+
+function updateSignal(data) {
+  if (!data) return;
+
+  document.getElementById("signalAsset").innerText = data.symbol || "--";
+
+  const dir = document.getElementById("signalDirection");
+
+  if (data.signal === "CALL") {
+    dir.innerText = "COMPRA";
+    dir.className = "signal-direction buy";
+  } else if (data.signal === "PUT") {
+    dir.innerText = "VENDA";
+    dir.className = "signal-direction sell";
+  } else {
+    dir.innerText = "AGUARDANDO";
+    dir.className = "signal-direction neutral";
+  }
+
+  document.getElementById("signalConfidence").innerText =
+    (data.finalScore || data.confidence || 0) + "%";
+
+  document.getElementById("signalScore").innerText =
+    data.finalScore || "--";
+
+  document.getElementById("signalEntry").innerText =
+    data.timing || "--";
+
+  document.getElementById("aiExplanation").innerText =
+    data.explanation || "IA analisando...";
+}
+
+// =========================
+// 📜 HISTORY
+// =========================
+
+function updateHistory(list) {
+  const el = document.getElementById("historyList");
+  if (!el) return;
+
+  el.innerHTML = "";
+
+  list.slice(0, 10).forEach((s) => {
+    const div = document.createElement("div");
+    div.className = "history-item";
+
+    div.innerHTML = `
+      <div>${s.symbol}</div>
+      <div>${s.signal}</div>
+      <div>${s.finalScore || 0}%</div>
+      <div>${s.result || "pending"}</div>
+    `;
+
+    el.appendChild(div);
+  });
+}
+
+// =========================
+// 🧠 ENGINE UPDATE
+// =========================
+
+function updateEngine(data) {
+  if (!data?.data) return;
+
+  const state = data.data;
+
+  document.getElementById("systemStatus").innerText =
+    state.connection?.engineRunning ? "ATIVO" : "PARADO";
+
+  document.getElementById("lastUpdate").innerText =
+    new Date().toLocaleTimeString();
+}
+
+// =========================
+// 👤 LOAD USER
+// =========================
+
+async function loadUser() {
+  const user = JSON.parse(localStorage.getItem("aerix_user") || "{}");
+
+  document.getElementById("userName").innerText =
+    user.name || "Usuário";
+
+  document.getElementById("userEmail").innerText =
+    user.email || "--";
+
+  setPlanUI(user.plan || "free");
+}
 
 // =========================
 // 🚀 INIT
@@ -159,7 +213,7 @@ window.startCheckout = startCheckout;
 async function init() {
   setupLogin();
 
-  const token = localStorage.getItem("aerix_token");
+  const token = getToken();
   const overlay = document.getElementById("loginOverlay");
 
   if (!token) {
@@ -169,8 +223,9 @@ async function init() {
 
   overlay.classList.add("hidden");
 
-  await fetchMe();
-  await checkPremiumAccess();
+  await loadUser();
+
+  connectSocket();
 }
 
 init();
