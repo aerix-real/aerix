@@ -159,7 +159,7 @@ input {
 
 .logo-banner {
   position: relative;
-  min-height: 112px;
+  min-height: 124px;
   flex: 1;
   border-radius: 26px;
   overflow: hidden;
@@ -200,12 +200,17 @@ input {
 
 .logo-banner-img {
   position: absolute;
-  inset: 10px 18px;
-  width: calc(100% - 36px);
-  height: calc(100% - 20px);
+  inset: 8px 22px 18px 22px;
+  width: calc(100% - 44px);
+  height: calc(100% - 26px);
+  max-height: 92px;
   object-fit: contain;
+  object-position: center;
   opacity: 1;
   image-rendering: auto;
+  filter:
+    drop-shadow(0 0 10px rgba(32, 183, 255, 0.18))
+    drop-shadow(0 0 22px rgba(0, 240, 255, 0.08));
 }
 
 .logo-banner-overlay {

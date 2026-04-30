@@ -2,6 +2,16 @@ const Stripe = require("stripe");
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
+function getAppUrl() {
+  let appUrl = String(process.env.APP_URL || "http://localhost:3000").trim();
+
+  if (!appUrl.startsWith("http://") && !appUrl.startsWith("https://")) {
+    appUrl = `https://${appUrl}`;
+  }
+
+  return appUrl.replace(/\/+$/, "");
+}
+
 class StripeService {
   async createCheckoutSession({ user }) {
     if (!user?.id || !user?.email) {
@@ -12,11 +22,15 @@ class StripeService {
       throw new Error("STRIPE_SECRET_KEY não configurado.");
     }
 
+    if (!process.env.STRIPE_SECRET_KEY.startsWith("sk_")) {
+      throw new Error("STRIPE_SECRET_KEY inválida. Use uma chave sk_test_ ou sk_live_ da Stripe.");
+    }
+
     if (!process.env.STRIPE_PRICE_PREMIUM_MONTHLY) {
       throw new Error("STRIPE_PRICE_PREMIUM_MONTHLY não configurado.");
     }
 
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
 
     return stripe.checkout.sessions.create({
       mode: "subscription",
