@@ -9,31 +9,21 @@ const engineRunner = require("./services/engine-runner.service");
 const marketDataService = require("./services/market-data.service");
 const authMiddleware = require("./middlewares/auth.middleware");
 const { requirePremium } = require("./middlewares/plan.middleware");
-
 const billingController = require("./controllers/billing.controller");
 
-// 🔥 SOCKET
 const { Server } = require("socket.io");
 const { initializeSocket } = require("./websocket/socket");
 
 const app = express();
 const server = http.createServer(app);
 
-// =========================
-// 🔥 SOCKET.IO INIT
-// =========================
-
 const io = new Server(server, {
   cors: {
-    origin: "*"
+    origin: process.env.CORS_ORIGIN || "*"
   }
 });
 
 initializeSocket(io);
-
-// =========================
-// 💳 STRIPE WEBHOOK
-// =========================
 
 app.post(
   "/api/billing/webhook",
@@ -41,23 +31,14 @@ app.post(
   billingController.handleWebhook
 );
 
-// =========================
-// GLOBAL MIDDLEWARES
-// =========================
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "*"
+}));
 
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =========================
-// STATIC FRONTEND
-// =========================
-
 app.use(express.static(path.join(__dirname, "../public")));
-
-// =========================
-// AUTH ROUTES
-// =========================
 
 try {
   const authRoutes = require("./routes/auth.routes");
@@ -65,10 +46,6 @@ try {
 } catch (error) {
   console.log("⚠️ Rotas de auth não encontradas:", error.message);
 }
-
-// =========================
-// BILLING ROUTES
-// =========================
 
 app.post(
   "/api/billing/create-checkout",
@@ -88,10 +65,6 @@ app.get(
   billingController.status
 );
 
-// =========================
-// DASHBOARD
-// =========================
-
 app.get("/api/dashboard", authMiddleware, requirePremium, (req, res) => {
   try {
     return res.json({
@@ -106,30 +79,43 @@ app.get("/api/dashboard", authMiddleware, requirePremium, (req, res) => {
   }
 });
 
-// =========================
-// ENGINE CONTROL
-// =========================
-
 app.get("/api/engine", authMiddleware, requirePremium, (req, res) => {
-  return res.json({
-    ok: true,
-    data: engineRunner.getState()
-  });
+  try {
+    return res.json({
+      ok: true,
+      data: engineRunner.getState()
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: "Erro ao carregar engine"
+    });
+  }
 });
 
 app.post("/api/engine/start", authMiddleware, requirePremium, (req, res) => {
-  engineRunner.start();
-  return res.json({ ok: true });
+  try {
+    engineRunner.start();
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: "Erro ao iniciar engine"
+    });
+  }
 });
 
 app.post("/api/engine/stop", authMiddleware, requirePremium, (req, res) => {
-  engineRunner.stop();
-  return res.json({ ok: true });
+  try {
+    engineRunner.stop();
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: "Erro ao parar engine"
+    });
+  }
 });
-
-// =========================
-// MARKET STATUS
-// =========================
 
 app.get("/api/market/status", authMiddleware, async (req, res) => {
   try {
@@ -147,9 +133,72 @@ app.get("/api/market/status", authMiddleware, async (req, res) => {
   }
 });
 
-// =========================
-// HEALTH
-// =========================
+app.get("/api/signals/recent", authMiddleware, async (req, res) => {
+  try {
+    const state = typeof engineRunner.getState === "function"
+      ? engineRunner.getState()
+      : {};
+
+    const signals =
+      state.recentSignals ||
+      state.history ||
+      state.signals ||
+      [];
+
+    return res.json({
+      ok: true,
+      signals: Array.isArray(signals) ? signals.slice(0, 50) : []
+    });
+  } catch (error) {
+    return res.json({
+      ok: true,
+      signals: []
+    });
+  }
+});
+
+app.get("/api/stats", authMiddleware, async (req, res) => {
+  try {
+    const state = typeof engineRunner.getState === "function"
+      ? engineRunner.getState()
+      : {};
+
+    const history =
+      state.recentSignals ||
+      state.history ||
+      state.signals ||
+      [];
+
+    const list = Array.isArray(history) ? history : [];
+
+    const total = list.length;
+    const wins = list.filter((item) => item.result === "WIN").length;
+    const losses = list.filter((item) => item.result === "LOSS").length;
+    const winrate = wins + losses > 0
+      ? Math.round((wins / (wins + losses)) * 100)
+      : 0;
+
+    return res.json({
+      ok: true,
+      stats: {
+        total,
+        wins,
+        losses,
+        winrate
+      }
+    });
+  } catch (error) {
+    return res.json({
+      ok: true,
+      stats: {
+        total: 0,
+        wins: 0,
+        losses: 0,
+        winrate: 0
+      }
+    });
+  }
+});
 
 app.get("/api/health", (req, res) => {
   return res.json({
@@ -160,22 +209,14 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// =========================
-// FRONTEND
-// =========================
-
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-// =========================
-// START SERVER (🔥 CORRETO)
-// =========================
-
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log(`🚀 AERIX rodando em http://localhost:${PORT}`);
+  console.log(`🚀 AERIX rodando na porta ${PORT}`);
 
   if (String(process.env.AUTO_START_ENGINE).toLowerCase() === "true") {
     engineRunner.start();

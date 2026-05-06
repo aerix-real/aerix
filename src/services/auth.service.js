@@ -2,11 +2,19 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../config/database");
 
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || "aerix_access_secret";
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || "aerix_refresh_secret";
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
 
-const ACCESS_EXPIRES = "15m";
-const REFRESH_EXPIRES = "7d";
+const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || "15m";
+const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || "7d";
+
+if (!ACCESS_SECRET) {
+  throw new Error("JWT_ACCESS_SECRET ou JWT_SECRET não configurado.");
+}
+
+if (!REFRESH_SECRET) {
+  throw new Error("JWT_REFRESH_SECRET ou JWT_SECRET não configurado.");
+}
 
 function resolveUserPlan(user) {
   const role = String(user?.role || "").toLowerCase();
@@ -45,7 +53,9 @@ function generateAccessToken(user) {
 
 function generateRefreshToken(user) {
   return jwt.sign(
-    { id: user.id },
+    {
+      id: user.id
+    },
     REFRESH_SECRET,
     { expiresIn: REFRESH_EXPIRES }
   );
@@ -122,7 +132,11 @@ async function register({ name, email, password }) {
 
   await saveRefreshToken(user.id, refreshToken);
 
-  return { user, accessToken, refreshToken };
+  return {
+    user,
+    accessToken,
+    refreshToken
+  };
 }
 
 async function login({ email, password }) {
@@ -159,7 +173,11 @@ async function login({ email, password }) {
 
   await saveRefreshToken(user.id, refreshToken);
 
-  return { user, accessToken, refreshToken };
+  return {
+    user,
+    accessToken,
+    refreshToken
+  };
 }
 
 async function getUserById(id) {
@@ -201,16 +219,16 @@ async function refreshSession(refreshToken) {
     }
 
     const user = await getUserById(decoded.id);
-    const newAccess = generateAccessToken(user);
-    const newRefresh = generateRefreshToken(user);
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
 
     await deleteRefreshToken(refreshToken);
-    await saveRefreshToken(user.id, newRefresh);
+    await saveRefreshToken(user.id, newRefreshToken);
 
     return {
       user,
-      accessToken: newAccess,
-      refreshToken: newRefresh
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
     };
   } catch (_) {
     throw { statusCode: 401, message: "Refresh token inválido." };
@@ -225,11 +243,25 @@ async function logout(refreshToken) {
 }
 
 async function bootstrapAdmin() {
-  const adminEmail = String(process.env.ADMIN_EMAIL || "admin@aerix.com")
+  const adminEmail = String(process.env.ADMIN_EMAIL || "")
     .trim()
     .toLowerCase();
 
-  const adminPassword = String(process.env.ADMIN_PASSWORD || "123456").trim();
+  const adminPassword = String(process.env.ADMIN_PASSWORD || "").trim();
+
+  if (!adminEmail || !adminPassword) {
+    throw {
+      statusCode: 500,
+      message: "ADMIN_EMAIL e ADMIN_PASSWORD não configurados."
+    };
+  }
+
+  if (adminPassword.length < 6) {
+    throw {
+      statusCode: 500,
+      message: "ADMIN_PASSWORD precisa ter pelo menos 6 caracteres."
+    };
+  }
 
   const existing = await db.query(
     `
@@ -268,7 +300,10 @@ async function verifyAccessToken(token) {
   try {
     return jwt.verify(token, ACCESS_SECRET);
   } catch (_) {
-    throw { statusCode: 401, message: "Token inválido ou expirado." };
+    throw {
+      statusCode: 401,
+      message: "Token inválido ou expirado."
+    };
   }
 }
 
