@@ -12,7 +12,11 @@ const state = {
   accessToken: localStorage.getItem(STORAGE_KEYS.accessToken),
   refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken),
   aiStateIndex: 0,
-  chartData: Array.from({ length: 34 }, (_, index) => 48 + Math.sin(index / 2) * 10 + Math.random() * 12),
+  currentMode: localStorage.getItem("aerix_mode") || "equilibrado",
+  chartData: Array.from(
+    { length: 34 },
+    (_, index) => 48 + Math.sin(index / 2) * 10 + Math.random() * 12
+  ),
   chartTimer: null,
   aiTimer: null
 };
@@ -70,6 +74,12 @@ const AI_STATES = [
   "Monitorando volatilidade do ativo",
   "Mercado sem confluência ideal no momento"
 ];
+
+const MODE_DESCRIPTIONS = {
+  conservador: "Modo conservador ativo. Foco em menos sinais e maior filtro operacional.",
+  equilibrado: "Modo equilibrado ativo. Balanceamento entre frequência e qualidade.",
+  agressivo: "Modo agressivo ativo. Mais sinais, com maior exposição operacional."
+};
 
 function isPremium() {
   const role = String(state.user?.role || "").toLowerCase();
@@ -150,6 +160,7 @@ function saveSession({ user, accessToken, refreshToken }) {
 
   applyUserUI();
   applyPlanLocks();
+  applyModeUI(state.currentMode, false);
 }
 
 function clearSession() {
@@ -378,6 +389,53 @@ function setPremiumPlaceholders() {
   if (el.bestAsset) el.bestAsset.textContent = "---";
   if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade liberada no PREMIUM.";
   if (el.bestScore) el.bestScore.textContent = "0%";
+}
+
+function applyModeUI(mode, notify = true) {
+  const safeMode = ["conservador", "equilibrado", "agressivo"].includes(mode)
+    ? mode
+    : "equilibrado";
+
+  state.currentMode = safeMode;
+  localStorage.setItem("aerix_mode", safeMode);
+
+  document.body.classList.remove("mode-conservador", "mode-equilibrado", "mode-agressivo");
+  document.body.classList.add(`mode-${safeMode}`);
+
+  const modeButtons = document.querySelectorAll(".mode-btn");
+  modeButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.mode === safeMode);
+  });
+
+  const modeDescription = document.getElementById("modeDescription");
+  if (modeDescription) {
+    modeDescription.textContent = MODE_DESCRIPTIONS[safeMode] || MODE_DESCRIPTIONS.equilibrado;
+  }
+
+  if (notify) {
+    showToast(`Modo ${safeMode} ativado.`, "success");
+  }
+}
+
+function setupModeSwitcher() {
+  const modeButtons = document.querySelectorAll(".mode-btn");
+
+  if (!modeButtons.length) return;
+
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.mode || "equilibrado";
+
+      if (!isPremium()) {
+        showToast("Alteração de modo disponível apenas no plano PREMIUM.", "info");
+        return;
+      }
+
+      applyModeUI(mode, true);
+    });
+  });
+
+  applyModeUI(state.currentMode, false);
 }
 
 function rotateAIState() {
@@ -763,6 +821,7 @@ function startAIEngine() {
 async function bootPanel() {
   applyUserUI();
   applyPlanLocks();
+  applyModeUI(state.currentMode, false);
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
@@ -898,6 +957,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
+  setupModeSwitcher();
   setConnection("Conectando");
 
   const validSession = await checkSession();
