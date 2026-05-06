@@ -10,7 +10,11 @@ const state = {
   history: [],
   user: null,
   accessToken: localStorage.getItem(STORAGE_KEYS.accessToken),
-  refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken)
+  refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken),
+  aiStateIndex: 0,
+  chartData: Array.from({ length: 34 }, (_, index) => 48 + Math.sin(index / 2) * 10 + Math.random() * 12),
+  chartTimer: null,
+  aiTimer: null
 };
 
 const el = {
@@ -58,10 +62,18 @@ const el = {
   statsUpdated: document.getElementById("statsUpdated")
 };
 
+const AI_STATES = [
+  "IA analisando alinhamento de tendência",
+  "Filtrando confluências operacionais",
+  "Aguardando confirmação de timing",
+  "Validando força do candle atual",
+  "Monitorando volatilidade do ativo",
+  "Mercado sem confluência ideal no momento"
+];
+
 function isPremium() {
   const role = String(state.user?.role || "").toLowerCase();
   const plan = String(state.user?.plan || "").toLowerCase();
-
   return role === "admin" || plan === "premium";
 }
 
@@ -90,6 +102,27 @@ function showAuthFeedback(message, type = "error") {
   if (!message) {
     el.authFeedback.classList.add("hidden");
   }
+}
+
+function showToast(message, type = "info") {
+  let container = document.querySelector(".toast-container");
+
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add("hide");
+    setTimeout(() => toast.remove(), 280);
+  }, 3200);
 }
 
 function setLoginLoading(loading) {
@@ -184,6 +217,7 @@ async function login(email, password) {
 
   setLoginVisible(false);
   showAuthFeedback("");
+  showToast("Login realizado com sucesso.", "success");
 
   await bootPanel();
 }
@@ -267,13 +301,12 @@ async function logout() {
         })
       });
     }
-  } catch (_) {
-    // logout local mesmo se servidor falhar
-  }
+  } catch (_) {}
 
   clearSession();
   renderHistory();
   setLoginVisible(true);
+  showToast("Sessão encerrada.", "info");
 }
 
 function applyUserUI() {
@@ -298,14 +331,14 @@ function applyUserUI() {
 
   if (el.premiumStatus) {
     el.premiumStatus.textContent = premium
-      ? "Premium ativo. Todos os recursos liberados."
-      : "Plano FREE ativo. Recursos premium bloqueados.";
+      ? "Premium ativo. Todos os recursos institucionais liberados."
+      : "Plano FREE ativo. Leitura básica liberada; inteligência premium bloqueada.";
   }
 
   if (el.headlineText) {
     el.headlineText.textContent = premium
-      ? "Painel premium ativo com recursos institucionais liberados."
-      : "Painel FREE carregado. Histórico e estatísticas básicas liberados.";
+      ? "Terminal premium ativo. IA operacional monitorando mercado em tempo real."
+      : "Painel FREE carregado. Histórico e estatísticas básicas disponíveis.";
   }
 }
 
@@ -325,22 +358,47 @@ function applyPlanLocks() {
 
 function setPremiumPlaceholders() {
   if (el.signalAsset) el.signalAsset.textContent = "---";
+
   if (el.signalDirection) {
-    el.signalDirection.textContent = "PREMIUM";
-    el.signalDirection.className = "signal-direction neutral";
+    el.signalDirection.textContent = "IA PREMIUM";
+    el.signalDirection.className = "signal-direction analyzing";
   }
+
   if (el.signalEntry) el.signalEntry.textContent = "--";
   if (el.signalExpiry) el.signalExpiry.textContent = "--";
   if (el.signalConfidence) el.signalConfidence.textContent = "0%";
   if (el.signalCountdown) el.signalCountdown.textContent = "--";
   if (el.signalTime) el.signalTime.textContent = "Bloqueado no FREE";
+
   if (el.aiExplanation) {
-    el.aiExplanation.textContent =
-      "Recurso premium. No plano FREE, o painel carrega parcialmente com histórico e estatísticas básicas.";
+    el.aiExplanation.innerHTML =
+      'Recurso premium. No FREE, o painel exibe histórico e estatísticas básicas. <span class="ai-live-dots"><i></i><i></i><i></i></span>';
   }
+
   if (el.bestAsset) el.bestAsset.textContent = "---";
-  if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade disponível no PREMIUM.";
+  if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade liberada no PREMIUM.";
   if (el.bestScore) el.bestScore.textContent = "0%";
+}
+
+function rotateAIState() {
+  if (!isPremium()) return;
+
+  const text = AI_STATES[state.aiStateIndex % AI_STATES.length];
+  state.aiStateIndex += 1;
+
+  if (el.signalDirection) {
+    const currentDirection = String(el.signalDirection.textContent || "").toUpperCase();
+
+    if (!["CALL", "PUT", "BUY", "SELL"].includes(currentDirection)) {
+      el.signalDirection.textContent = text.toUpperCase();
+      el.signalDirection.className = "signal-direction analyzing";
+    }
+  }
+
+  if (el.aiExplanation) {
+    el.aiExplanation.classList.add("is-typing");
+    el.aiExplanation.innerHTML = `${text}<span class="ai-live-dots"><i></i><i></i><i></i></span>`;
+  }
 }
 
 async function loadHistory() {
@@ -464,14 +522,15 @@ function renderSignal(signal) {
 
   if (el.signalDirection) {
     el.signalDirection.textContent = direction || "AGUARDANDO";
-    el.signalDirection.className = "signal-direction neutral";
+    el.signalDirection.className = "signal-direction";
 
     if (direction === "CALL" || direction === "BUY") {
       el.signalDirection.classList.add("buy");
     } else if (direction === "PUT" || direction === "SELL") {
       el.signalDirection.classList.add("sell");
     } else {
-      el.signalDirection.classList.add("neutral");
+      el.signalDirection.classList.add("analyzing");
+      el.signalDirection.textContent = "IA VALIDANDO";
     }
   }
 
@@ -480,7 +539,9 @@ function renderSignal(signal) {
   if (el.signalConfidence) el.signalConfidence.textContent = `${confidence}%`;
   if (el.signalCountdown) el.signalCountdown.textContent = signal.countdown || "--";
   if (el.signalTime) el.signalTime.textContent = formatTime(signal.created_at || new Date());
+
   if (el.aiExplanation) {
+    el.aiExplanation.classList.remove("is-typing");
     el.aiExplanation.textContent =
       signal.explanation ||
       signal.aiExplanation ||
@@ -495,11 +556,31 @@ function renderSignal(signal) {
       "Sinal premium detectado com leitura operacional.";
   }
   if (el.bestScore) el.bestScore.textContent = `${confidence}%`;
+
+  const card = document.querySelector(".signal-card");
+
+  if (card) {
+    card.classList.remove("signal-call", "signal-put", "signal-wait", "flash");
+
+    if (direction === "CALL" || direction === "BUY") {
+      card.classList.add("signal-call");
+    } else if (direction === "PUT" || direction === "SELL") {
+      card.classList.add("signal-put");
+    } else {
+      card.classList.add("signal-wait");
+    }
+
+    void card.offsetWidth;
+    card.classList.add("flash");
+  }
+
+  pushChartPoint(confidence || 50);
+  drawMiniChart();
 }
 
 async function setResult(id, result) {
   if (!isPremium()) {
-    alert("Recurso disponível apenas no plano PREMIUM.");
+    showToast("Recurso disponível apenas no plano PREMIUM.", "error");
     return;
   }
 
@@ -514,10 +595,13 @@ async function setResult(id, result) {
     const data = await response.json().catch(() => null);
 
     if (!response.ok || data?.ok === false) {
-      alert(data?.message || "Não foi possível atualizar o resultado.");
+      showToast(data?.message || "Não foi possível atualizar o resultado.", "error");
+      return;
     }
+
+    showToast(`Resultado marcado como ${result}.`, "success");
   } catch (error) {
-    alert("Erro ao atualizar resultado.");
+    showToast("Erro ao atualizar resultado.", "error");
   }
 }
 
@@ -548,9 +632,140 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
+function ensureMiniChart() {
+  const bestPanel = document.querySelector(".best-opportunity-panel");
+
+  if (!bestPanel || document.getElementById("miniChartCanvas")) return;
+
+  const metrics = document.createElement("div");
+  metrics.className = "opportunity-metrics";
+  metrics.innerHTML = `
+    <div class="opportunity-metric"><span>Tendência</span><strong id="trendMetric">Neutra</strong></div>
+    <div class="opportunity-metric"><span>Volatilidade</span><strong id="volMetric">Monitorando</strong></div>
+    <div class="opportunity-metric"><span>Timing</span><strong id="timingMetric">Aguardando</strong></div>
+  `;
+
+  const wrap = document.createElement("div");
+  wrap.className = "mini-chart-wrap";
+  wrap.innerHTML = `<canvas id="miniChartCanvas" width="640" height="180"></canvas>`;
+
+  bestPanel.appendChild(metrics);
+  bestPanel.appendChild(wrap);
+}
+
+function pushChartPoint(value) {
+  const safe = Number.isFinite(Number(value)) ? Number(value) : 50;
+  const previous = state.chartData[state.chartData.length - 1] || 50;
+  const next = Math.max(12, Math.min(98, previous * 0.72 + safe * 0.28 + (Math.random() * 8 - 4)));
+
+  state.chartData.push(next);
+
+  if (state.chartData.length > 42) {
+    state.chartData.shift();
+  }
+}
+
+function drawMiniChart() {
+  const canvas = document.getElementById("miniChartCanvas");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const data = state.chartData;
+  const max = Math.max(...data, 100);
+  const min = Math.min(...data, 0);
+  const range = Math.max(1, max - min);
+
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 1;
+
+  for (let i = 0; i < 6; i++) {
+    const y = (height / 5) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+
+  data.forEach((point, index) => {
+    const x = (width / (data.length - 1)) * index;
+    const y = height - ((point - min) / range) * (height - 24) - 12;
+
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+
+  const gradient = ctx.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, "#20b7ff");
+  gradient.addColorStop(0.5, "#00f0ff");
+  gradient.addColorStop(1, "#20e6a0");
+
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 4;
+  ctx.shadowColor = "rgba(0,240,255,0.55)";
+  ctx.shadowBlur = 18;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  const last = data[data.length - 1];
+  const x = width - 2;
+  const y = height - ((last - min) / range) * (height - 24) - 12;
+
+  ctx.beginPath();
+  ctx.arc(x - 5, y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#20e6a0";
+  ctx.fill();
+}
+
+function startChartLoop() {
+  ensureMiniChart();
+  drawMiniChart();
+
+  if (state.chartTimer) clearInterval(state.chartTimer);
+
+  state.chartTimer = setInterval(() => {
+    pushChartPoint(45 + Math.random() * 35);
+    drawMiniChart();
+
+    const trend = document.getElementById("trendMetric");
+    const vol = document.getElementById("volMetric");
+    const timing = document.getElementById("timingMetric");
+
+    const last = state.chartData[state.chartData.length - 1];
+    const prev = state.chartData[state.chartData.length - 8] || last;
+
+    if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
+    if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
+    if (timing) timing.textContent = isPremium() ? "Validando candle" : "Premium";
+  }, 1800);
+}
+
+function startAIEngine() {
+  if (state.aiTimer) clearInterval(state.aiTimer);
+
+  state.aiTimer = setInterval(() => {
+    rotateAIState();
+  }, 2800);
+}
+
 async function bootPanel() {
   applyUserUI();
   applyPlanLocks();
+  ensureMiniChart();
+  startChartLoop();
+  startAIEngine();
   await Promise.allSettled([loadHistory(), loadStats()]);
 }
 
@@ -633,9 +848,9 @@ if (el.upgradeBtn) {
         return;
       }
 
-      alert(data?.message || "Checkout ainda não configurado.");
+      showToast(data?.message || "Checkout ainda não configurado.", "info");
     } catch (error) {
-      alert("Erro ao iniciar checkout.");
+      showToast("Erro ao iniciar checkout.", "error");
     }
   });
 }
@@ -680,6 +895,9 @@ window.setResult = setResult;
 
 document.addEventListener("DOMContentLoaded", async () => {
   startClock();
+  ensureMiniChart();
+  startChartLoop();
+  startAIEngine();
   setConnection("Conectando");
 
   const validSession = await checkSession();
