@@ -1270,50 +1270,113 @@ body.plan-premium .user-avatar {
   font-size: 0.84rem;
 }
 
-/* PREMIUM LOCK */
+/* PREMIUM LOCK - VERSÃO SaaS PREMIUM LEVE */
 
 .locked {
   position: relative;
-  opacity: 0.56;
-  filter: saturate(0.78);
+  opacity: 1 !important;
+  filter: none !important;
+  overflow: hidden;
+}
+
+.locked::before {
+  content: "🔒 Recurso Premium";
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 12;
+  width: auto;
+  max-width: 210px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: rgba(5, 13, 26, 0.78);
+  border: 1px solid rgba(255, 200, 87, 0.28);
+  color: #ffe7a6;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 .locked::after {
-  content: "PREMIUM";
+  content: "";
   position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 8;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 950;
-  letter-spacing: 0.08em;
-  color: #06101f;
-  background: linear-gradient(135deg, #ffc857, #20e6a0);
-  box-shadow: 0 0 16px rgba(255, 200, 87, 0.22);
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(5, 13, 26, 0.18),
+      rgba(5, 13, 26, 0.38)
+    );
+  border: 1px solid rgba(255, 200, 87, 0.08);
 }
 
-body.plan-premium .locked {
-  opacity: 1;
-  filter: none;
+.locked .signal-direction,
+.locked .signal-meta-card strong,
+.locked .best-opportunity-score,
+.locked .ai-text,
+.locked #miniChartCanvas {
+  filter: blur(3px);
+  opacity: 0.62;
 }
 
+.locked .signal-asset,
+.locked .best-opportunity-main strong,
+.locked .best-opportunity-main span,
+.locked .opportunity-metric,
+.locked .signal-meta-card span {
+  opacity: 0.82;
+}
+
+.locked .mini-chart-wrap,
+.locked .best-opportunity-box,
+.locked .signal-meta-card,
+.locked .ai-text {
+  background: rgba(255, 255, 255, 0.024);
+}
+
+body.plan-premium .locked::before,
 body.plan-premium .locked::after {
-  display: none;
+  display: none !important;
+}
+
+body.plan-premium .locked,
+body.plan-premium .locked * {
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 .action-buttons.locked {
+  opacity: 1 !important;
+  filter: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 38px;
   border-radius: 12px;
-  color: var(--amber);
+  color: #ffe7a6;
   background: rgba(255, 200, 87, 0.08);
   border: 1px solid rgba(255, 200, 87, 0.16);
   font-weight: 900;
   font-size: 0.78rem;
+}
+
+.action-buttons.locked::before,
+.action-buttons.locked::after {
+  display: none !important;
+}
+
+@media (max-width: 820px) {
+  .locked::before {
+    top: 10px;
+    right: 10px;
+    font-size: 0.64rem;
+    padding: 7px 10px;
+  }
 }
 
 /* TOAST */
