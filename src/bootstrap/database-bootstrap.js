@@ -109,6 +109,7 @@ async function ensureUsersTable() {
   await ensureColumn("users", "stripe_customer_id", "TEXT");
   await ensureColumn("users", "stripe_subscription_id", "TEXT");
   await ensureColumn("users", "subscription_status", "TEXT");
+  await ensureColumn("users", "premium_until", "TIMESTAMP");
   await ensureColumn("users", "created_at", "TIMESTAMP DEFAULT NOW()");
 }
 

@@ -53,20 +53,30 @@ async function getGlobalAnalytics() {
       signalRepository.getLatest(20)
     ]);
 
-  const wins = Number(stats?.wins || 0);
-  const losses = Number(stats?.losses || 0);
+  const resolvedBuckets = Object.values(stats?.bySignal || {});
+  const wins = resolvedBuckets.reduce((sum, item) => sum + Number(item.wins || 0), 0);
+  const losses = resolvedBuckets.reduce((sum, item) => sum + Number(item.losses || 0), 0);
   const totalResolved = wins + losses;
+  const totalSignals = recentHistory.length;
+  const callCount = Number(stats?.bySignal?.CALL?.total || 0);
+  const putCount = Number(stats?.bySignal?.PUT?.total || 0);
+  const avgConfidence = recentHistory.length
+    ? recentHistory.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / recentHistory.length
+    : 0;
+  const avgFinalScore = recentHistory.length
+    ? recentHistory.reduce((sum, item) => sum + Number(item.final_score || item.finalScore || 0), 0) / recentHistory.length
+    : 0;
 
   const summary = {
-    totalSignals: Number(stats?.total || 0),
+    totalSignals,
     wins,
     losses,
     totalResolved,
     winRate: toWinRate(wins, losses),
-    avgConfidence: Number(stats?.avg_confidence || 0),
-    avgFinalScore: Number(stats?.avg_final_score || 0),
-    callCount: Number(stats?.call_count || 0),
-    putCount: Number(stats?.put_count || 0)
+    avgConfidence: Number(avgConfidence.toFixed(2)),
+    avgFinalScore: Number(avgFinalScore.toFixed(2)),
+    callCount,
+    putCount
   };
 
   const symbols = topSymbols.map((item) => ({

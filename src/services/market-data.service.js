@@ -12,6 +12,7 @@ const BASE_URL = "https://api.twelvedata.com";
 let DAILY_LIMIT_REACHED = false;
 let lastStatsCache = null;
 let lastStatsTime = 0;
+let LAST_FALLBACK_AT = 0;
 
 // =========================
 // 🧠 OTIMIZAÇÃO DE STATS
@@ -34,7 +35,7 @@ async function getCachedStats() {
 // 🧠 IA OFFLINE INTELIGENTE
 // =========================
 
-async function generateSmartFakeCandles(symbol) {
+async function generateSmartFakeCandles(symbol, outputsize = 120) {
   const stats = await getCachedStats();
 
   const symbolStats = stats?.bySymbol?.[symbol];
@@ -43,7 +44,7 @@ async function generateSmartFakeCandles(symbol) {
   const candles = [];
   let price = 1 + Math.random();
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < outputsize; i++) {
     const direction = (Math.random() - 0.5 + trendBias * 0.2);
 
     const open = price;
@@ -58,7 +59,8 @@ async function generateSmartFakeCandles(symbol) {
       close,
       high,
       low,
-      volume: Math.random() * 100
+      volume: Math.random() * 100,
+      source: "fallback"
     });
 
     price = close;
@@ -73,6 +75,7 @@ async function generateSmartFakeCandles(symbol) {
 
 function markDailyLimit() {
   DAILY_LIMIT_REACHED = true;
+  LAST_FALLBACK_AT = Date.now();
   console.log("🚨 LIMITE DIÁRIO ATINGIDO → fallback IA ativado");
 }
 
@@ -87,7 +90,7 @@ function shouldUseFallback() {
 // 🚀 FETCH PRINCIPAL
 // =========================
 
-async function fetchTimeSeries(symbol, interval = "5min", outputsize = 30) {
+async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
   const normalized = normalizeSymbol(symbol);
   const cacheKey = `${normalized}:${interval}`;
 
@@ -95,7 +98,8 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 30) {
   if (cached) return cached;
 
   if (shouldUseFallback()) {
-    const fake = await generateSmartFakeCandles(symbol);
+    LAST_FALLBACK_AT = Date.now();
+    const fake = await generateSmartFakeCandles(symbol, outputsize);
     cacheService.set(cacheKey, fake, 5000);
     return fake;
   }
@@ -115,7 +119,7 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 30) {
 
     if (data?.message?.includes("API credits")) {
       markDailyLimit();
-      return await generateSmartFakeCandles(symbol);
+      return await generateSmartFakeCandles(symbol, outputsize);
     }
 
     if (!data?.values || !Array.isArray(data.values)) {
@@ -140,7 +144,8 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 30) {
   } catch (err) {
     console.log("⚠️ API falhou → usando IA offline");
 
-    const fake = await generateSmartFakeCandles(symbol);
+    LAST_FALLBACK_AT = Date.now();
+    const fake = await generateSmartFakeCandles(symbol, outputsize);
     cacheService.set(cacheKey, fake, 5000);
 
     return fake;
@@ -196,14 +201,42 @@ function getVolatilityPercent(candles) {
 // =========================
 
 async function getMarketSnapshot(symbol) {
+  const snapshotStartedAt = Date.now();
+  const usedFallback = shouldUseFallback();
+
   const [m5, m15, h1] = await Promise.all([
     fetchTimeSeries(symbol, "5min"),
     fetchTimeSeries(symbol, "15min"),
     fetchTimeSeries(symbol, "1h")
   ]);
 
+  const hasFallbackCandles = [m5, m15, h1].some((candles) =>
+    Array.isArray(candles) && candles.some((candle) => candle?.source === "fallback")
+  );
+
+  const source = usedFallback ||
+    DAILY_LIMIT_REACHED ||
+    LAST_FALLBACK_AT >= snapshotStartedAt ||
+    hasFallbackCandles ||
+    process.env.USE_FAKE_DATA === "true"
+    ? "fallback"
+    : "twelvedata";
+
   return {
     symbol,
+    source,
+    isFallback: source === "fallback",
+    dataQuality: {
+      source,
+      isFallback: source === "fallback",
+      operational: source !== "fallback",
+      candles: {
+        m5: m5.length,
+        m15: m15.length,
+        h1: h1.length
+      },
+      minimumCandles: 60
+    },
     timeframes: {
       m5: {
         candles: m5,

@@ -66,9 +66,18 @@ function buildMtfContext(snapshot) {
   if (downCount > upCount) dominantDirection = "down";
 
   return {
-    h1: { trend: h1.direction || "neutral" },
-    m15: { trend: m15.direction || "neutral" },
-    m5: { trend: m5.direction || "neutral" },
+    h1: {
+      trend: h1.direction || "neutral",
+      aligned: dominantDirection !== "neutral" && h1.direction === dominantDirection
+    },
+    m15: {
+      trend: m15.direction || "neutral",
+      aligned: dominantDirection !== "neutral" && m15.direction === dominantDirection
+    },
+    m5: {
+      trend: m5.direction || "neutral",
+      aligned: dominantDirection !== "neutral" && m5.direction === dominantDirection
+    },
     dominantDirection,
     alignment: Math.max(upCount, downCount),
     isAligned: upCount === 3 || downCount === 3
@@ -126,14 +135,22 @@ function safeEvaluateStrategy(strategy, payload) {
 function validateMarketConditions(snapshot, mtf) {
   const m5 = snapshot?.timeframes?.m5 || {};
   const volatility = Number(m5.volatilityPercent || 0);
+  const dataQuality = snapshot?.dataQuality || {};
 
   const isLowVolatility = volatility < 0.12;
   const isWeakAlignment = mtf.alignment < 2;
+  const isFallbackData = Boolean(snapshot?.isFallback || dataQuality.isFallback);
+  const hasInsufficientCandles = ["m5", "m15", "h1"].some((timeframe) => {
+    const candles = snapshot?.timeframes?.[timeframe]?.candles || [];
+    return candles.length < 60;
+  });
 
   return {
     isLowVolatility,
     isWeakAlignment,
-    shouldBlock: isLowVolatility || isWeakAlignment
+    isFallbackData,
+    hasInsufficientCandles,
+    shouldBlock: isLowVolatility || isWeakAlignment || isFallbackData || hasInsufficientCandles
   };
 }
 
@@ -189,6 +206,12 @@ function runStrategies({ snapshot, mode = "balanced" }) {
           : null,
         marketValidation.isWeakAlignment
           ? "Falta de alinhamento entre timeframes."
+          : null,
+        marketValidation.isFallbackData
+          ? "Fonte de dados em fallback; entrada operacional bloqueada."
+          : null,
+        marketValidation.hasInsufficientCandles
+          ? "Histórico insuficiente de candles para validação institucional."
           : null
       ].filter(Boolean),
       strategies: evaluated,

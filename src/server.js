@@ -10,9 +10,10 @@ const marketDataService = require("./services/market-data.service");
 const authMiddleware = require("./middlewares/auth.middleware");
 const { requirePremium } = require("./middlewares/plan.middleware");
 const billingController = require("./controllers/billing.controller");
+const signalRepository = require("./repositories/signal.repository");
 
 const { Server } = require("socket.io");
-const { initializeSocket } = require("./websocket/socket");
+const { initializeSocket, emitToAll } = require("./websocket/socket");
 
 const app = express();
 const server = http.createServer(app);
@@ -139,11 +140,15 @@ app.get("/api/signals/recent", authMiddleware, async (req, res) => {
       ? engineRunner.getState()
       : {};
 
-    const signals =
+    let signals =
       state.recentSignals ||
       state.history ||
       state.signals ||
       [];
+
+    if (!Array.isArray(signals) || signals.length === 0) {
+      signals = await signalRepository.getLatest(50);
+    }
 
     return res.json({
       ok: true,
@@ -157,23 +162,62 @@ app.get("/api/signals/recent", authMiddleware, async (req, res) => {
   }
 });
 
+app.post("/api/signals/:id/result", authMiddleware, requirePremium, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const result = String(req.body?.result || "").trim().toLowerCase();
+
+    if (!id || !["win", "loss"].includes(result)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Resultado invÃ¡lido."
+      });
+    }
+
+    const saved = await signalRepository.updateSignalResult(id, result);
+
+    if (!saved) {
+      return res.status(404).json({
+        ok: false,
+        message: "Sinal nÃ£o encontrado."
+      });
+    }
+
+    emitToAll("signal-result-updated", saved);
+
+    return res.json({
+      ok: true,
+      data: saved
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: "Erro ao atualizar resultado."
+    });
+  }
+});
+
 app.get("/api/stats", authMiddleware, async (req, res) => {
   try {
     const state = typeof engineRunner.getState === "function"
       ? engineRunner.getState()
       : {};
 
-    const history =
+    let history =
       state.recentSignals ||
       state.history ||
       state.signals ||
       [];
 
+    if (!Array.isArray(history) || history.length === 0) {
+      history = await signalRepository.getLatest(200);
+    }
+
     const list = Array.isArray(history) ? history : [];
 
     const total = list.length;
-    const wins = list.filter((item) => item.result === "WIN").length;
-    const losses = list.filter((item) => item.result === "LOSS").length;
+    const wins = list.filter((item) => String(item.result || "").toLowerCase() === "win").length;
+    const losses = list.filter((item) => String(item.result || "").toLowerCase() === "loss").length;
     const winrate = wins + losses > 0
       ? Math.round((wins / (wins + losses)) * 100)
       : 0;

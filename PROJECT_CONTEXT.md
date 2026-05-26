@@ -1,6 +1,9 @@
 # AERIX
 
-Plataforma SaaS institucional de trading.
+Plataforma institucional de sinais.
+
+Objetivo:
+Criar sistema extremamente assertivo, estável e profissional.
 
 Stack:
 - Node.js
@@ -8,14 +11,10 @@ Stack:
 - PostgreSQL
 - JWT
 - WebSocket
-- React
-
-Objetivo:
-Criar plataforma hedge fund premium.
 
 Regras:
-- Nunca quebrar sistema existente
-- Priorizar performance
+- Nunca quebrar funcionalidades
+- Priorizar assertividade
+- Priorizar estabilidade
 - Código modular
-- Responsividade obrigatória
-- Design premium preto/dourado
+- UX hedge fund institucional

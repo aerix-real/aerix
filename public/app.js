@@ -524,7 +524,7 @@ function renderHistory() {
     const item = document.createElement("div");
     item.className = "history-item";
 
-    const result = signal.result || "PENDING";
+    const result = String(signal.result || "PENDING").toUpperCase();
     const resultColor =
       result === "WIN" ? "#18f2a3" :
       result === "LOSS" ? "#ff4d6d" :
@@ -575,6 +575,15 @@ function renderSignal(signal) {
 
   const direction = String(signal.direction || "").toUpperCase();
   const confidence = Number(signal.confidence || signal.score || 0);
+  const blocked = Boolean(signal.blocked || direction === "WAIT");
+  const blockReason =
+    signal.blockReason ||
+    signal.block_reason ||
+    signal.execution?.reason ||
+    null;
+  const dataQuality = signal.dataQuality || signal.data_quality || {};
+  const dataSource = dataQuality.source || signal.source || "mercado";
+  const dataOperational = dataQuality.operational !== false && !dataQuality.isFallback;
 
   if (el.signalAsset) el.signalAsset.textContent = signal.symbol || signal.asset || "---";
 
@@ -582,7 +591,10 @@ function renderSignal(signal) {
     el.signalDirection.textContent = direction || "AGUARDANDO";
     el.signalDirection.className = "signal-direction";
 
-    if (direction === "CALL" || direction === "BUY") {
+    if (blocked) {
+      el.signalDirection.classList.add("analyzing");
+      el.signalDirection.textContent = "WAIT";
+    } else if (direction === "CALL" || direction === "BUY") {
       el.signalDirection.classList.add("buy");
     } else if (direction === "PUT" || direction === "SELL") {
       el.signalDirection.classList.add("sell");
@@ -592,23 +604,29 @@ function renderSignal(signal) {
     }
   }
 
-  if (el.signalEntry) el.signalEntry.textContent = signal.entry || signal.entryTime || "--";
-  if (el.signalExpiry) el.signalExpiry.textContent = signal.expiry || signal.expiration || "--";
+  if (el.signalEntry) el.signalEntry.textContent = blocked ? "--" : signal.entry || signal.entryTime || "--";
+  if (el.signalExpiry) el.signalExpiry.textContent = blocked ? "--" : signal.expiry || signal.expiration || "--";
   if (el.signalConfidence) el.signalConfidence.textContent = `${confidence}%`;
-  if (el.signalCountdown) el.signalCountdown.textContent = signal.countdown || "--";
+  if (el.signalCountdown) el.signalCountdown.textContent = blocked ? "Bloqueado" : signal.countdown || "--";
   if (el.signalTime) el.signalTime.textContent = formatTime(signal.created_at || new Date());
 
   if (el.aiExplanation) {
     el.aiExplanation.classList.remove("is-typing");
-    el.aiExplanation.textContent =
-      signal.explanation ||
-      signal.aiExplanation ||
-      "IA analisando confluência, tendência, timing e qualidade do candle.";
+    const qualityText = dataOperational
+      ? `Fonte ${dataSource} validada.`
+      : `Fonte ${dataSource} sem liberacao operacional.`;
+
+    el.aiExplanation.textContent = blocked
+      ? `${qualityText} ${blockReason || signal.explanation || "IA bloqueou a entrada para reduzir falso positivo."}`
+      : signal.explanation ||
+        signal.aiExplanation ||
+        `${qualityText} IA analisando confluencia, tendencia, timing e qualidade do candle.`;
   }
 
   if (el.bestAsset) el.bestAsset.textContent = signal.symbol || signal.asset || "---";
   if (el.bestReason) {
     el.bestReason.textContent =
+      blockReason ||
       signal.reason ||
       signal.explanation ||
       "Sinal premium detectado com leitura operacional.";
@@ -620,7 +638,9 @@ function renderSignal(signal) {
   if (card) {
     card.classList.remove("signal-call", "signal-put", "signal-wait", "flash");
 
-    if (direction === "CALL" || direction === "BUY") {
+    if (blocked) {
+      card.classList.add("signal-wait");
+    } else if (direction === "CALL" || direction === "BUY") {
       card.classList.add("signal-call");
     } else if (direction === "PUT" || direction === "SELL") {
       card.classList.add("signal-put");

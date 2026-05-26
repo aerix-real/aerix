@@ -383,6 +383,16 @@ class EngineRunnerService {
       strategies: strategyResult.strategies || [],
       mtf: strategyResult.mtf || {},
       market: snapshot?.timeframes || {},
+      dataQuality: snapshot?.dataQuality || {
+        source: snapshot?.source || "unknown",
+        isFallback: Boolean(snapshot?.isFallback),
+        operational: !snapshot?.isFallback
+      },
+      data_quality: snapshot?.dataQuality || {
+        source: snapshot?.source || "unknown",
+        isFallback: Boolean(snapshot?.isFallback),
+        operational: !snapshot?.isFallback
+      },
       indicators,
       mode,
       trendDirection: snapshot?.timeframes?.h1?.direction || "neutral",
@@ -398,9 +408,13 @@ class EngineRunnerService {
       expiration: expiresAt.toISOString(),
       created_at: now.toISOString(),
       result: "pending",
-      blocked: false,
-      blockReason: null,
-      block_reason: null
+      blocked: Boolean(snapshot?.isFallback),
+      blockReason: snapshot?.isFallback
+        ? "Fonte de dados em fallback; entrada operacional bloqueada."
+        : null,
+      block_reason: snapshot?.isFallback
+        ? "Fonte de dados em fallback; entrada operacional bloqueada."
+        : null
     };
 
     baseSignal.timing = this.buildTiming(baseSignal);
@@ -557,6 +571,8 @@ class EngineRunnerService {
       timing_confidence: signal.timing_confidence ?? signal.timingConfidence ?? null,
 
       market_regime: signal.market_regime || signal.marketRegime || "NORMAL",
+      dataQuality: signal.dataQuality || signal.data_quality || null,
+      data_quality: signal.data_quality || signal.dataQuality || null,
 
       adaptive_adjustment: Number(signal.adaptiveAdjustment || signal.adaptive_adjustment || 0),
       adaptiveAdjustment: Number(signal.adaptiveAdjustment || signal.adaptive_adjustment || 0),
