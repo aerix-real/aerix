@@ -29,6 +29,12 @@ const safeUserId =
     ? userId
     : null;
 
+const safeUserId =
+  typeof userId === "string" &&
+  /^[0-9a-fA-F-]{36}$/.test(userId)
+    ? userId
+    : null;
+
 const values = [
   safeUserId,
   eventType,
