@@ -17,12 +17,18 @@ async function createAuditLog({
     RETURNING *
   `;
 
-  const values = [
-    userId,
-    eventType,
-    description,
-    JSON.stringify(meta || {})
-  ];
+  const safeUserId =
+  typeof userId === "string" &&
+  /^[0-9a-fA-F-]{36}$/.test(userId)
+    ? userId
+    : null;
+
+const values = [
+  safeUserId,
+  eventType,
+  description,
+  JSON.stringify(meta || {})
+];
 
   const result = await db.query(query, values);
   return result.rows[0] || null;
