@@ -23,6 +23,12 @@ async function createAuditLog({
     ? userId
     : null;
 
+const safeUserId =
+  typeof userId === "string" &&
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(userId)
+    ? userId
+    : null;
+
 const values = [
   safeUserId,
   eventType,
