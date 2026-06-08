@@ -1,28 +1,31 @@
 const express = require("express");
-const authRoutes = require("./auth.routes");
-const userRoutes = require("./user.routes");
-const engineRoutes = require("./engine.routes");
-const runtimeRoutes = require("./runtime.routes");
-const dashboardRoutes = require("./dashboard.routes");
-const premiumRoutes = require("./premium.routes");
-const billingRoutes = require("./billing.routes");
 
-const router = express.Router();
+const createBillingRoutes = require("../modules/billing/billing.routes");
+const createDashboardRoutes = require("../modules/dashboard/dashboard.routes");
+const createEngineRoutes = require("../modules/engine/engine.routes");
+const createMarketRoutes = require("../modules/market/market.routes");
+const createSignalsRoutes = require("../modules/signals/signals.routes");
+const createStatsRoutes = require("../modules/stats/stats.routes");
+const createSystemRoutes = require("../modules/system/system.routes");
 
-router.use("/auth", authRoutes);
-router.use("/users", userRoutes);
-router.use("/engine", engineRoutes);
-router.use("/runtime", runtimeRoutes);
-router.use("/dashboard", dashboardRoutes);
-router.use("/premium", premiumRoutes);
-router.use("/billing", billingRoutes);
+module.exports = (deps) => {
+  const router = express.Router();
 
-router.get("/health", (req, res) => {
-  return res.status(200).json({
-    ok: true,
-    service: "AERIX API",
-    timestamp: new Date().toISOString()
-  });
-});
+  try {
+    const authRoutes = require("../routes/auth.routes");
+    router.use("/auth", authRoutes);
+  } catch (error) {
+    console.log("⚠️ Rotas de auth não encontradas:", error.message);
+  }
 
-module.exports = router;
+  router.use("/billing", createBillingRoutes(deps));
+  router.get("/premium/status", deps.authMiddleware, deps.billingController.status);
+  router.use("/dashboard", createDashboardRoutes(deps));
+  router.use("/engine", createEngineRoutes(deps));
+  router.use("/market", createMarketRoutes(deps));
+  router.use("/signals", createSignalsRoutes(deps));
+  router.use("/stats", createStatsRoutes(deps));
+  router.use("/", createSystemRoutes());
+
+  return router;
+};
