@@ -35,6 +35,27 @@ const io = new Server(server, {
 
 initializeSocket(io);
 
+
+function isConfirmedExecutedSignal(signal = {}) {
+  if (!signal || typeof signal !== "object") return false;
+
+  const status = String(signal.status || signal.signal_status || "").toLowerCase();
+  const result = String(signal.result || "").toLowerCase();
+  const direction = String(signal.direction || signal.signal || "").toUpperCase();
+  const blocked = Boolean(signal.blocked);
+
+  const confirmedByStatus = ["confirmed", "executed"].includes(status);
+  const confirmedByResult = ["win", "loss", "executed", "confirmed"].includes(result);
+  const actionableDirection = ["CALL", "PUT"].includes(direction);
+
+  return !blocked && actionableDirection && (confirmedByStatus || confirmedByResult);
+}
+
+function filterConfirmedExecutedSignals(signals = []) {
+  if (!Array.isArray(signals)) return [];
+  return signals.filter(isConfirmedExecutedSignal);
+}
+
 app.post(
   "/api/billing/webhook",
   express.raw({ type: "application/json" }),
@@ -161,7 +182,7 @@ app.get("/api/signals/recent", authMiddleware, async (req, res) => {
 
     return res.json({
       ok: true,
-      signals: Array.isArray(signals) ? signals.slice(0, 50) : []
+      signals: filterConfirmedExecutedSignals(signals).slice(0, 50)
     });
   } catch (error) {
     return res.json({
