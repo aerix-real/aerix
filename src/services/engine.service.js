@@ -5,6 +5,7 @@ const { explainSignal } = require("./signal-ai.service");
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { runStrategies } = require("../strategy/strategy-runner.service");
 const adaptiveService = require("./adaptive.service");
+const predictiveAiService = require("./predictive-ai.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -290,10 +291,45 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategyMode
   );
 
+  const preCheck = await predictiveAiService.evaluatePreSignal({
+    symbol,
+    snapshot,
+    mode: strategyMode
+  });
+
   const adaptive = await adaptiveService.applyAdaptiveScore(
     strategyResult.finalScore,
-    symbol
+    {
+      symbol,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName
+    }
   );
+
+  const antiLossBlock = await adaptiveService.shouldHardBlock({
+    symbol,
+    signal: strategyResult.signal,
+    strategyName: strategyResult.strategyName
+  });
+
+  let finalSignal = strategyResult.signal;
+  let finalScore = adaptive.finalScore;
+  const dynamicBlocks = [...strategyResult.blocks];
+  const adaptiveReasons = Array.isArray(adaptive.adaptiveReasons)
+    ? adaptive.adaptiveReasons
+    : [];
+
+  if (preCheck.blocked) {
+    finalSignal = "WAIT";
+    finalScore = Math.min(finalScore, Math.max(0, Number((preCheck.preScore - 8).toFixed(2))));
+    dynamicBlocks.push(preCheck.explanation);
+  }
+
+  if (antiLossBlock.blocked) {
+    finalSignal = "WAIT";
+    finalScore = Math.min(finalScore, 35);
+    dynamicBlocks.push(antiLossBlock.reason || "Anti-loss bloqueou o sinal por risco elevado.");
+  }
 
   const explanation =
     preferences.ai_explanations_enabled !== false
@@ -308,8 +344,24 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const finalResult = {
     ...strategyResult,
-    finalScore: adaptive.finalScore,
-    adaptiveAdjustments: adaptive.adjustments,
+    signal: finalSignal,
+    finalScore,
+    blocks: dynamicBlocks,
+    adaptiveAdjustments: {
+      adjustment: adaptive.adaptiveAdjustment,
+      reasons: adaptiveReasons,
+      learningProfile: adaptive.learningProfile,
+      antiLoss: {
+        blocked: antiLossBlock.blocked,
+        reason: antiLossBlock.reason || null
+      },
+      predictive: {
+        blocked: preCheck.blocked,
+        preScore: preCheck.preScore,
+        minimum: preCheck.minimum,
+        risks: preCheck.risks
+      }
+    },
     explanation
   };
 
