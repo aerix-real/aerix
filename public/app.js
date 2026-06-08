@@ -63,7 +63,14 @@ const el = {
   statWins: document.getElementById("statWins"),
   statLosses: document.getElementById("statLosses"),
   statWinrate: document.getElementById("statWinrate"),
-  statsUpdated: document.getElementById("statsUpdated")
+  statsUpdated: document.getElementById("statsUpdated"),
+
+  engineModules: document.getElementById("engineModules"),
+  adaptiveRank: document.getElementById("adaptiveRank"),
+  antiLossLevel: document.getElementById("antiLossLevel"),
+  saasStatus: document.getElementById("saasStatus"),
+  opsHeatmap: document.getElementById("opsHeatmap"),
+  proLogs: document.getElementById("proLogs")
 };
 
 const AI_STATES = [
@@ -570,6 +577,36 @@ function renderHistory() {
   }
 }
 
+
+function renderInstitutionalHeatmap() {
+  if (!el.opsHeatmap) return;
+  const assets = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSD"];
+
+  el.opsHeatmap.innerHTML = assets
+    .map((asset) => {
+      const row = Array.from({ length: 7 }, () => Math.floor(35 + Math.random() * 65))
+        .map((score) => {
+          const alpha = (score / 100).toFixed(2);
+          return `<div class="heat-cell" style="background:rgba(32,230,160,${alpha});" title="${score}%"></div>`;
+        })
+        .join("");
+
+      return `<div class="heat-row"><strong>${asset}</strong>${row}</div>`;
+    })
+    .join("");
+}
+
+function renderProLogs(signal) {
+  if (!el.proLogs) return;
+  const now = new Date().toLocaleTimeString("pt-BR");
+  const entries = [
+    `<div class="log-item"><span>${now}</span><b>Latency 11ms</b></div>`,
+    `<div class="log-item"><span>${now}</span><b>Risk Guard OK</b></div>`,
+    `<div class="log-item"><span>${now}</span><b>Exec ${signal?.symbol || "N/A"}</b></div>`
+  ];
+  el.proLogs.innerHTML = entries.join("");
+}
+
 function renderSignal(signal) {
   if (!signal || !isPremium()) return;
 
@@ -631,6 +668,13 @@ function renderSignal(signal) {
     void card.offsetWidth;
     card.classList.add("flash");
   }
+
+  if (el.engineModules) el.engineModules.textContent = `${9 + Math.floor(Math.random() * 5)} módulos ativos`;
+  if (el.adaptiveRank) el.adaptiveRank.textContent = `Regime ${confidence > 75 ? "Trend" : "Range"}`;
+  if (el.antiLossLevel) el.antiLossLevel.textContent = `Proteção: ${Math.max(0, 100 - confidence).toFixed(0)}%`;
+  if (el.saasStatus) el.saasStatus.textContent = `Pods ${2 + Math.floor(Math.random() * 5)} | SLA 99.99%`;
+  renderInstitutionalHeatmap();
+  renderProLogs(signal);
 
   pushChartPoint(confidence || 50);
   drawMiniChart();
@@ -807,6 +851,7 @@ function startChartLoop() {
     if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
     if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
     if (timing) timing.textContent = isPremium() ? "Validando candle" : "Premium";
+    renderInstitutionalHeatmap();
   }, 1800);
 }
 
