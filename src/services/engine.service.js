@@ -292,7 +292,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const adaptive = await adaptiveService.applyAdaptiveScore(
     strategyResult.finalScore,
-    symbol
+    {
+      symbol,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName || "unknown"
+    }
   );
 
   const explanation =
@@ -309,7 +313,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const finalResult = {
     ...strategyResult,
     finalScore: adaptive.finalScore,
-    adaptiveAdjustments: adaptive.adjustments,
+    adaptiveAdjustments: {
+      adjustment: adaptive.adaptiveAdjustment,
+      reasons: adaptive.adaptiveReasons,
+      profile: adaptive.learningProfile
+    },
     explanation
   };
 
