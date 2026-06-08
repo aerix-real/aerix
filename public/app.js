@@ -465,9 +465,9 @@ async function loadHistory() {
     const data = await response.json().catch(() => null);
 
     if (data?.ok && Array.isArray(data.signals)) {
-      state.history = data.signals;
+      state.history = filterConfirmedExecutedSignals(data.signals);
     } else if (data?.ok && Array.isArray(data.data)) {
-      state.history = data.data;
+      state.history = filterConfirmedExecutedSignals(data.data);
     } else {
       state.history = [];
     }
@@ -568,6 +568,25 @@ function renderHistory() {
   if (el.historyCount) {
     el.historyCount.textContent = `${state.history.length} sinais`;
   }
+}
+
+
+function isConfirmedExecutedSignal(signal = {}) {
+  const status = String(signal.status || signal.signal_status || "").toLowerCase();
+  const result = String(signal.result || "").toLowerCase();
+  const direction = String(signal.direction || signal.signal || "").toUpperCase();
+  const blocked = Boolean(signal.blocked);
+
+  const confirmedByStatus = ["confirmed", "executed"].includes(status);
+  const confirmedByResult = ["win", "loss", "executed", "confirmed"].includes(result);
+  const actionableDirection = ["CALL", "PUT"].includes(direction);
+
+  return !blocked && actionableDirection && (confirmedByStatus || confirmedByResult);
+}
+
+function filterConfirmedExecutedSignals(signals = []) {
+  if (!Array.isArray(signals)) return [];
+  return signals.filter(isConfirmedExecutedSignal);
 }
 
 function renderSignal(signal) {
@@ -935,8 +954,10 @@ socket.on("signal", (signal) => {
     renderSignal(signal);
   }
 
-  state.history.unshift(signal);
-  state.history = state.history.slice(0, 50);
+  if (isConfirmedExecutedSignal(signal)) {
+    state.history.unshift(signal);
+    state.history = state.history.slice(0, 50);
+  }
   renderHistory();
 });
 
@@ -944,7 +965,11 @@ socket.on("signal-result-updated", (signal) => {
   const index = state.history.findIndex((item) => item.id === signal.id);
 
   if (index !== -1) {
-    state.history[index] = signal;
+    if (isConfirmedExecutedSignal(signal)) {
+      state.history[index] = signal;
+    } else {
+      state.history.splice(index, 1);
+    }
     renderHistory();
     loadStats();
   }
