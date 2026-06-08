@@ -1,18 +1,22 @@
 let ioInstance = null;
+let cachedTimestamp = new Date().toISOString();
+let cachedStatusPayload = Object.freeze({ connected: true, timestamp: cachedTimestamp });
+let cachedPongPayload = Object.freeze({ timestamp: cachedTimestamp });
+
+setInterval(() => {
+  cachedTimestamp = new Date().toISOString();
+  cachedStatusPayload = Object.freeze({ connected: true, timestamp: cachedTimestamp });
+  cachedPongPayload = Object.freeze({ timestamp: cachedTimestamp });
+}, 250).unref();
 
 function initializeSocket(io) {
   ioInstance = io;
 
   io.on("connection", (socket) => {
-    socket.emit("system:status", {
-      connected: true,
-      timestamp: new Date().toISOString()
-    });
+    socket.emit("system:status", cachedStatusPayload);
 
     socket.on("runtime:ping", () => {
-      socket.emit("runtime:pong", {
-        timestamp: new Date().toISOString()
-      });
+      socket.volatile.emit("runtime:pong", cachedPongPayload);
     });
   });
 
@@ -24,8 +28,9 @@ function getIO() {
 }
 
 function emitToAll(event, payload) {
-  if (!ioInstance) return;
-  ioInstance.emit(event, payload);
+  const io = ioInstance;
+  if (!io || io.engine.clientsCount === 0) return;
+  io.emit(event, payload);
 }
 
 module.exports = {
