@@ -38,7 +38,7 @@ class EngineRunnerService {
 
     this.rateLimiter = new RateLimiterService({
       maxPerMinute: Number(process.env.MAX_REQUESTS_PER_MINUTE || 8)
-    });
+    }, { cacheLatest: true });
 
     this.rateLimit = this.rateLimiter.getStats();
   }
@@ -298,8 +298,8 @@ class EngineRunnerService {
           this.bestOpportunity = signal;
           this.latestResults = [signal, ...this.latestResults].slice(0, 30);
 
-          emitToAll("signal", signal);
-          emitToAll("bestOpportunity", signal);
+          emitToAll("signal", signal, { cacheLatest: true });
+          emitToAll("bestOpportunity", signal, { cacheLatest: true });
 
           await this.auditDecision("signal_generated", signal);
         } catch (symbolError) {
@@ -589,7 +589,7 @@ class EngineRunnerService {
       const updated = await resultCheckerService.checkPendingSignals();
 
       if (updated.length) {
-        emitToAll("history", updated);
+        emitToAll("history", updated, { cacheLatest: true });
 
         await this.auditDecision("results_checked", {
           total: updated.length
@@ -621,7 +621,7 @@ class EngineRunnerService {
 
     this.latestResults = [payload, ...this.latestResults].slice(0, 30);
 
-    emitToAll("signal", payload);
+    emitToAll("signal", payload, { cacheLatest: true });
     emitToAll("execution", {
       executed: false,
       allowed: false,
@@ -629,7 +629,7 @@ class EngineRunnerService {
       adjustedScore: payload.adjustedScore || payload.finalScore || 0,
       aiAdjustments: payload.aiAdjustments || null,
       aiBlock: payload.aiBlock || null
-    });
+    }, { cacheLatest: true });
   }
 
   emitRuntimeUpdate(cycleResults = []) {
@@ -658,7 +658,7 @@ class EngineRunnerService {
         }
       },
       timestamp: new Date().toISOString()
-    });
+    }, { cacheLatest: true, volatile: true });
   }
 
   async auditDecision(eventType, payload) {
