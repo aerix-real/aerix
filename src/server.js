@@ -13,6 +13,7 @@ const billingController = require("./controllers/billing.controller");
 
 const { Server } = require("socket.io");
 const { initializeSocket } = require("./websocket/socket");
+const { filterOperationalHistory } = require("./utils/signal-history-filter");
 
 const app = express();
 const server = http.createServer(app);
@@ -145,9 +146,11 @@ app.get("/api/signals/recent", authMiddleware, async (req, res) => {
       state.signals ||
       [];
 
+    const filteredSignals = filterOperationalHistory(signals).slice(0, 50);
+
     return res.json({
       ok: true,
-      signals: Array.isArray(signals) ? signals.slice(0, 50) : []
+      signals: filteredSignals
     });
   } catch (error) {
     return res.json({
@@ -169,7 +172,7 @@ app.get("/api/stats", authMiddleware, async (req, res) => {
       state.signals ||
       [];
 
-    const list = Array.isArray(history) ? history : [];
+    const list = filterOperationalHistory(history);
 
     const total = list.length;
     const wins = list.filter((item) => item.result === "WIN").length;

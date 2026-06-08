@@ -509,6 +509,25 @@ function resetStats() {
   if (el.statsUpdated) el.statsUpdated.textContent = "Sem dados";
 }
 
+function getInstitutionalScore(signal = {}) {
+  const score = Number(signal.final_score ?? signal.finalScore ?? signal.score ?? signal.confidence ?? 0);
+  return Number.isFinite(score) ? score : 0;
+}
+
+function isOperationalHistorySignal(signal = {}) {
+  const direction = String(signal.signal || signal.direction || "").toUpperCase();
+  const result = String(signal.result || "").toUpperCase();
+  const confidence = Number(signal.confidence ?? 0);
+  const institutionalScore = getInstitutionalScore(signal);
+
+  if (!["CALL", "PUT"].includes(direction)) return false;
+  if (signal.blocked) return false;
+  if (["CANCELED", "CANCELLED", "EXPIRED"].includes(result)) return false;
+  if (confidence <= 0 || institutionalScore <= 0) return false;
+
+  return true;
+}
+
 function renderHistory() {
   if (!el.historyList) return;
 
@@ -520,29 +539,27 @@ function renderHistory() {
     return;
   }
 
-  state.history.forEach((signal) => {
+  state.history.filter(isOperationalHistorySignal).forEach((signal) => {
     const item = document.createElement("div");
     item.className = "history-item";
 
-    const result = signal.result || "PENDING";
-    const resultColor =
-      result === "WIN" ? "#18f2a3" :
-      result === "LOSS" ? "#ff4d6d" :
-      "#ffd166";
-
+    const result = String(signal.result || "PENDING").toUpperCase();
     item.innerHTML = `
-      <div>
+      <div class="history-primary">
         <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
-        <div class="history-meta">${formatTime(signal.created_at || signal.createdAt || signal.time)}</div>
+        <div class="history-meta">Entrada: ${escapeHtml(signal.entry || signal.entryTime || "--")} • Exp: ${escapeHtml(signal.expiry || signal.expiration || "--")}</div>
+        <div class="history-meta">Confirmação: ${formatTime(signal.checked_at || signal.checkedAt || signal.created_at || signal.createdAt || signal.time)}</div>
       </div>
 
       <span class="badge ${signal.direction === "CALL" ? "call" : "put"}">
         ${escapeHtml(signal.direction || "---")}
       </span>
 
-      <span class="score-badge">${Number(signal.confidence || signal.score || 0)}%</span>
+      <span class="score-badge">Conf: ${Number(signal.confidence || signal.score || 0)}%</span>
 
-      <span style="color:${resultColor}; font-weight:800;">
+      <span class="score-badge">Inst: ${getInstitutionalScore(signal)}%</span>
+
+      <span class="result-badge ${result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending"}">
         ${escapeHtml(result)}
       </span>
 
@@ -566,7 +583,7 @@ function renderHistory() {
   });
 
   if (el.historyCount) {
-    el.historyCount.textContent = `${state.history.length} sinais`;
+    el.historyCount.textContent = `${state.history.filter(isOperationalHistorySignal).length} sinais`;
   }
 }
 
@@ -935,6 +952,7 @@ socket.on("signal", (signal) => {
     renderSignal(signal);
   }
 
+  if (!isOperationalHistorySignal(signal)) return;
   state.history.unshift(signal);
   state.history = state.history.slice(0, 50);
   renderHistory();

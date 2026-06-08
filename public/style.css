@@ -1058,7 +1058,7 @@ body.plan-premium .user-avatar {
 
 .history-item {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 100px 110px 112px;
+  grid-template-columns: minmax(220px, 1.8fr) 110px 110px 110px 90px 112px;
   gap: 12px;
   align-items: center;
   transition: 0.2s ease;
@@ -1121,6 +1121,29 @@ body.plan-premium .user-avatar {
   color: #dff7ff;
   background: rgba(32, 183, 255, 0.10);
   border: 1px solid rgba(32, 183, 255, 0.18);
+}
+
+.result-badge {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.result-badge.win {
+  color: #7ff5c8;
+}
+
+.result-badge.loss {
+  color: #ff8fa3;
+}
+
+.result-badge.pending {
+  color: #ffd166;
 }
 
 .action-buttons {

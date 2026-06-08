@@ -14,6 +14,7 @@ const RateLimiterService = require("./rate-limiter.service");
 
 const signalRepository = require("../repositories/signal.repository");
 const { emitToAll } = require("../websocket/socket");
+const { isConfirmedOperationalSignal } = require("../utils/signal-history-filter");
 
 class EngineRunnerService {
   constructor() {
@@ -298,7 +299,9 @@ class EngineRunnerService {
           this.bestOpportunity = signal;
           this.latestResults = [signal, ...this.latestResults].slice(0, 30);
 
-          emitToAll("signal", signal);
+          if (isConfirmedOperationalSignal(signal)) {
+            emitToAll("signal", signal);
+          }
           emitToAll("bestOpportunity", signal);
 
           await this.auditDecision("signal_generated", signal);
