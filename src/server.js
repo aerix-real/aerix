@@ -21,6 +21,15 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || "*"
+  },
+  transports: ["websocket", "polling"],
+  perMessageDeflate: false,
+  httpCompression: false,
+  pingInterval: Number(process.env.SOCKET_PING_INTERVAL_MS || 10000),
+  pingTimeout: Number(process.env.SOCKET_PING_TIMEOUT_MS || 5000),
+  connectionStateRecovery: {
+    maxDisconnectionDuration: Number(process.env.SOCKET_RECOVERY_MS || 30000),
+    skipMiddlewares: true
   }
 });
 
