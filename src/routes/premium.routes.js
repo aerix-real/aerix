@@ -1,106 +1,78 @@
 const express = require("express");
 const authMiddleware = require("../middlewares/auth.middleware");
 const userRepository = require("../repositories/user.repository");
+const {
+  PLAN_FEATURES,
+  normalizePlan,
+  resolveUserPlan,
+  requirePlan,
+  requireFeature
+} = require("../middlewares/plan.middleware");
 
 const router = express.Router();
 
-/**
- * 🔒 Verifica se usuário é premium
- */
-function isPremiumUser(user) {
-  if (!user) return false;
-
-  return (
-    user.role === "admin" ||
-    String(user.plan || "").toLowerCase() === "premium"
-  );
-}
-
-/**
- * 📊 STATUS DO PLANO
- */
-router.get("/status", authMiddleware, async (req, res) => {
-  try {
-    const premium = isPremiumUser(req.user);
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        premium,
-        plan: req.user.plan || "free"
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao verificar status premium."
-    });
-  }
-});
-
-/**
- * 🔐 ROTA PROTEGIDA PREMIUM
- */
-router.get("/dashboard", authMiddleware, async (req, res) => {
-  try {
-    if (!isPremiumUser(req.user)) {
-      return res.status(403).json({
-        ok: false,
-        message: "Plano premium necessário."
-      });
+router.get("/plans", authMiddleware, async (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    data: {
+      currentPlan: resolveUserPlan(req.user),
+      plans: Object.entries(PLAN_FEATURES).map(([plan, features]) => ({
+        plan,
+        features
+      }))
     }
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        premium: true,
-        features: {
-          advancedRanking: true,
-          premiumSignals: true,
-          premiumIntelligence: true
-        }
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao acessar recursos premium."
-    });
-  }
+  });
 });
 
-/**
- * 🚀 UPGRADE DE PLANO
- */
+router.get("/status", authMiddleware, async (req, res) => {
+  const currentPlan = resolveUserPlan(req.user);
+
+  return res.status(200).json({
+    ok: true,
+    data: {
+      premium: ["PREMIUM", "ENTERPRISE"].includes(currentPlan),
+      plan: currentPlan,
+      features: PLAN_FEATURES[currentPlan] || []
+    }
+  });
+});
+
+router.get("/dashboard", authMiddleware, requirePlan("PREMIUM"), async (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    data: {
+      premium: true,
+      plan: req.userPlan,
+      features: {
+        advancedRanking: true,
+        premiumSignals: true,
+        premiumIntelligence: true,
+        adaptiveAI: true
+      }
+    }
+  });
+});
+
 router.post("/upgrade", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const updatedUser = await userRepository.updatePlan(userId, "premium");
+    const requestedPlan = normalizePlan(req.body?.plan || "PREMIUM");
+    const updatedUser = await userRepository.updatePlan(req.user.id, requestedPlan);
 
     return res.status(200).json({
       ok: true,
-      message: "🔥 Upgrade realizado com sucesso!",
+      message: "Upgrade realizado com sucesso.",
       data: {
         plan: updatedUser.plan
       }
     });
   } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao realizar upgrade."
-    });
+    return res.status(500).json({ ok: false, message: "Erro ao realizar upgrade." });
   }
 });
 
-/**
- * 🔻 DOWNGRADE DE PLANO
- */
 router.post("/downgrade", authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const updatedUser = await userRepository.updatePlan(userId, "free");
+    const updatedUser = await userRepository.updatePlan(req.user.id, "FREE");
 
     return res.status(200).json({
       ok: true,
@@ -110,39 +82,31 @@ router.post("/downgrade", authMiddleware, async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao alterar plano."
-    });
+    return res.status(500).json({ ok: false, message: "Erro ao alterar plano." });
   }
 });
 
-/**
- * 🎯 FEATURES DISPONÍVEIS (IMPORTANTE PRO FRONT)
- */
 router.get("/features", authMiddleware, async (req, res) => {
-  try {
-    const premium = isPremiumUser(req.user);
+  const plan = resolveUserPlan(req.user);
 
-    return res.status(200).json({
-      ok: true,
-      data: {
-        plan: req.user.plan || "free",
-        premium,
-        features: {
-          advancedRanking: premium,
-          premiumSignals: premium,
-          premiumIntelligence: premium,
-          adaptiveAI: premium
-        }
-      }
-    });
-  } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      message: "Erro ao carregar features."
-    });
-  }
+  return res.status(200).json({
+    ok: true,
+    data: {
+      plan,
+      premium: ["PREMIUM", "ENTERPRISE"].includes(plan),
+      features: PLAN_FEATURES[plan] || []
+    }
+  });
+});
+
+router.get("/signals", authMiddleware, requireFeature("premium_signals"), async (req, res) => {
+  return res.status(200).json({
+    ok: true,
+    data: {
+      message: "Acesso liberado para sinais premium.",
+      plan: req.userPlan
+    }
+  });
 });
 
 module.exports = router;
