@@ -108,6 +108,7 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     explanation: strategyResult.explanation || "",
     price: lastM5Candle?.close ?? null,
     strategyName: strategyResult.strategyName || null,
+    marketRegime: strategyResult.marketRegime || null,
     entryQuality: strategyResult.entryQuality || "weak",
     adaptiveAdjustments: strategyResult.adaptiveAdjustments || {},
     timestamp: snapshot?.timestamp || new Date().toISOString()
@@ -249,6 +250,7 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     confidence: Number(strategyResult.confidence || 0),
     entryQuality: strategyResult.entryQuality || "weak",
     strategyName: strategyResult.strategyName || null,
+    marketRegime: strategyResult.marketRegime || null,
     reasons: Array.isArray(strategyResult.reasons) ? strategyResult.reasons : [],
     blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
     explanation: strategyResult.explanation || "",
@@ -292,7 +294,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const adaptive = await adaptiveService.applyAdaptiveScore(
     strategyResult.finalScore,
-    symbol
+    {
+      symbol,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName
+    }
   );
 
   const explanation =
@@ -309,7 +315,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const finalResult = {
     ...strategyResult,
     finalScore: adaptive.finalScore,
-    adaptiveAdjustments: adaptive.adjustments,
+    adaptiveAdjustments: {
+      adaptiveAdjustment: adaptive.adaptiveAdjustment,
+      adaptiveReasons: adaptive.adaptiveReasons,
+      learningProfile: adaptive.learningProfile
+    },
     explanation
   };
 
