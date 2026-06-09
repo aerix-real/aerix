@@ -44,20 +44,13 @@ function requireRole(role) {
   };
 }
 
-// 🔥 NOVO: middleware de plano
-function requirePlan(plan) {
+// Middleware de compatibilidade: todos os usuários autenticados têm acesso completo.
+function requirePlan() {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
         ok: false,
         message: "Não autenticado."
-      });
-    }
-
-    if (req.user.plan !== plan && req.user.role !== "admin") {
-      return res.status(403).json({
-        ok: false,
-        message: "Plano insuficiente."
       });
     }
 

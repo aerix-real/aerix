@@ -234,9 +234,7 @@ const MODE_DESCRIPTIONS = {
 };
 
 function isPremium() {
-  const role = String(state.user?.role || "").toLowerCase();
-  const plan = String(state.user?.plan || "").toLowerCase();
-  return role === "admin" || plan === "premium";
+  return Boolean(state.user);
 }
 
 function authHeaders() {
@@ -473,10 +471,10 @@ async function logout() {
 }
 
 function applyUserUI() {
-  const premium = isPremium();
+  const fullAccess = isPremium();
 
-  document.body.classList.toggle("plan-premium", premium);
-  document.body.classList.toggle("plan-free", !premium);
+  document.body.classList.toggle("plan-premium", fullAccess);
+  document.body.classList.toggle("plan-free", false);
 
   if (el.userName) {
     el.userName.textContent = state.user?.name || "Usuário";
@@ -487,39 +485,33 @@ function applyUserUI() {
   }
 
   if (el.planBadge) {
-    el.planBadge.textContent = premium ? "PREMIUM" : "FREE";
-    el.planBadge.classList.toggle("premium", premium);
-    el.planBadge.classList.toggle("free", !premium);
+    el.planBadge.textContent = "ACESSO COMPLETO";
+    el.planBadge.classList.toggle("premium", true);
+    el.planBadge.classList.toggle("free", false);
   }
 
   if (el.premiumStatus) {
-    el.premiumStatus.textContent = premium
-      ? "Premium ativo. Todos os recursos institucionais liberados."
-      : "Plano FREE ativo. Leitura básica liberada; inteligência premium bloqueada.";
+    el.premiumStatus.textContent = "Acesso completo liberado. Todos os recursos institucionais estão disponíveis.";
   }
 
   if (el.headlineText) {
-    el.headlineText.textContent = premium
-      ? "Terminal premium ativo. IA operacional monitorando mercado em tempo real."
-      : "Painel FREE carregado. Histórico e estatísticas básicas disponíveis.";
+    el.headlineText.textContent = "Terminal institucional ativo. IA operacional monitorando mercado em tempo real.";
   }
 }
 
 function applyPlanLocks() {
-  const premium = isPremium();
-
   ensureInstitutionalCenter();
 
   const premiumOnlyElements = document.querySelectorAll("[data-premium-only='true']");
 
   premiumOnlyElements.forEach((node) => {
-    node.classList.toggle("locked", !premium);
-    node.setAttribute("aria-disabled", premium ? "false" : "true");
+    node.classList.remove("locked", "hidden-by-plan");
+    node.setAttribute("aria-disabled", "false");
   });
 
-  if (!premium) {
-    setPremiumPlaceholders();
-  }
+  document.querySelectorAll("[data-free-only='true']").forEach((node) => {
+    node.classList.add("hidden");
+  });
 
   updateInstitutionalCards();
   updateRealtimeMetrics();
@@ -563,7 +555,7 @@ function ensureInstitutionalCenter() {
       <article class="institutional-metric-card">
         <span>Status SaaS</span>
         <strong id="saasStatusCard">Online</strong>
-        <small>API, Socket.IO, login, premium e engine preservados</small>
+        <small>API, Socket.IO, login e engine preservados</small>
       </article>
     </div>
 
@@ -674,17 +666,16 @@ function updateRealtimeMetrics(signal = {}) {
   const metrics = getRealtimeMetricElements();
   const confidence = getOperationalScore(signal);
   const risk = Number(signal.risk || signal.riskScore || signal.execution?.risk || 0);
-  const premium = isPremium();
   const connected = socket.connected;
   const historyLoad = Math.min(99, Math.max(18, state.history.length * 8));
   const flow = confidence || historyLoad;
-  const aiScore = premium ? Math.max(48, Math.min(99, confidence || 72)) : 0;
+  const aiScore = Math.max(48, Math.min(99, confidence || 72));
   const latency = connected ? Math.round(42 + Math.random() * 64) : 0;
 
   setTextContent(metrics.metricLatency, connected ? `${latency}ms` : "offline");
-  setTextContent(metrics.metricFlow, premium ? `${Math.round(flow)}%` : "FREE");
-  setTextContent(metrics.metricRisk, premium ? `${Math.max(0, Math.min(100, Math.round(100 - risk * 3)))}%` : "--");
-  setTextContent(metrics.metricAi, premium ? `${Math.round(aiScore)}%` : "premium");
+  setTextContent(metrics.metricFlow, `${Math.round(flow)}%`);
+  setTextContent(metrics.metricRisk, `${Math.max(0, Math.min(100, Math.round(100 - risk * 3)))}%`);
+  setTextContent(metrics.metricAi, `${Math.round(aiScore)}%`);
 }
 
 function renderAIInsights(signal = {}) {
@@ -694,20 +685,13 @@ function renderAIInsights(signal = {}) {
   const direction = getOperationalDirection(signal) || "WAIT";
   const score = getOperationalScore(signal);
   const asset = signal.symbol || signal.asset || "MULTI-ASSET";
-  const premium = isPremium();
   const riskText = signal.blocked ? "Bloqueio defensivo ativo" : score >= 82 ? "Risco calibrado" : "Aguardando validação";
 
-  const insights = premium
-    ? [
-        ["01", "Tese institucional", `${asset} em leitura ${direction}; score operacional ${Math.round(score || 0)}%.`],
-        ["02", "Risco e timing", riskText],
-        ["03", "Próxima ação", direction === "WAIT" ? "Manter observação até nova confluência." : "Validar candle, expiração e gestão de banca antes da execução."]
-      ]
-    : [
-        ["01", "Premium requerido", "IA Insights completos liberados no plano PREMIUM."],
-        ["02", "Camada preservada", "Autenticação, APIs, Socket.IO e engine seguem integrados."],
-        ["03", "Desk readiness", "Ative o premium para leitura tática em tempo real."]
-      ];
+  const insights = [
+    ["01", "Tese institucional", `${asset} em leitura ${direction}; score operacional ${Math.round(score || 0)}%.`],
+    ["02", "Risco e timing", riskText],
+    ["03", "Próxima ação", direction === "WAIT" ? "Manter observação até nova confluência." : "Validar candle, expiração e gestão de banca antes da execução."]
+  ];
 
   list.innerHTML = insights.map(([index, title, text]) => `
     <article class="ai-insight-item">
@@ -844,26 +828,24 @@ function updateInstitutionalCards(signal = {}) {
   const confidence = Number(signal.confidence || signal.score || 0);
   const direction = String(signal.direction || "WAIT").toUpperCase();
   const blocked = Boolean(signal.blocked || direction === "WAIT");
-  const premium = isPremium();
-
   const engineModules = document.getElementById("engineModules");
   const adaptiveRank = document.getElementById("adaptiveRank");
   const antiLossLevel = document.getElementById("antiLossLevel");
   const saasStatus = document.getElementById("saasStatus");
   const saasStatusCard = document.getElementById("saasStatusCard");
 
-  if (engineModules) engineModules.textContent = premium ? (blocked ? "11/14" : "14/14") : "6/14";
+  if (engineModules) engineModules.textContent = blocked ? "11/14" : "14/14";
   if (adaptiveRank) adaptiveRank.textContent = confidence >= 88 ? "A+" : confidence >= 76 ? "A" : confidence >= 62 ? "B+" : "B";
   if (antiLossLevel) antiLossLevel.textContent = blocked ? "Nível 5" : confidence >= 80 ? "Nível 2" : "Nível 3";
-  if (saasStatus) saasStatus.textContent = premium ? "SaaS institucional online" : "SaaS premium bloqueado";
-  if (saasStatusCard) saasStatusCard.textContent = premium ? "Online" : "Free";
+  if (saasStatus) saasStatus.textContent = "SaaS institucional online";
+  if (saasStatusCard) saasStatusCard.textContent = "Online";
 }
 
 function setPremiumPlaceholders() {
   if (el.signalAsset) el.signalAsset.textContent = "---";
 
   if (el.signalDirection) {
-    el.signalDirection.textContent = "IA PREMIUM";
+    el.signalDirection.textContent = "IA OPERACIONAL";
     el.signalDirection.className = "signal-direction analyzing";
   }
 
@@ -871,15 +853,15 @@ function setPremiumPlaceholders() {
   if (el.signalExpiry) el.signalExpiry.textContent = "--";
   if (el.signalConfidence) el.signalConfidence.textContent = "0%";
   if (el.signalCountdown) el.signalCountdown.textContent = "--";
-  if (el.signalTime) el.signalTime.textContent = "Bloqueado no FREE";
+  if (el.signalTime) el.signalTime.textContent = "Aguardando dados";
 
   if (el.aiExplanation) {
     el.aiExplanation.innerHTML =
-      'Recurso premium. No FREE, o painel exibe histórico e estatísticas básicas. <span class="ai-live-dots"><i></i><i></i><i></i></span>';
+      'IA operacional aguardando confluência em tempo real. <span class="ai-live-dots"><i></i><i></i><i></i></span>';
   }
 
   if (el.bestAsset) el.bestAsset.textContent = "---";
-  if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade liberada no PREMIUM.";
+  if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade liberada para análise.";
   if (el.bestScore) el.bestScore.textContent = "0%";
 }
 
@@ -918,11 +900,6 @@ function setupModeSwitcher() {
     button.addEventListener("click", () => {
       const mode = button.dataset.mode || "equilibrado";
 
-      if (!isPremium()) {
-        showToast("Alteração de modo disponível apenas no plano PREMIUM.", "info");
-        return;
-      }
-
       applyModeUI(mode, true);
     });
   });
@@ -931,8 +908,6 @@ function setupModeSwitcher() {
 }
 
 function rotateAIState() {
-  if (!isPremium()) return;
-
   const text = AI_STATES[state.aiStateIndex % AI_STATES.length];
   state.aiStateIndex += 1;
 
@@ -1071,7 +1046,6 @@ function ensureShadowModePanel() {
   const panel = document.createElement("section");
   panel.className = "panel shadow-mode-panel premium-card";
   panel.id = "shadowModePanel";
-  panel.setAttribute("data-premium-only", "true");
   panel.innerHTML = `
     <div class="panel-header"><h3>SHADOW MODE</h3><span id="shadowModeUpdated">standby</span></div>
     <div class="filter-summary-grid shadow-mode-summary">
@@ -1108,14 +1082,13 @@ function ensureFilterPerformancePanel() {
   const panel = document.createElement("section");
   panel.className = "panel filter-performance-panel premium-card";
   panel.id = "filterPerformancePanel";
-  panel.setAttribute("data-premium-only", "true");
   panel.innerHTML = `
     <div class="panel-header"><h3>FILTER PERFORMANCE</h3><span id="filterPerformanceUpdated">sem dados</span></div>
     <div class="filter-summary-grid" id="filterPerformanceCards">
       <div class="stat-card"><span>Eficiência dos filtros</span><strong>0%</strong></div>
       <div class="stat-card"><span>Filtro líder</span><strong>--</strong></div>
       <div class="stat-card"><span>Ativo crítico</span><strong>--</strong></div>
-      <div class="stat-card"><span>Score médio bloqueado</span><strong>0.0</strong></div>
+      <div class="stat-card"><span>Score médio filtrado</span><strong>0.0</strong></div>
     </div>
   `;
 
@@ -1217,7 +1190,7 @@ function renderFilterPerformance(data = {}) {
     <div class="stat-card"><span>Eficiência dos filtros</span><strong>${filterEfficiency.toFixed(1)}%</strong></div>
     <div class="stat-card"><span>Filtro líder</span><strong>${escapeHtml(topFilter?.filterLabel || topFilter?.filterName || "--")}</strong></div>
     <div class="stat-card"><span>Ativo crítico</span><strong>${escapeHtml(topAsset?.symbol || "--")}</strong></div>
-    <div class="stat-card"><span>Score médio bloqueado</span><strong>${avgScore.toFixed(1)}</strong></div>
+    <div class="stat-card"><span>Score médio filtrado</span><strong>${avgScore.toFixed(1)}</strong></div>
   `;
 }
 
@@ -1411,20 +1384,10 @@ function renderHistory() {
         ${escapeHtml(result)}
       </span>
 
-      ${
-        isPremium()
-          ? `
-            <div class="action-buttons">
-              <button onclick="setResult(${Number(signal.id)}, 'WIN')">WIN</button>
-              <button onclick="setResult(${Number(signal.id)}, 'LOSS')">LOSS</button>
-            </div>
-          `
-          : `
-            <div class="action-buttons locked">
-              Premium
-            </div>
-          `
-      }
+      <div class="action-buttons">
+        <button onclick="setResult(${Number(signal.id)}, 'WIN')">WIN</button>
+        <button onclick="setResult(${Number(signal.id)}, 'LOSS')">LOSS</button>
+      </div>
     `;
 
     el.historyList.appendChild(item);
@@ -1491,7 +1454,7 @@ function filterConfirmedOperationalSignals(signals = []) {
 }
 
 function renderSignal(signal) {
-  if (!signal || !isPremium() || !isConfirmedOperationalSignal(signal)) return;
+  if (!signal || !isConfirmedOperationalSignal(signal)) return;
 
   const direction = getOperationalDirection(signal);
   const confidence = getOperationalScore(signal);
@@ -1549,7 +1512,7 @@ function renderSignal(signal) {
       blockReason ||
       signal.reason ||
       signal.explanation ||
-      "Sinal premium detectado com leitura operacional.";
+      "Sinal detectado com leitura operacional.";
   }
   setTextContent(el.bestScore, `${confidence}%`);
 
@@ -1588,11 +1551,6 @@ function renderSignal(signal) {
 }
 
 async function setResult(id, result) {
-  if (!isPremium()) {
-    showToast("Recurso disponível apenas no plano PREMIUM.", "error");
-    return;
-  }
-
   if (!id) return;
 
   try {
@@ -1760,7 +1718,7 @@ function startChartLoop() {
 
     if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
     if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
-    if (timing) timing.textContent = isPremium() ? "Validando candle" : "Premium";
+    if (timing) timing.textContent = "Validando candle";
 
     if (state.institutionalHeatmap.length) {
       state.institutionalHeatmap = state.institutionalHeatmap.map((item, index) => ({
@@ -1831,9 +1789,9 @@ async function bootPanel() {
   renderOperationalHeatmap();
   renderAIInsights();
   drawEquityCurve();
-  pushTimelineEvent(isPremium() ? "Centro de Operações IA sincronizado." : "Terminal carregado em modo FREE.");
+  pushTimelineEvent("Centro de Operações IA sincronizado.");
   if (!state.proLogs.length) {
-    renderProLogs({}, isPremium() ? "Centro Institucional sincronizado com a engine." : "Centro Institucional aguardando ativação PREMIUM.");
+    renderProLogs({}, "Centro Institucional sincronizado com a engine.");
   }
   ensureMiniChart();
   startChartLoop();
@@ -1993,9 +1951,7 @@ socket.on("connect_error", () => {
 socket.on("signal", (signal) => {
   renderShadowMode(signal, "signal");
 
-  if (isPremium()) {
-    renderSignal(signal);
-  }
+  renderSignal(signal);
 
   if (isConfirmedOperationalSignal(signal)) {
     state.history.unshift(signal);

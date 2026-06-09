@@ -1,7 +1,6 @@
 const express = require("express");
 
 const authMiddleware = require("../middlewares/auth.middleware");
-const { requirePremium } = require("../middlewares/plan.middleware");
 const billingController = require("../controllers/billing.controller");
 const engineRunner = require("../services/engine-runner.service");
 const marketDataService = require("../services/market-data.service");
@@ -32,7 +31,7 @@ router.get(
   billingController.status
 );
 
-router.get("/dashboard", authMiddleware, requirePremium, (req, res) => {
+router.get("/dashboard", authMiddleware, (req, res) => {
   try {
     return res.json({
       ok: true,
@@ -46,7 +45,7 @@ router.get("/dashboard", authMiddleware, requirePremium, (req, res) => {
   }
 });
 
-router.get("/engine", authMiddleware, requirePremium, (req, res) => {
+router.get("/engine", authMiddleware, (req, res) => {
   try {
     return res.json({
       ok: true,
@@ -60,7 +59,7 @@ router.get("/engine", authMiddleware, requirePremium, (req, res) => {
   }
 });
 
-router.post("/engine/start", authMiddleware, requirePremium, (req, res) => {
+router.post("/engine/start", authMiddleware, (req, res) => {
   try {
     engineRunner.start();
     return res.json({ ok: true });
@@ -72,7 +71,7 @@ router.post("/engine/start", authMiddleware, requirePremium, (req, res) => {
   }
 });
 
-router.post("/engine/stop", authMiddleware, requirePremium, (req, res) => {
+router.post("/engine/stop", authMiddleware, (req, res) => {
   try {
     engineRunner.stop();
     return res.json({ ok: true });
@@ -129,7 +128,7 @@ router.get("/signals/recent", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/signals/:id/result", authMiddleware, requirePremium, async (req, res) => {
+router.post("/signals/:id/result", authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const result = String(req.body?.result || "").trim().toLowerCase();
