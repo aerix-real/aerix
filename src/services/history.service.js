@@ -57,7 +57,7 @@ class HistoryService {
   }
 
   async getLatest(limit = 20) {
-    return await signalRepository.getLatest(limit);
+    return await signalRepository.getLatestConfirmed(limit);
   }
 
   // ==============================

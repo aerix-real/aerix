@@ -562,7 +562,11 @@ class EngineRunnerService {
 
     signal.execution = validation;
     signal.executionAllowed = validation.allowed;
+    signal.execution_allowed = validation.allowed;
+    signal.minimumScore = validation.minimumScore || executionService.getMinimumScoreByMode(signal);
+    signal.minimum_score = signal.minimumScore;
     signal.adjustedScore = validation.adjustedScore ?? signal.finalScore;
+    signal.adjusted_score = signal.adjustedScore;
     signal.aiAdjustments = validation.aiAdjustments || signal.aiAdjustments || null;
     signal.aiBlock = validation.aiBlock || signal.aiBlock || null;
 
@@ -638,6 +642,10 @@ class EngineRunnerService {
       blocked: Boolean(signal.blocked),
       blockReason,
       block_reason: blockReason,
+      executionAllowed: signal.executionAllowed === true || signal.execution_allowed === true,
+      execution_allowed: signal.executionAllowed === true || signal.execution_allowed === true,
+      minimumScore: Number(signal.minimumScore || signal.minimum_score || 0),
+      minimum_score: Number(signal.minimumScore || signal.minimum_score || 0),
 
       explanation: signal.explanation || "",
       timing: signal.timing || "AGUARDANDO",
@@ -736,6 +744,8 @@ class EngineRunnerService {
 
   emitRuntimeUpdate(cycleResults = []) {
     const confirmedHistory = filterConfirmedOperationalSignals(this.latestResults);
+    const confirmedThisCycle = filterConfirmedOperationalSignals(cycleResults);
+    const blockedAnalyses = cycleResults.filter((item) => !isConfirmedOperationalSignal(item));
 
     emitToAll("engine:update", {
       ok: true,
@@ -751,6 +761,15 @@ class EngineRunnerService {
         },
         ranking: confirmedHistory,
         history: confirmedHistory,
+        blockedAnalyses,
+        filters: {
+          analyzedSignals: cycleResults.length,
+          blockedSignals: blockedAnalyses.length,
+          confirmedSignals: confirmedThisCycle.length,
+          approvalRate: cycleResults.length
+            ? Number(((confirmedThisCycle.length / cycleResults.length) * 100).toFixed(2))
+            : 0
+        },
         analytics: {
           historyStats: this.historyStats
         },

@@ -1,14 +1,20 @@
 const engineRunnerService = require("../services/engine-runner.service");
 const analyticsService = require("../services/analytics.service");
+const filterAnalyticsService = require("../services/filter-analytics.service");
+const { filterConfirmedOperationalSignals } = require("../utils/signal-history-filter");
 
 async function getDashboard(req, res) {
   try {
     const engineState = engineRunnerService.getState();
-    const analytics = await analyticsService.getGlobalAnalytics();
+    const [analytics, filterAnalytics] = await Promise.all([
+      analyticsService.getGlobalAnalytics(),
+      filterAnalyticsService.getFilterAnalytics({ limit: 12, rankingLimit: 8 })
+    ]);
 
     const bestOpportunity = engineState.bestOpportunity || null;
-    const ranking = Array.isArray(engineState.latestResults)
-      ? engineState.latestResults.slice(0, 8).map((item) => ({
+    const confirmedLatestResults = filterConfirmedOperationalSignals(engineState.latestResults || []);
+    const ranking = Array.isArray(confirmedLatestResults)
+      ? confirmedLatestResults.slice(0, 8).map((item) => ({
           symbol: item.symbol,
           asset: item.symbol,
           signal: item.signal,
@@ -18,7 +24,10 @@ async function getDashboard(req, res) {
           score: Number(item.finalScore || item.confidence || 0),
           entryQuality: item.entryQuality || "weak",
           strategyName: item.strategyName || null,
-          adaptiveAdjustments: item.adaptiveAdjustments || {}
+          adaptiveAdjustments: item.adaptiveAdjustments || {},
+          executionAllowed: item.executionAllowed === true || item.execution_allowed === true,
+          minimumScore: Number(item.minimumScore || item.minimum_score || 0),
+          adjustedScore: Number(item.adjustedScore || item.adjusted_score || item.finalScore || 0)
         }))
       : [];
 
@@ -30,6 +39,7 @@ async function getDashboard(req, res) {
         },
         ranking,
         history: analytics.recentHistory,
+        blockedAnalyses: filterAnalytics.recentBlocks || [],
         analytics: {
           historyStats: {
             total: analytics.summary.totalSignals,
@@ -44,7 +54,14 @@ async function getDashboard(req, res) {
           symbolPerformance: analytics.symbolPerformance,
           hourPerformance: analytics.hourPerformance,
           directionalPerformance: analytics.directionalPerformance,
-          adaptiveInsights: analytics.adaptiveInsights
+          adaptiveInsights: analytics.adaptiveInsights,
+          filters: {
+            analyzedSignals: filterAnalytics.analyzedSignals,
+            blockedSignals: filterAnalytics.blockedSignals,
+            confirmedSignals: filterAnalytics.confirmedSignals,
+            approvalRate: filterAnalytics.approvalRate,
+            topBlockingFilters: filterAnalytics.topBlockingFilters
+          }
         },
         connection: {
           engineRunning: engineState.isRunning,
@@ -70,13 +87,24 @@ async function getDashboard(req, res) {
 
 async function getHistory(req, res) {
   try {
-    const analytics = await analyticsService.getGlobalAnalytics();
+    const [analytics, filterAnalytics] = await Promise.all([
+      analyticsService.getGlobalAnalytics(),
+      filterAnalyticsService.getFilterAnalytics({ limit: 20, rankingLimit: 8 })
+    ]);
 
     return res.status(200).json({
       ok: true,
       data: {
         history: analytics.recentHistory,
-        summary: analytics.summary,
+        blockedAnalyses: filterAnalytics.recentBlocks || [],
+        summary: {
+          ...analytics.summary,
+          analyzedSignals: filterAnalytics.analyzedSignals,
+          blockedSignals: filterAnalytics.blockedSignals,
+          confirmedSignals: filterAnalytics.confirmedSignals,
+          approvalRate: filterAnalytics.approvalRate,
+          topBlockingFilters: filterAnalytics.topBlockingFilters
+        },
         symbolPerformance: analytics.symbolPerformance,
         hourPerformance: analytics.hourPerformance,
         directionalPerformance: analytics.directionalPerformance,

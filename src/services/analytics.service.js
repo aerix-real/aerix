@@ -50,7 +50,7 @@ async function getGlobalAnalytics() {
       signalRepository.getTopSymbols(8),
       signalRepository.getHourlyPerformance(24),
       signalRepository.getDirectionalPerformance(),
-      signalRepository.getLatest(20)
+      signalRepository.getLatestConfirmed(20)
     ]);
 
   const resolvedBuckets = Object.values(stats?.bySignal || {});
