@@ -7,6 +7,11 @@ const { runStrategies } = require("../strategy/strategy-runner.service");
 const adaptiveService = require("./adaptive.service");
 const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
+const {
+  CLASSIFICATIONS,
+  applySignalClassification,
+  hasOperationalDirection
+} = require("../utils/signal-classification");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -128,6 +133,11 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     predictiveAi: strategyResult.predictiveAi || null,
     preSignalScore: strategyResult.preSignalScore || 0,
     blocked: strategyResult.blocked || false,
+    classification: strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+    signalClassification: strategyResult.signalClassification || strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+    signal_classification: strategyResult.signal_classification || strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+    executionAllowed: strategyResult.executionAllowed === true || strategyResult.execution_allowed === true,
+    execution_allowed: strategyResult.execution_allowed === true || strategyResult.executionAllowed === true,
     blockReason: strategyResult.blockReason || null,
     timestamp: snapshot?.timestamp || new Date().toISOString()
   };
@@ -139,6 +149,12 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       symbol,
       asset: symbol,
       signal: strategyResult.signal,
+      direction: strategyResult.signal,
+      classification: strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+      signalClassification: strategyResult.signalClassification || strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+      signal_classification: strategyResult.signal_classification || strategyResult.classification || CLASSIFICATIONS.WATCHLIST,
+      executionAllowed: strategyResult.executionAllowed === true || strategyResult.execution_allowed === true,
+      execution_allowed: strategyResult.execution_allowed === true || strategyResult.executionAllowed === true,
       confidence: strategyResult.confidence,
       finalScore: Number(strategyResult.finalScore || strategyResult.confidence || 0),
       entryQuality: strategyResult.entryQuality,
@@ -418,7 +434,9 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const criticalLossDetected = hasCriticalLossPattern(preCheckMetrics, antiLoss);
   const preCheckBlocked = Boolean(preCheckMetrics.blocked);
-  const forceWait = preCheckBlocked || criticalLossDetected || dynamicThresholdBlocked;
+  const criticalBlocked = preCheckBlocked || criticalLossDetected;
+  const partialOpportunityBlocked = dynamicThresholdBlocked && hasOperationalDirection(strategyResult);
+  const forceWait = criticalBlocked || (dynamicThresholdBlocked && !partialOpportunityBlocked);
 
   const finalSignal = forceWait ? "WAIT" : strategyResult.signal;
   const finalBlocks = uniqueMessages([
@@ -487,8 +505,13 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       : adaptive.finalScore,
     blocks: finalBlocks,
     filterBlocks,
-    blocked: forceWait,
-    blockReason: forceWait ? finalBlocks.join(" ") : null,
+    blocked: criticalBlocked || (forceWait && !partialOpportunityBlocked),
+    executionAllowed: hasOperationalDirection({ signal: finalSignal }) && !criticalBlocked && !dynamicThresholdBlocked,
+    execution_allowed: hasOperationalDirection({ signal: finalSignal }) && !criticalBlocked && !dynamicThresholdBlocked,
+    classification: partialOpportunityBlocked ? CLASSIFICATIONS.WATCHLIST : null,
+    signalClassification: partialOpportunityBlocked ? CLASSIFICATIONS.WATCHLIST : null,
+    signal_classification: partialOpportunityBlocked ? CLASSIFICATIONS.WATCHLIST : null,
+    blockReason: (criticalBlocked || dynamicThresholdBlocked) ? finalBlocks.join(" ") : null,
     adaptiveAdjustment: Number(adaptive.adaptiveAdjustment || 0),
     adaptive_adjustment: Number(adaptive.adaptiveAdjustment || 0),
     adaptiveReasons: adaptive.adaptiveReasons || [],
@@ -513,6 +536,8 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       ? `${explanation} ${preCheckMetrics.explanation || ""} ${antiLoss.reason || ""}`.trim()
       : explanation
   };
+
+  applySignalClassification(finalResult);
 
   const legacySignal = buildLegacySignalShape(
     symbol,
@@ -539,6 +564,12 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   return {
     symbol,
     signal: finalResult.signal,
+    direction: finalResult.signal,
+    classification: finalResult.classification,
+    signalClassification: finalResult.signalClassification,
+    signal_classification: finalResult.signal_classification,
+    executionAllowed: finalResult.executionAllowed === true || finalResult.execution_allowed === true,
+    execution_allowed: finalResult.execution_allowed === true || finalResult.executionAllowed === true,
     confidence: finalResult.confidence,
     finalScore: finalResult.finalScore,
     entryQuality: finalResult.entryQuality,
@@ -569,6 +600,12 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     blockReason: finalResult.blockReason,
     finalResult: {
       signal: finalResult.signal,
+      direction: finalResult.signal,
+      classification: finalResult.classification,
+      signalClassification: finalResult.signalClassification,
+      signal_classification: finalResult.signal_classification,
+      executionAllowed: finalResult.executionAllowed === true || finalResult.execution_allowed === true,
+      execution_allowed: finalResult.execution_allowed === true || finalResult.executionAllowed === true,
       finalScore: finalResult.finalScore,
       blocks: finalResult.blocks,
       marketRegime: finalResult.marketRegime || "NORMAL",
@@ -641,6 +678,11 @@ function buildRanking(results = []) {
     score: Number(item.finalScore || item.confidence || 0),
     signal: item.signal,
     direction: item.signal,
+    classification: item.classification || CLASSIFICATIONS.WATCHLIST,
+    signalClassification: item.signalClassification || item.classification || CLASSIFICATIONS.WATCHLIST,
+    signal_classification: item.signal_classification || item.classification || CLASSIFICATIONS.WATCHLIST,
+    executionAllowed: item.executionAllowed === true || item.execution_allowed === true,
+    execution_allowed: item.execution_allowed === true || item.executionAllowed === true,
     entryQuality: item.entryQuality,
     strategyName: item.strategyName,
     marketRegime: item.marketRegime || "NORMAL",
@@ -667,6 +709,11 @@ function buildHistory(results = []) {
     asset: item.symbol,
     signal: item.signal,
     direction: item.signal,
+    classification: item.classification || CLASSIFICATIONS.WATCHLIST,
+    signalClassification: item.signalClassification || item.classification || CLASSIFICATIONS.WATCHLIST,
+    signal_classification: item.signal_classification || item.classification || CLASSIFICATIONS.WATCHLIST,
+    executionAllowed: item.executionAllowed === true || item.execution_allowed === true,
+    execution_allowed: item.execution_allowed === true || item.executionAllowed === true,
     confidence: item.confidence,
     finalScore: Number(item.finalScore || item.confidence || 0),
     score: Number(item.finalScore || item.confidence || 0),
@@ -732,6 +779,11 @@ async function analyzePreferredSymbols(userId) {
         preCheck: {},
         preSignalScore: 0,
         blocked: true,
+        classification: CLASSIFICATIONS.BLOCKED,
+        signalClassification: CLASSIFICATIONS.BLOCKED,
+        signal_classification: CLASSIFICATIONS.BLOCKED,
+        executionAllowed: false,
+        execution_allowed: false,
         blockReason: error.message || "Erro ao analisar ativo.",
         timestamp: new Date().toISOString()
       });
