@@ -14,6 +14,10 @@ const RateLimiterService = require("./rate-limiter.service");
 
 const signalRepository = require("../repositories/signal.repository");
 const { emitToAll } = require("../websocket/socket");
+const {
+  isConfirmedOperationalSignal,
+  filterConfirmedOperationalSignals
+} = require("../utils/signal-history-filter");
 
 class EngineRunnerService {
   constructor() {
@@ -289,6 +293,11 @@ class EngineRunnerService {
           if (signal.blocked || signal.signal === "WAIT") {
             this.emitBlocked(signal);
             await this.auditDecision("signal_blocked", signal);
+            continue;
+          }
+
+          if (!isConfirmedOperationalSignal(signal)) {
+            await this.auditDecision("signal_discarded_unconfirmed", signal);
             continue;
           }
 
@@ -605,7 +614,7 @@ class EngineRunnerService {
       const updated = await resultCheckerService.checkPendingSignals();
 
       if (updated.length) {
-        emitToAll("history", updated, { cacheLatest: true });
+        emitToAll("history", filterConfirmedOperationalSignals(updated), { cacheLatest: true });
 
         await this.auditDecision("results_checked", {
           total: updated.length
@@ -635,9 +644,6 @@ class EngineRunnerService {
       }`
     };
 
-    this.latestResults = [payload, ...this.latestResults].slice(0, 30);
-
-    emitToAll("signal", payload, { cacheLatest: true });
     emitToAll("execution", {
       executed: false,
       allowed: false,
@@ -649,6 +655,8 @@ class EngineRunnerService {
   }
 
   emitRuntimeUpdate(cycleResults = []) {
+    const confirmedHistory = filterConfirmedOperationalSignals(this.latestResults);
+
     emitToAll("engine:update", {
       ok: true,
       data: {
@@ -661,8 +669,8 @@ class EngineRunnerService {
         signalCenter: {
           bestOpportunity: this.bestOpportunity
         },
-        ranking: this.latestResults,
-        history: this.latestResults,
+        ranking: confirmedHistory,
+        history: confirmedHistory,
         analytics: {
           historyStats: this.historyStats
         },

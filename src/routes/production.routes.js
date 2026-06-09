@@ -7,28 +7,12 @@ const engineRunner = require("../services/engine-runner.service");
 const marketDataService = require("../services/market-data.service");
 const signalRepository = require("../repositories/signal.repository");
 const { emitToAll } = require("../websocket/socket");
+const {
+  isConfirmedOperationalSignal,
+  filterConfirmedOperationalSignals
+} = require("../utils/signal-history-filter");
 
 const router = express.Router();
-
-function isConfirmedExecutedSignal(signal = {}) {
-  if (!signal || typeof signal !== "object") return false;
-
-  const status = String(signal.status || signal.signal_status || "").toLowerCase();
-  const result = String(signal.result || "").toLowerCase();
-  const direction = String(signal.direction || signal.signal || "").toUpperCase();
-  const blocked = Boolean(signal.blocked);
-
-  const confirmedByStatus = ["confirmed", "executed"].includes(status);
-  const confirmedByResult = ["win", "loss", "executed", "confirmed"].includes(result);
-  const actionableDirection = ["CALL", "PUT"].includes(direction);
-
-  return !blocked && actionableDirection && (confirmedByStatus || confirmedByResult);
-}
-
-function filterConfirmedExecutedSignals(signals = []) {
-  if (!Array.isArray(signals)) return [];
-  return signals.filter(isConfirmedExecutedSignal);
-}
 
 router.post(
   "/billing/create-checkout",
@@ -126,15 +110,16 @@ router.get("/signals/recent", authMiddleware, async (req, res) => {
       state.recentSignals ||
       state.history ||
       state.signals ||
+      state.latestResults ||
       [];
 
     if (!Array.isArray(signals) || signals.length === 0) {
-      signals = await signalRepository.getLatest(50);
+      signals = await signalRepository.getLatest(200);
     }
 
     return res.json({
       ok: true,
-      signals: filterConfirmedExecutedSignals(signals).slice(0, 50)
+      signals: filterConfirmedOperationalSignals(signals).slice(0, 50)
     });
   } catch (error) {
     return res.json({
@@ -165,7 +150,9 @@ router.post("/signals/:id/result", authMiddleware, requirePremium, async (req, r
       });
     }
 
-    emitToAll("signal-result-updated", saved);
+    if (isConfirmedOperationalSignal(saved)) {
+      emitToAll("signal-result-updated", saved);
+    }
 
     return res.json({
       ok: true,
@@ -189,13 +176,14 @@ router.get("/stats", authMiddleware, async (req, res) => {
       state.recentSignals ||
       state.history ||
       state.signals ||
+      state.latestResults ||
       [];
 
     if (!Array.isArray(history) || history.length === 0) {
       history = await signalRepository.getLatest(200);
     }
 
-    const list = Array.isArray(history) ? history : [];
+    const list = filterConfirmedOperationalSignals(history);
 
     const total = list.length;
     const wins = list.filter((item) => String(item.result || "").toLowerCase() === "win").length;

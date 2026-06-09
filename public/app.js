@@ -630,9 +630,9 @@ async function loadHistory() {
     const data = await response.json().catch(() => null);
 
     if (data?.ok && Array.isArray(data.signals)) {
-      state.history = filterConfirmedExecutedSignals(data.signals);
+      state.history = filterConfirmedOperationalSignals(data.signals);
     } else if (data?.ok && Array.isArray(data.data)) {
-      state.history = filterConfirmedExecutedSignals(data.data);
+      state.history = filterConfirmedOperationalSignals(data.data);
     } else {
       state.history = [];
     }
@@ -689,6 +689,8 @@ function renderHistory() {
     const item = document.createElement("div");
     item.className = "history-item";
 
+    const direction = getOperationalDirection(signal);
+    const score = getOperationalScore(signal);
     const result = String(signal.result || "PENDING").toUpperCase();
     const resultColor =
       result === "WIN" ? "#18f2a3" :
@@ -701,11 +703,11 @@ function renderHistory() {
         <div class="history-meta">${formatTime(signal.created_at || signal.createdAt || signal.time)}</div>
       </div>
 
-      <span class="badge ${signal.direction === "CALL" ? "call" : "put"}">
-        ${escapeHtml(signal.direction || "---")}
+      <span class="badge ${direction === "CALL" ? "call" : "put"}">
+        ${escapeHtml(direction || "---")}
       </span>
 
-      <span class="score-badge">${Number(signal.confidence || signal.score || 0)}%</span>
+      <span class="score-badge">${score}%</span>
 
       <span style="color:${resultColor}; font-weight:800;">
         ${escapeHtml(result)}
@@ -736,29 +738,65 @@ function renderHistory() {
 }
 
 
-function isConfirmedExecutedSignal(signal = {}) {
-  const status = String(signal.status || signal.signal_status || "").toLowerCase();
-  const result = String(signal.result || "").toLowerCase();
-  const direction = String(signal.direction || signal.signal || "").toUpperCase();
-  const blocked = Boolean(signal.blocked);
-
-  const confirmedByStatus = ["confirmed", "executed"].includes(status);
-  const confirmedByResult = ["win", "loss", "executed", "confirmed"].includes(result);
-  const actionableDirection = ["CALL", "PUT"].includes(direction);
-
-  return !blocked && actionableDirection && (confirmedByStatus || confirmedByResult);
+function normalizeOperationalDirection(value) {
+  const direction = String(value || "").trim().toUpperCase();
+  return ["CALL", "PUT"].includes(direction) ? direction : "";
 }
 
-function filterConfirmedExecutedSignals(signals = []) {
+function getOperationalDirection(signal = {}) {
+  return (
+    normalizeOperationalDirection(signal.direction) ||
+    normalizeOperationalDirection(signal.signal) ||
+    normalizeOperationalDirection(signal.action) ||
+    normalizeOperationalDirection(signal.side) ||
+    normalizeOperationalDirection(signal.type) ||
+    normalizeOperationalDirection(signal.result)
+  );
+}
+
+function getOperationalScore(signal = {}) {
+  const score = Number(
+    signal.final_score ??
+    signal.finalScore ??
+    signal.score ??
+    signal.confidence ??
+    0
+  );
+
+  return Number.isFinite(score) ? score : 0;
+}
+
+function isConfirmedOperationalSignal(signal = {}) {
+  if (!signal || typeof signal !== "object") return false;
+
+  const status = String(signal.status || signal.signal_status || "").trim().toLowerCase();
+  const result = String(signal.result || "").trim().toLowerCase();
+  const rawDirection = String(signal.direction || signal.signal || "").trim().toUpperCase();
+  const blockedStatuses = ["blocked", "bloqueado", "rejected", "rejeitado", "invalid", "invalido", "cancelled", "canceled", "wait", "waiting"];
+
+  if (
+    signal.blocked === true ||
+    signal.executionAllowed === false ||
+    rawDirection === "WAIT" ||
+    blockedStatuses.includes(status) ||
+    blockedStatuses.includes(result)
+  ) {
+    return false;
+  }
+
+  return Boolean(getOperationalDirection(signal)) && getOperationalScore(signal) > 0;
+}
+
+function filterConfirmedOperationalSignals(signals = []) {
   if (!Array.isArray(signals)) return [];
-  return signals.filter(isConfirmedExecutedSignal);
+  return signals.filter(isConfirmedOperationalSignal);
 }
 
 function renderSignal(signal) {
-  if (!signal || !isPremium()) return;
+  if (!signal || !isPremium() || !isConfirmedOperationalSignal(signal)) return;
 
-  const direction = String(signal.direction || "").toUpperCase();
-  const confidence = Number(signal.confidence || signal.score || 0);
+  const direction = getOperationalDirection(signal);
+  const confidence = getOperationalScore(signal);
   const blocked = Boolean(signal.blocked || direction === "WAIT");
   const blockReason =
     signal.blockReason ||
@@ -1164,7 +1202,7 @@ socket.on("signal", (signal) => {
     renderSignal(signal);
   }
 
-  if (isConfirmedExecutedSignal(signal)) {
+  if (isConfirmedOperationalSignal(signal)) {
     state.history.unshift(signal);
     state.history = state.history.slice(0, 50);
   }
@@ -1175,7 +1213,7 @@ socket.on("signal-result-updated", (signal) => {
   const index = state.history.findIndex((item) => item.id === signal.id);
 
   if (index !== -1) {
-    if (isConfirmedExecutedSignal(signal)) {
+    if (isConfirmedOperationalSignal(signal)) {
       state.history[index] = signal;
     } else {
       state.history.splice(index, 1);
