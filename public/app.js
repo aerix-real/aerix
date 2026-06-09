@@ -73,7 +73,13 @@ const el = {
   metricLatency: document.getElementById("metricLatency"),
   metricFlow: document.getElementById("metricFlow"),
   metricRisk: document.getElementById("metricRisk"),
-  metricAi: document.getElementById("metricAi")
+  metricAi: document.getElementById("metricAi"),
+
+  aiInsightsList: document.getElementById("aiInsightsList"),
+  operationTimeline: document.getElementById("operationTimeline"),
+  timelineCount: document.getElementById("timelineCount"),
+  equityCurveCanvas: document.getElementById("equityCurveCanvas"),
+  equityStatus: document.getElementById("equityStatus")
 };
 
 const AI_STATES = [
@@ -545,6 +551,127 @@ function updateRealtimeMetrics(signal = {}) {
   if (metrics.metricAi) metrics.metricAi.textContent = premium ? `${Math.round(aiScore)}%` : "premium";
 }
 
+function renderAIInsights(signal = {}) {
+  const list = el.aiInsightsList || document.getElementById("aiInsightsList");
+  if (!list) return;
+
+  const direction = getOperationalDirection(signal) || "WAIT";
+  const score = getOperationalScore(signal);
+  const asset = signal.symbol || signal.asset || "MULTI-ASSET";
+  const premium = isPremium();
+  const riskText = signal.blocked ? "Bloqueio defensivo ativo" : score >= 82 ? "Risco calibrado" : "Aguardando validação";
+
+  const insights = premium
+    ? [
+        ["01", "Tese institucional", `${asset} em leitura ${direction}; score operacional ${Math.round(score || 0)}%.`],
+        ["02", "Risco e timing", riskText],
+        ["03", "Próxima ação", direction === "WAIT" ? "Manter observação até nova confluência." : "Validar candle, expiração e gestão de banca antes da execução."]
+      ]
+    : [
+        ["01", "Premium requerido", "IA Insights completos liberados no plano PREMIUM."],
+        ["02", "Camada preservada", "Autenticação, APIs, Socket.IO e engine seguem integrados."],
+        ["03", "Desk readiness", "Ative o premium para leitura tática em tempo real."]
+      ];
+
+  list.innerHTML = insights.map(([index, title, text]) => `
+    <article class="ai-insight-item">
+      <span>${index}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(text)}</p>
+    </article>
+  `).join("");
+}
+
+function pushTimelineEvent(message) {
+  const timeline = el.operationTimeline || document.getElementById("operationTimeline");
+  if (!timeline) return;
+
+  const existing = Array.from(timeline.querySelectorAll(".timeline-event span")).map((node) => node.textContent);
+  if (existing[0] === message) return;
+
+  const item = document.createElement("div");
+  item.className = "timeline-event";
+  item.innerHTML = `<time>${formatTime(new Date())}</time><span>${escapeHtml(message)}</span>`;
+  timeline.prepend(item);
+
+  Array.from(timeline.querySelectorAll(".timeline-event")).slice(7).forEach((node) => node.remove());
+
+  const count = el.timelineCount || document.getElementById("timelineCount");
+  if (count) count.textContent = `${timeline.querySelectorAll(".timeline-event").length} eventos`;
+}
+
+function drawEquityCurve() {
+  const canvas = el.equityCurveCanvas || document.getElementById("equityCurveCanvas");
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const base = 100;
+  const points = [base];
+
+  state.history.slice().reverse().forEach((signal) => {
+    const result = String(signal.result || "PENDING").toUpperCase();
+    const score = Math.max(1, getOperationalScore(signal) / 100);
+    const last = points[points.length - 1];
+    const delta = result === "WIN" ? 7 * score : result === "LOSS" ? -5 * score : 1.8 * score;
+    points.push(Math.max(72, last + delta));
+  });
+
+  while (points.length < 18) {
+    const index = points.length;
+    points.push(points[index - 1] + Math.sin(index / 2) * 1.8 + 1.2);
+  }
+
+  const data = points.slice(-38);
+  const max = Math.max(...data) + 6;
+  const min = Math.min(...data) - 6;
+  const range = Math.max(1, max - min);
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = 22 + ((height - 44) / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.strokeStyle = "rgba(230,198,127,0.10)";
+    ctx.stroke();
+  }
+
+  const toX = (index) => (width / Math.max(1, data.length - 1)) * index;
+  const toY = (value) => height - 22 - ((value - min) / range) * (height - 44);
+
+  ctx.beginPath();
+  data.forEach((point, index) => {
+    const x = toX(index);
+    const y = toY(point);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  const gradient = ctx.createLinearGradient(0, 0, width, 0);
+  gradient.addColorStop(0, "#8b6b2f");
+  gradient.addColorStop(0.45, "#f5da95");
+  gradient.addColorStop(1, "#2ee6a6");
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 4;
+  ctx.shadowColor = "rgba(230,198,127,0.42)";
+  ctx.shadowBlur = 18;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  const lastX = toX(data.length - 1);
+  const lastY = toY(data[data.length - 1]);
+  ctx.beginPath();
+  ctx.arc(lastX - 4, lastY, 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#f5da95";
+  ctx.fill();
+
+  const status = el.equityStatus || document.getElementById("equityStatus");
+  if (status) status.textContent = state.history.length ? "histórico real" : "baseline visual";
+}
+
 function renderProLogs(signal = {}, message = null) {
   ensureInstitutionalCenter();
 
@@ -702,9 +829,11 @@ async function loadHistory() {
     }
 
     renderHistory();
+    drawEquityCurve();
   } catch (error) {
     state.history = [];
     renderHistory();
+    drawEquityCurve();
   }
 }
 
@@ -941,7 +1070,10 @@ function renderSignal(signal) {
   updateInstitutionalCards(signal);
   updateRealtimeMetrics(signal);
   renderOperationalHeatmap(signal);
+  renderAIInsights(signal);
   renderProLogs(signal);
+  pushTimelineEvent(`${direction} ${signal.symbol || signal.asset || "ativo"} · score ${Math.round(confidence)}%`);
+  drawEquityCurve();
 
   pushChartPoint(confidence || 50);
   drawMiniChart();
@@ -1107,6 +1239,7 @@ function startChartLoop() {
   state.chartTimer = setInterval(() => {
     pushChartPoint(45 + Math.random() * 35);
     drawMiniChart();
+    drawEquityCurve();
 
     const trend = document.getElementById("trendMetric");
     const vol = document.getElementById("volMetric");
@@ -1175,6 +1308,9 @@ async function bootPanel() {
   updateInstitutionalCards();
   updateRealtimeMetrics();
   renderOperationalHeatmap();
+  renderAIInsights();
+  drawEquityCurve();
+  pushTimelineEvent(isPremium() ? "Centro de Operações IA sincronizado." : "Terminal carregado em modo FREE.");
   if (!state.proLogs.length) {
     renderProLogs({}, isPremium() ? "Centro Institucional sincronizado com a engine." : "Centro Institucional aguardando ativação PREMIUM.");
   }
@@ -1274,6 +1410,7 @@ socket.on("connect", () => {
   setConnection("Online");
   updateInstitutionalCards();
   renderProLogs({}, "Socket.IO conectado ao barramento em tempo real.");
+  pushTimelineEvent("Socket.IO conectado ao barramento em tempo real.");
 
   if (state.accessToken) {
     bootPanel();
@@ -1287,6 +1424,7 @@ socket.on("disconnect", () => {
   if (saasStatus) saasStatus.textContent = "SaaS reconectando";
   if (saasStatusCard) saasStatusCard.textContent = "Reconectando";
   renderProLogs({}, "Socket.IO desconectado; camada visual em modo de proteção.");
+  pushTimelineEvent("Socket.IO desconectado; modo de proteção visual ativo.");
 });
 
 socket.on("connect_error", () => {
@@ -1303,6 +1441,7 @@ socket.on("signal", (signal) => {
     state.history = state.history.slice(0, 50);
   }
   renderHistory();
+  drawEquityCurve();
 });
 
 socket.on("signal-result-updated", (signal) => {
@@ -1315,6 +1454,7 @@ socket.on("signal-result-updated", (signal) => {
       state.history.splice(index, 1);
     }
     renderHistory();
+    drawEquityCurve();
     loadStats();
   }
 });
@@ -1326,6 +1466,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   ensureInstitutionalCenter();
   updateRealtimeMetrics();
   renderOperationalHeatmap();
+  renderAIInsights();
+  drawEquityCurve();
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
