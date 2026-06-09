@@ -666,3 +666,55 @@ canvas { max-width: 100%; }
   .filter-summary-grid { grid-template-columns: 1fr; }
   .filter-block-item > div { flex-direction: column; }
 }
+
+.filter-performance-list {
+  display: grid;
+  gap: 12px;
+}
+
+.filter-performance-item {
+  border: 1px solid rgba(240,207,130,0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(240,207,130,0.12), transparent 34%),
+    linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.02));
+  padding: 14px;
+}
+
+.performance-head,
+.performance-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.performance-head strong {
+  color: #fff8e8;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.performance-efficiency {
+  border: 1px solid rgba(90,255,190,0.24);
+  border-radius: 999px;
+  color: #8fffd5;
+  font-weight: 900;
+  padding: 6px 10px;
+}
+
+.performance-metrics {
+  margin-top: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.performance-metrics span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.performance-metrics strong {
+  color: #fff8e8;
+}

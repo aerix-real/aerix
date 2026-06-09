@@ -1,6 +1,7 @@
 const signalRepository = require("../repositories/signal.repository");
 const { getMarketSnapshot } = require("./market-data.service");
 const executionService = require("./execution.service");
+const shadowModeService = require("./shadow-mode.service");
 
 class ResultCheckerService {
   constructor() {
@@ -30,6 +31,53 @@ class ResultCheckerService {
     }
 
     return "loss";
+  }
+
+  buildShadowSignal(signal) {
+    const originalSignal = signal.original_signal || {};
+
+    return {
+      ...originalSignal,
+      id: signal.id,
+      symbol: signal.symbol,
+      signal: signal.original_direction || originalSignal.signal || originalSignal.direction,
+      direction: signal.original_direction || originalSignal.direction || originalSignal.signal,
+      entry_price: signal.entry_price,
+      final_score: signal.original_score,
+      finalScore: Number(signal.original_score || 0),
+      confidence: Number(signal.original_confidence || signal.original_score || 0)
+    };
+  }
+
+  async checkPendingShadowSignals(limit = 50) {
+    const pendingSignals = await shadowModeService.getExpiredPending(limit);
+    const updated = [];
+
+    for (const signal of pendingSignals) {
+      try {
+        const snapshot = await getMarketSnapshot(signal.symbol);
+        const candles = snapshot?.timeframes?.m5?.candles || [];
+        const lastCandle = candles[candles.length - 1] || null;
+
+        const resultPrice = this.normalizePrice(lastCandle?.close);
+        const shadowSignal = this.buildShadowSignal(signal);
+        const finalResult = this.resolveSignalResult(shadowSignal, resultPrice);
+
+        const saved = await shadowModeService.finalizeShadowResult(signal.id, {
+          result: finalResult,
+          resultPrice
+        });
+
+        if (saved) updated.push(saved);
+      } catch (error) {
+        console.error(
+          `Erro ao verificar shadow mode ${signal.id}:`,
+          error.message || error
+        );
+      }
+    }
+
+    return updated;
   }
 
   buildLearningSignal(signal, savedResult) {
@@ -91,7 +139,9 @@ class ResultCheckerService {
         }
       }
 
-      return updated;
+      const shadowUpdated = await this.checkPendingShadowSignals(50);
+
+      return updated.map((item) => ({ ...item, shadowModeUpdated: shadowUpdated.length }));
     } finally {
       this.isChecking = false;
     }

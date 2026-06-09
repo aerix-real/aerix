@@ -7,6 +7,7 @@ const executionService = require("./execution.service");
 const resultCheckerService = require("./result-checker.service");
 const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
+const shadowModeService = require("./shadow-mode.service");
 
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { explainSignal, applyLossPenalty } = require("./signal-ai.service");
@@ -284,6 +285,7 @@ class EngineRunnerService {
           });
 
           signal = this.applyPredictiveDecisionToSignal(signal, predictiveDecision);
+          const originalSignal = this.cloneSignal(signal);
           signal = await this.applyAdaptiveLayers(signal);
           signal = applyLossPenalty(signal, this.latestResults);
           signal = this.applySniperTiming(signal);
@@ -294,7 +296,8 @@ class EngineRunnerService {
 
           if (signal.blocked || signal.signal === "WAIT") {
             this.emitBlocked(signal);
-            await this.recordFilterAnalytics(signal, "engine");
+            const blockEvents = await this.recordFilterAnalytics(signal, "engine");
+            await this.recordShadowMode(signal, originalSignal, "engine", blockEvents);
             await this.auditDecision("signal_blocked", signal);
             continue;
           }
@@ -612,11 +615,28 @@ class EngineRunnerService {
     };
   }
 
+  cloneSignal(signal) {
+    return JSON.parse(JSON.stringify(signal || {}));
+  }
+
   async recordFilterAnalytics(signal, source = "engine") {
     try {
-      await filterAnalyticsService.recordBlockedSignal(signal, source);
+      return await filterAnalyticsService.recordBlockedSignal(signal, source);
     } catch (error) {
       console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
+      return [];
+    }
+  }
+
+  async recordShadowMode(blockedSignal, originalSignal, source = "engine", blockEvents = []) {
+    try {
+      return await shadowModeService.recordBlockedSignal(blockedSignal, originalSignal, {
+        source,
+        blockEvents
+      });
+    } catch (error) {
+      console.error("Erro ao registrar shadow mode:", error.message || error);
+      return [];
     }
   }
 

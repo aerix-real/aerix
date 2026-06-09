@@ -24,7 +24,8 @@ const state = {
   dashboardSnapshot: null,
   engineSnapshot: null,
   premiumSnapshot: null,
-  filterAnalytics: null
+  filterAnalytics: null,
+  shadowMode: null
 };
 
 const el = {
@@ -88,7 +89,14 @@ const el = {
   filterTotalAssets: document.getElementById("filterTotalAssets"),
   filterAvgScore: document.getElementById("filterAvgScore"),
   filterRankingList: document.getElementById("filterRankingList"),
-  filterBlockList: document.getElementById("filterBlockList")
+  filterBlockList: document.getElementById("filterBlockList"),
+
+  shadowModeUpdated: document.getElementById("shadowModeUpdated"),
+  shadowSavedLosses: document.getElementById("shadowSavedLosses"),
+  shadowLostWins: document.getElementById("shadowLostWins"),
+  shadowAccuracy: document.getElementById("shadowAccuracy"),
+  shadowPending: document.getElementById("shadowPending"),
+  shadowFilterList: document.getElementById("shadowFilterList")
 };
 
 const AI_STATES = [
@@ -937,6 +945,51 @@ async function loadFilterAnalytics() {
   }
 }
 
+function renderShadowMode(data = {}) {
+  const summary = data.summary || {};
+  const filters = Array.isArray(data.filters) ? data.filters : [];
+
+  if (el.shadowSavedLosses) el.shadowSavedLosses.textContent = summary.savedLosses ?? 0;
+  if (el.shadowLostWins) el.shadowLostWins.textContent = summary.lostWins ?? 0;
+  if (el.shadowAccuracy) el.shadowAccuracy.textContent = `${summary.filterAccuracy ?? 0}%`;
+  if (el.shadowPending) el.shadowPending.textContent = summary.pending ?? 0;
+  if (el.shadowModeUpdated) el.shadowModeUpdated.textContent = summary.lastCheckedAt ? formatTime(summary.lastCheckedAt) : "shadow ativo";
+
+  if (el.shadowFilterList) {
+    el.shadowFilterList.innerHTML = filters.length
+      ? filters.map((item) => `
+        <div class="filter-performance-item">
+          <div class="performance-head">
+            <strong>${escapeHtml(item.filterLabel || item.filterName || "Filtro")}</strong>
+            <span class="performance-efficiency">${Number(item.filterAccuracy || 0)}%</span>
+          </div>
+          <div class="performance-metrics">
+            <span>Losses evitados: <strong>${escapeHtml(item.savedLosses || 0)}</strong></span>
+            <span>Wins perdidos: <strong>${escapeHtml(item.lostWins || 0)}</strong></span>
+            <span>Em observação: <strong>${escapeHtml(item.pending || 0)}</strong></span>
+          </div>
+        </div>
+      `).join("")
+      : `<div class="history-empty">Shadow mode aguardando filtros bloquearem sinais operacionais</div>`;
+  }
+}
+
+async function loadShadowMode() {
+  try {
+    const response = await apiFetch("/api/shadow-mode?limit=30&rankingLimit=10");
+    const data = await response.json().catch(() => null);
+
+    if (data?.ok) {
+      state.shadowMode = data.data;
+      renderShadowMode(data.data);
+      return;
+    }
+
+    renderShadowMode({});
+  } catch (error) {
+    renderShadowMode({});
+  }
+}
 
 function renderHistory() {
   if (!el.historyList) return;
@@ -1386,7 +1439,7 @@ async function bootPanel() {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
-  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics()]);
+  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics(), loadShadowMode()]);
 }
 
 function escapeHtml(value) {
@@ -1526,6 +1579,7 @@ socket.on("signal-result-updated", (signal) => {
     drawEquityCurve();
     loadStats();
     loadFilterAnalytics();
+    loadShadowMode();
   }
 });
 

@@ -7,6 +7,7 @@ const dashboardRoutes = require("./dashboard.routes");
 const premiumRoutes = require("./premium.routes");
 const billingRoutes = require("./billing.routes");
 const filterAnalyticsRoutes = require("./filter-analytics.routes");
+const shadowModeRoutes = require("./shadow-mode.routes");
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ router.use("/dashboard", dashboardRoutes);
 router.use("/premium", premiumRoutes);
 router.use("/billing", billingRoutes);
 router.use("/filter-analytics", filterAnalyticsRoutes);
+router.use("/shadow-mode", shadowModeRoutes);
 
 router.get("/health", (req, res) => {
   return res.status(200).json({

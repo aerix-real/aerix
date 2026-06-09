@@ -249,6 +249,80 @@ async function ensureFilterBlockEventsTable() {
   `);
 }
 
+async function ensureShadowModeEventsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.shadow_mode_events (
+      id SERIAL PRIMARY KEY,
+      filter_block_event_id INTEGER REFERENCES public.filter_block_events(id) ON DELETE SET NULL,
+      user_id INTEGER,
+      filter_name TEXT NOT NULL,
+      filter_label TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      original_signal JSONB NOT NULL DEFAULT '{}'::jsonb,
+      original_direction TEXT NOT NULL,
+      original_score NUMERIC DEFAULT 0,
+      original_confidence NUMERIC DEFAULT 0,
+      entry_price NUMERIC,
+      result_price NUMERIC,
+      block_reason TEXT NOT NULL,
+      filter_decision TEXT NOT NULL DEFAULT 'blocked',
+      result TEXT NOT NULL DEFAULT 'pending',
+      comparison TEXT,
+      mode TEXT,
+      market_regime TEXT,
+      strategy_name TEXT,
+      source TEXT NOT NULL DEFAULT 'engine',
+      expires_at TIMESTAMP,
+      checked_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await ensureColumn("shadow_mode_events", "filter_block_event_id", "INTEGER");
+  await ensureColumn("shadow_mode_events", "user_id", "INTEGER");
+  await ensureColumn("shadow_mode_events", "filter_name", "TEXT NOT NULL DEFAULT 'institutional_quality_filter'");
+  await ensureColumn("shadow_mode_events", "filter_label", "TEXT NOT NULL DEFAULT 'Filtro de qualidade institucional'");
+  await ensureColumn("shadow_mode_events", "symbol", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
+  await ensureColumn("shadow_mode_events", "original_signal", "JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await ensureColumn("shadow_mode_events", "original_direction", "TEXT NOT NULL DEFAULT 'WAIT'");
+  await ensureColumn("shadow_mode_events", "original_score", "NUMERIC DEFAULT 0");
+  await ensureColumn("shadow_mode_events", "original_confidence", "NUMERIC DEFAULT 0");
+  await ensureColumn("shadow_mode_events", "entry_price", "NUMERIC");
+  await ensureColumn("shadow_mode_events", "result_price", "NUMERIC");
+  await ensureColumn("shadow_mode_events", "block_reason", "TEXT NOT NULL DEFAULT 'Bloqueio institucional sem motivo detalhado.'");
+  await ensureColumn("shadow_mode_events", "filter_decision", "TEXT NOT NULL DEFAULT 'blocked'");
+  await ensureColumn("shadow_mode_events", "result", "TEXT NOT NULL DEFAULT 'pending'");
+  await ensureColumn("shadow_mode_events", "comparison", "TEXT");
+  await ensureColumn("shadow_mode_events", "mode", "TEXT");
+  await ensureColumn("shadow_mode_events", "market_regime", "TEXT");
+  await ensureColumn("shadow_mode_events", "strategy_name", "TEXT");
+  await ensureColumn("shadow_mode_events", "source", "TEXT NOT NULL DEFAULT 'engine'");
+  await ensureColumn("shadow_mode_events", "expires_at", "TIMESTAMP");
+  await ensureColumn("shadow_mode_events", "checked_at", "TIMESTAMP");
+  await ensureColumn("shadow_mode_events", "created_at", "TIMESTAMP NOT NULL DEFAULT NOW()");
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_shadow_mode_events_filter_name
+      ON public.shadow_mode_events(filter_name);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_shadow_mode_events_result
+      ON public.shadow_mode_events(result);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_shadow_mode_events_expires_at
+      ON public.shadow_mode_events(expires_at)
+      WHERE result = 'pending';
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_shadow_mode_events_created_at
+      ON public.shadow_mode_events(created_at DESC);
+  `);
+}
+
 async function logSignalHistoryColumns() {
   const cols = await db.query(`
     SELECT column_name
@@ -275,6 +349,7 @@ async function bootstrapDatabase() {
   await ensureBillingTable();
   await ensureAuditLogsTable();
   await ensureFilterBlockEventsTable();
+  await ensureShadowModeEventsTable();
 
   console.log("✅ Banco pronto para IA institucional");
   await logSignalHistoryColumns();
