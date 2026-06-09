@@ -42,6 +42,8 @@ function getSignalDirection(signal = {}) {
 
 function getSignalScore(signal = {}) {
   const score = Number(
+    signal.adjusted_score ??
+    signal.adjustedScore ??
     signal.final_score ??
     signal.finalScore ??
     signal.score ??
@@ -50,6 +52,26 @@ function getSignalScore(signal = {}) {
   );
 
   return Number.isFinite(score) ? score : 0;
+}
+
+function getMinimumValidatedScore(signal = {}) {
+  const explicitMinimum = Number(
+    signal.minimum_score ??
+    signal.minimumScore ??
+    signal.dynamicThresholds?.minimumScore ??
+    signal.dynamic_thresholds?.minimumScore
+  );
+
+  if (Number.isFinite(explicitMinimum) && explicitMinimum > 0) {
+    return explicitMinimum;
+  }
+
+  const mode = String(signal.mode || signal.tradingMode || signal.operationMode || "balanced").toLowerCase();
+
+  if (["conservador", "conservative"].includes(mode)) return 88;
+  if (["agressivo", "aggressive"].includes(mode)) return 70;
+
+  return 78;
 }
 
 function isBlockedSignal(signal = {}) {
@@ -73,7 +95,11 @@ function isConfirmedOperationalSignal(signal = {}) {
   const direction = getSignalDirection(signal);
   if (!OPERATIONAL_DIRECTIONS.has(direction)) return false;
 
-  return getSignalScore(signal) > 0;
+  if (signal.executionAllowed !== true && signal.execution_allowed !== true) {
+    return false;
+  }
+
+  return getSignalScore(signal) >= getMinimumValidatedScore(signal);
 }
 
 function filterConfirmedOperationalSignals(signals = []) {
@@ -85,5 +111,6 @@ module.exports = {
   isConfirmedOperationalSignal,
   filterConfirmedOperationalSignals,
   getSignalDirection,
-  getSignalScore
+  getSignalScore,
+  getMinimumValidatedScore
 };

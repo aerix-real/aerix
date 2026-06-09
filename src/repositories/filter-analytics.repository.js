@@ -1,5 +1,23 @@
 const db = require("../config/database");
 
+const MINIMUM_SCORE_SQL = `
+  COALESCE(
+    NULLIF(minimum_score, 0),
+    CASE
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 70
+      ELSE 78
+    END
+  )
+`;
+
+const CONFIRMED_OPERATIONAL_WHERE = `
+  COALESCE(blocked, false) = false
+  AND COALESCE(execution_allowed, false) = true
+  AND signal IN ('CALL', 'PUT')
+  AND COALESCE(NULLIF(adjusted_score, 0), final_score, confidence, 0) >= ${MINIMUM_SCORE_SQL}
+`;
+
 const INSTITUTIONAL_FILTERS = {
   predictive_ai_block: {
     label: "Predictive AI Block",
@@ -224,8 +242,7 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
       SELECT
         COUNT(*)::int AS approved_signals
       FROM public.signal_history
-      WHERE COALESCE(blocked, false) = false
-        AND signal IN ('CALL', 'PUT')
+      WHERE ${CONFIRMED_OPERATIONAL_WHERE}
     `),
     db.query(`
       SELECT
@@ -311,10 +328,14 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
 
   return {
     totalSignals,
+    analyzedSignals: totalSignals,
     approvedSignals,
+    confirmedSignals: approvedSignals,
     blockedSignals,
+    blockedAnalyses: blockedSignals,
     approvalRate,
     blocksByFilter: filterResult.rows,
+    topBlockingFilters: filterResult.rows,
     blocksByAsset: assetResult.rows,
     blocksByHour: hourResult.rows,
     summary: {

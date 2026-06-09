@@ -1,5 +1,23 @@
 const db = require("../config/database");
 
+const MINIMUM_SCORE_SQL = `
+  COALESCE(
+    NULLIF(minimum_score, 0),
+    CASE
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 70
+      ELSE 78
+    END
+  )
+`;
+
+const CONFIRMED_OPERATIONAL_WHERE = `
+  COALESCE(blocked, false) = false
+  AND COALESCE(execution_allowed, false) = true
+  AND signal IN ('CALL', 'PUT')
+  AND COALESCE(NULLIF(adjusted_score, 0), final_score, confidence, 0) >= ${MINIMUM_SCORE_SQL}
+`;
+
 function normalizeNumber(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -61,11 +79,14 @@ async function insertSignal(data) {
       market_regime,
       institutional_quality,
       adaptive_adjustment,
-      tuning_weight
+      tuning_weight,
+      execution_allowed,
+      minimum_score,
+      adjusted_score
     )
     VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
+      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
     )
     RETURNING *;
   `;
@@ -98,7 +119,10 @@ async function insertSignal(data) {
     data.market_regime ?? data.marketRegime ?? null,
     data.institutional_quality ?? data.institutionalQuality ?? null,
     normalizeNumber(data.adaptive_adjustment ?? data.adaptiveAdjustment, 0),
-    normalizeNumber(data.tuning_weight ?? data.tuningWeight, 1)
+    normalizeNumber(data.tuning_weight ?? data.tuningWeight, 1),
+    data.execution_allowed ?? data.executionAllowed ?? false,
+    normalizeNumber(data.minimum_score ?? data.minimumScore, 0),
+    normalizeNumber(data.adjusted_score ?? data.adjustedScore ?? data.final_score ?? data.finalScore, 0)
   ];
 
   const result = await db.query(query, values);
@@ -123,6 +147,25 @@ async function getLatest(limit = 20) {
   return result.rows;
 }
 
+async function getLatestConfirmed(limit = 20) {
+  const result = await db.query(
+    `
+    SELECT
+      *,
+      execution_allowed AS "executionAllowed",
+      minimum_score AS "minimumScore",
+      adjusted_score AS "adjustedScore"
+    FROM public.signal_history
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
+    ORDER BY created_at DESC
+    LIMIT $1
+    `,
+    [limit]
+  );
+
+  return result.rows;
+}
+
 async function getStats() {
   const result = await db.query(`
     SELECT
@@ -137,6 +180,7 @@ async function getStats() {
       market_regime
     FROM public.signal_history
     WHERE result IN ('win', 'loss')
+      AND ${CONFIRMED_OPERATIONAL_WHERE}
     ORDER BY created_at DESC
     LIMIT 1000
   `);
@@ -247,6 +291,7 @@ async function getPerformanceBySymbol(symbol) {
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
     WHERE symbol = $1
+      AND ${CONFIRMED_OPERATIONAL_WHERE}
     `,
     [symbol]
   );
@@ -263,6 +308,7 @@ async function getPerformanceByHour() {
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
     GROUP BY hour
     ORDER BY hour
   `);
@@ -329,6 +375,7 @@ async function getTopSymbols(limit = 8) {
       COALESCE(AVG(confidence), 0)::numeric(10,2) as avg_confidence,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
     GROUP BY symbol
     HAVING COUNT(*) >= 1
     ORDER BY
@@ -353,6 +400,7 @@ async function getHourlyPerformance(limit = 24) {
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
     GROUP BY hour
     ORDER BY hour
     LIMIT $1
@@ -372,7 +420,7 @@ async function getDirectionalPerformance() {
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
-    WHERE signal IN ('CALL', 'PUT')
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
     GROUP BY signal
     ORDER BY signal
   `);
@@ -384,6 +432,7 @@ module.exports = {
   insertSignal,
   save,
   getLatest,
+  getLatestConfirmed,
   getStats,
   getPerformanceBySymbol,
   getPerformanceByHour,

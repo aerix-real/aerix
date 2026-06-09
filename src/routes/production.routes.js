@@ -113,7 +113,7 @@ router.get("/signals/recent", authMiddleware, async (req, res) => {
       [];
 
     if (!Array.isArray(signals) || signals.length === 0) {
-      signals = await signalRepository.getLatest(200);
+      signals = await signalRepository.getLatestConfirmed(200);
     }
 
     return res.json({
@@ -179,7 +179,7 @@ router.get("/stats", authMiddleware, async (req, res) => {
       [];
 
     if (!Array.isArray(history) || history.length === 0) {
-      history = await signalRepository.getLatest(200);
+      history = await signalRepository.getLatestConfirmed(200);
     }
 
     const list = filterConfirmedOperationalSignals(history);

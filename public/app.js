@@ -996,12 +996,15 @@ function extractRuntimeSignals(runtimeData = {}) {
   const bestOpportunity = data.signalCenter?.bestOpportunity || data.bestOpportunity || data.lastSignal || data.currentSignal || null;
   const ranking = normalizeSignalCollection(data.ranking || data.latestResults);
   const history = normalizeSignalCollection(data.history || data.recentHistory);
+  const blockedAnalyses = normalizeSignalCollection(data.blockedAnalyses || data.blocked_analyses);
 
   return {
     bestOpportunity,
     ranking,
     history,
+    blockedAnalyses,
     connection: data.connection || {},
+    filters: data.filters || {},
     analytics: data.analytics || {}
   };
 }
@@ -1047,11 +1050,11 @@ function ensureShadowModePanel() {
   panel.className = "panel shadow-mode-panel premium-card";
   panel.id = "shadowModePanel";
   panel.innerHTML = `
-    <div class="panel-header"><h3>SHADOW MODE</h3><span id="shadowModeUpdated">standby</span></div>
+    <div class="panel-header"><h3>Análises Bloqueadas</h3><span id="shadowModeUpdated">standby</span></div>
     <div class="filter-summary-grid shadow-mode-summary">
       <div class="stat-card"><span>Status</span><strong id="shadowModeStatus">Monitorando</strong></div>
-      <div class="stat-card"><span>Sinais sombra</span><strong id="shadowSignalsCount">0</strong></div>
-      <div class="stat-card"><span>Bloqueios IA</span><strong id="shadowBlockedCount">0</strong></div>
+      <div class="stat-card"><span>Análises</span><strong id="shadowSignalsCount">0</strong></div>
+      <div class="stat-card"><span>Bloqueios</span><strong id="shadowBlockedCount">0</strong></div>
       <div class="stat-card"><span>Execuções</span><strong id="shadowExecutionCount">0</strong></div>
     </div>
     <div class="filter-block-list" id="shadowModeList"><div class="history-empty">Aguardando eventos da engine</div></div>
@@ -1083,12 +1086,12 @@ function ensureFilterPerformancePanel() {
   panel.className = "panel filter-performance-panel premium-card";
   panel.id = "filterPerformancePanel";
   panel.innerHTML = `
-    <div class="panel-header"><h3>FILTER PERFORMANCE</h3><span id="filterPerformanceUpdated">sem dados</span></div>
+    <div class="panel-header"><h3>Métricas de Filtros</h3><span id="filterPerformanceUpdated">sem dados</span></div>
     <div class="filter-summary-grid" id="filterPerformanceCards">
-      <div class="stat-card"><span>Eficiência dos filtros</span><strong>0%</strong></div>
+      <div class="stat-card"><span>Sinais bloqueados</span><strong>0%</strong></div>
       <div class="stat-card"><span>Filtro líder</span><strong>--</strong></div>
       <div class="stat-card"><span>Ativo crítico</span><strong>--</strong></div>
-      <div class="stat-card"><span>Score médio filtrado</span><strong>0.0</strong></div>
+      <div class="stat-card"><span>Score médio bloqueado</span><strong>0.0</strong></div>
     </div>
   `;
 
@@ -1187,10 +1190,10 @@ function renderFilterPerformance(data = {}) {
   if (!el.filterPerformanceCards) return;
 
   el.filterPerformanceCards.innerHTML = `
-    <div class="stat-card"><span>Eficiência dos filtros</span><strong>${filterEfficiency.toFixed(1)}%</strong></div>
+    <div class="stat-card"><span>Sinais bloqueados</span><strong>${filterEfficiency.toFixed(1)}%</strong></div>
     <div class="stat-card"><span>Filtro líder</span><strong>${escapeHtml(topFilter?.filterLabel || topFilter?.filterName || "--")}</strong></div>
     <div class="stat-card"><span>Ativo crítico</span><strong>${escapeHtml(topAsset?.symbol || "--")}</strong></div>
-    <div class="stat-card"><span>Score médio filtrado</span><strong>${avgScore.toFixed(1)}</strong></div>
+    <div class="stat-card"><span>Score médio bloqueado</span><strong>${avgScore.toFixed(1)}</strong></div>
   `;
 }
 
@@ -1207,6 +1210,10 @@ function syncRuntimeDashboard(runtimePayload = {}) {
     scheduleHistoryRender();
     scheduleEquityDraw();
   }
+
+  normalizeSignalCollection(runtime.blockedAnalyses || runtime.filters?.blockedAnalyses).forEach((analysis) => {
+    renderShadowMode(analysis, "blockedAnalysis");
+  });
 
   if (latestSignal) {
     updateInstitutionalCards(latestSignal);
@@ -1245,9 +1252,9 @@ function renderFilterAnalytics(data = {}) {
   const recentBlocks = Array.isArray(data.recentBlocks) ? data.recentBlocks : [];
 
   if (el.filterApprovalRate) el.filterApprovalRate.textContent = `${Number(data.approvalRate || 0).toFixed(1)}%`;
-  if (el.filterTotalSignals) el.filterTotalSignals.textContent = data.totalSignals ?? 0;
-  if (el.filterApprovedSignals) el.filterApprovedSignals.textContent = data.approvedSignals ?? 0;
-  if (el.filterBlockedSignals) el.filterBlockedSignals.textContent = data.blockedSignals ?? summary.total_blocks ?? 0;
+  if (el.filterTotalSignals) el.filterTotalSignals.textContent = data.analyzedSignals ?? data.totalSignals ?? 0;
+  if (el.filterApprovedSignals) el.filterApprovedSignals.textContent = data.confirmedSignals ?? data.approvedSignals ?? 0;
+  if (el.filterBlockedSignals) el.filterBlockedSignals.textContent = data.blockedAnalyses ?? data.blockedSignals ?? summary.total_blocks ?? 0;
   if (el.filterAnalyticsUpdated) el.filterAnalyticsUpdated.textContent = summary.last_block_at ? formatTime(summary.last_block_at) : "sem bloqueios";
 
   if (el.filterRankingList) {
@@ -1417,6 +1424,8 @@ function getOperationalDirection(signal = {}) {
 
 function getOperationalScore(signal = {}) {
   const score = Number(
+    signal.adjusted_score ??
+    signal.adjustedScore ??
     signal.final_score ??
     signal.finalScore ??
     signal.score ??
@@ -1425,6 +1434,24 @@ function getOperationalScore(signal = {}) {
   );
 
   return Number.isFinite(score) ? score : 0;
+}
+
+function getMinimumValidatedScore(signal = {}) {
+  const explicitMinimum = Number(
+    signal.minimum_score ??
+    signal.minimumScore ??
+    signal.dynamicThresholds?.minimumScore ??
+    signal.dynamic_thresholds?.minimumScore
+  );
+
+  if (Number.isFinite(explicitMinimum) && explicitMinimum > 0) return explicitMinimum;
+
+  const mode = String(signal.mode || signal.tradingMode || signal.operationMode || "balanced").toLowerCase();
+
+  if (["conservador", "conservative"].includes(mode)) return 88;
+  if (["agressivo", "aggressive"].includes(mode)) return 70;
+
+  return 78;
 }
 
 function isConfirmedOperationalSignal(signal = {}) {
@@ -1445,7 +1472,11 @@ function isConfirmedOperationalSignal(signal = {}) {
     return false;
   }
 
-  return Boolean(getOperationalDirection(signal)) && getOperationalScore(signal) > 0;
+  if (signal.executionAllowed !== true && signal.execution_allowed !== true) {
+    return false;
+  }
+
+  return Boolean(getOperationalDirection(signal)) && getOperationalScore(signal) >= getMinimumValidatedScore(signal);
 }
 
 function filterConfirmedOperationalSignals(signals = []) {
