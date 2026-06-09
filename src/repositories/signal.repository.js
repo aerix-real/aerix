@@ -133,7 +133,8 @@ async function getStats() {
       created_at,
       volatility,
       final_score,
-      entry_quality
+      entry_quality,
+      market_regime
     FROM public.signal_history
     WHERE result IN ('win', 'loss')
     ORDER BY created_at DESC
@@ -146,7 +147,9 @@ async function getStats() {
     byStrategy: {},
     bySignal: {},
     bySymbolSignal: {},
-    lossPatterns: {}
+    byMarketRegime: {},
+    lossPatterns: {},
+    global: createStatsBucket()
   };
 
   for (const row of result.rows) {
@@ -159,6 +162,7 @@ async function getStats() {
     const volatility = normalizeNumber(row.volatility, 0);
     const finalScore = normalizeNumber(row.final_score, 0);
     const entryQuality = row.entry_quality || "unknown";
+    const marketRegime = row.market_regime || "NORMAL";
 
     const symbolSignalKey = `${symbol}:${signal}`;
     const lossPatternKey = `${symbol}:${signal}:${strategy}:${hour}`;
@@ -167,6 +171,7 @@ async function getStats() {
     if (!stats.byHour[hour]) stats.byHour[hour] = createStatsBucket();
     if (!stats.byStrategy[strategy]) stats.byStrategy[strategy] = createStatsBucket();
     if (!stats.bySignal[signal]) stats.bySignal[signal] = createStatsBucket();
+    if (!stats.byMarketRegime[marketRegime]) stats.byMarketRegime[marketRegime] = createStatsBucket();
 
     if (!stats.bySymbolSignal[symbolSignalKey]) {
       stats.bySymbolSignal[symbolSignalKey] = createStatsBucket();
@@ -177,6 +182,8 @@ async function getStats() {
     updateBucket(stats.byStrategy[strategy], resultType);
     updateBucket(stats.bySignal[signal], resultType);
     updateBucket(stats.bySymbolSignal[symbolSignalKey], resultType);
+    updateBucket(stats.byMarketRegime[marketRegime], resultType);
+    updateBucket(stats.global, resultType);
 
     if (!stats.lossPatterns[lossPatternKey]) {
       stats.lossPatterns[lossPatternKey] = {
@@ -223,7 +230,9 @@ async function getStats() {
   finalizeGroup(stats.byStrategy);
   finalizeGroup(stats.bySignal);
   finalizeGroup(stats.bySymbolSignal);
+  finalizeGroup(stats.byMarketRegime);
   finalizeGroup(stats.lossPatterns);
+  finalizeBucket(stats.global);
 
   return stats;
 }

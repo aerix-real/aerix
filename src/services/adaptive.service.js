@@ -1,4 +1,5 @@
 const signalRepository = require("../repositories/signal.repository");
+const dynamicThresholdService = require("../modules/dynamic-threshold");
 
 function clamp(value, min = -30, max = 30) {
   return Math.max(min, Math.min(max, Number(value || 0)));
@@ -10,21 +11,25 @@ function winRate(wins, total) {
 }
 
 class AdaptiveService {
-  async getLearningProfile(symbol, signal = "WAIT", strategyName = "unknown") {
+  async getLearningProfile(symbol, signal = "WAIT", strategyName = "unknown", context = {}) {
     const stats = await signalRepository.getStats();
-    const hour = new Date().getHours();
+    const hour = context.hour ?? new Date().getHours();
+    const marketRegime = context.marketRegime || context.market_regime || "NORMAL";
 
     const symbolStats = stats.bySymbol?.[symbol];
     const hourStats = stats.byHour?.[hour];
     const strategyStats = stats.byStrategy?.[strategyName];
+    const marketRegimeStats = stats.byMarketRegime?.[marketRegime];
     const symbolSignalStats = stats.bySymbolSignal?.[`${symbol}:${signal}`];
     const lossPattern = stats.lossPatterns?.[`${symbol}:${signal}:${strategyName}:${hour}`];
 
     return {
       hour,
+      marketRegime,
       symbolStats,
       hourStats,
       strategyStats,
+      marketRegimeStats,
       symbolSignalStats,
       lossPattern
     };
@@ -92,24 +97,40 @@ class AdaptiveService {
     const signal = item.signal || item.direction || "WAIT";
     const strategyName = item.strategyName || item.strategy_name || item.strategy || "unknown";
 
-    const profile = await this.getLearningProfile(symbol, signal, strategyName);
+    const profile = await this.getLearningProfile(symbol, signal, strategyName, item);
     const learning = this.calculateAdjustment(profile);
+    const thresholdLearning = await dynamicThresholdService.learn({
+      ...item,
+      symbol,
+      signal,
+      strategyName,
+      hour: profile.hour,
+      marketRegime: profile.marketRegime
+    });
+
+    const adaptiveAdjustment = clamp(
+      Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0)
+    );
 
     const finalScore = Math.max(
       0,
-      Math.min(100, Number((Number(baseScore || 0) + learning.adjustment).toFixed(2)))
+      Math.min(100, Number((Number(baseScore || 0) + adaptiveAdjustment).toFixed(2)))
     );
 
     return {
       finalScore,
-      adaptiveAdjustment: learning.adjustment,
-      adaptiveReasons: learning.reasons,
+      adaptiveAdjustment,
+      adaptiveReasons: [...learning.reasons, ...(thresholdLearning.reasons || [])],
+      dynamicThresholds: thresholdLearning,
       learningProfile: {
         hour: profile.hour,
+        marketRegime: profile.marketRegime,
         symbol: profile.symbolStats || null,
         hourStats: profile.hourStats || null,
         strategy: profile.strategyStats || null,
-        lossPattern: profile.lossPattern || null
+        marketRegimeStats: profile.marketRegimeStats || null,
+        lossPattern: profile.lossPattern || null,
+        thresholdPerformance: thresholdLearning.thresholdPerformance || null
       }
     };
   }
@@ -119,7 +140,7 @@ class AdaptiveService {
     const signal = item.signal || item.direction || "WAIT";
     const strategyName = item.strategyName || item.strategy_name || item.strategy || "unknown";
 
-    const profile = await this.getLearningProfile(symbol, signal, strategyName);
+    const profile = await this.getLearningProfile(symbol, signal, strategyName, item);
     const reasons = [];
 
     if (profile.lossPattern?.total >= 6 && profile.lossPattern.lossrate >= 80) {

@@ -122,12 +122,13 @@ class EngineRunnerService {
   applySniperTiming(signal) {
     const score = Number(signal.finalScore || signal.confidence || 0);
     const direction = String(signal.signal || "").toUpperCase();
+    const sniperThreshold = Number(signal.dynamicThresholds?.sniperTiming || signal.sniperTiming || 90);
 
     if (!["CALL", "PUT"].includes(direction)) {
       return signal;
     }
 
-    if (score >= 90) {
+    if (score >= sniperThreshold) {
       return {
         ...signal,
         timing: "ENTRAR AGORA",
@@ -398,9 +399,11 @@ class EngineRunnerService {
 
   buildTiming(signal) {
     const score = Number(signal.finalScore || signal.confidence || 0);
+    const sniperThreshold = Number(signal.dynamicThresholds?.sniperTiming || signal.sniperTiming || 88);
+    const prepareThreshold = Math.max(70, sniperThreshold - 10);
 
-    if (score >= 88) return "ENTRAR AGORA";
-    if (score >= 78) return "PREPARAR ENTRADA";
+    if (score >= sniperThreshold) return "ENTRAR AGORA";
+    if (score >= prepareThreshold) return "PREPARAR ENTRADA";
 
     return "AGUARDANDO";
   }
@@ -494,6 +497,10 @@ class EngineRunnerService {
     signal.adaptiveAdjustment = Number(adaptive.adaptiveAdjustment || 0);
     signal.adaptive_adjustment = signal.adaptiveAdjustment;
     signal.adaptiveReasons = adaptive.adaptiveReasons || [];
+    signal.dynamicThresholds = adaptive.dynamicThresholds || signal.dynamicThresholds || null;
+    signal.thresholdHistory = signal.dynamicThresholds?.thresholdHistory || null;
+    signal.thresholdChanges = signal.dynamicThresholds?.thresholdChanges || [];
+    signal.thresholdPerformance = signal.dynamicThresholds?.thresholdPerformance || null;
     signal.learningProfile = adaptive.learningProfile || null;
 
     const hardBlock = await adaptiveService.shouldHardBlock(signal);
@@ -513,15 +520,21 @@ class EngineRunnerService {
     signal.tuning_weight = signal.tuningWeight;
     signal.tuningReasons = tuning.tuningReasons || [];
     signal.tuningProfile = tuning.tuningProfile || null;
+    signal.dynamicThresholds = tuning.dynamicThresholds || signal.dynamicThresholds || null;
+    signal.thresholdHistory = signal.dynamicThresholds?.thresholdHistory || signal.thresholdHistory || null;
+    signal.thresholdChanges = signal.dynamicThresholds?.thresholdChanges || signal.thresholdChanges || [];
+    signal.thresholdPerformance = signal.dynamicThresholds?.thresholdPerformance || signal.thresholdPerformance || null;
 
     signal.timing = this.buildTiming(signal);
 
-    const minimumScore =
-      signal.mode === "conservative"
+    const minimumScore = Number(
+      signal.dynamicThresholds?.minimumScore ??
+      (signal.mode === "conservative"
         ? 78
         : signal.mode === "aggressive"
           ? 66
-          : 72;
+          : 72)
+    );
 
     if (signal.finalScore < minimumScore) {
       signal.blocked = true;
@@ -632,6 +645,11 @@ class EngineRunnerService {
       entryInSeconds: Number(signal.entryInSeconds || signal.entry_in_seconds || 0),
       timing_mode: signal.timing_mode || signal.timingMode || null,
       timing_confidence: signal.timing_confidence ?? signal.timingConfidence ?? null,
+
+      dynamicThresholds: signal.dynamicThresholds || null,
+      thresholdHistory: signal.thresholdHistory || null,
+      thresholdChanges: signal.thresholdChanges || [],
+      thresholdPerformance: signal.thresholdPerformance || null,
 
       market_regime: signal.market_regime || signal.marketRegime || "NORMAL",
       dataQuality: signal.dataQuality || signal.data_quality || null,

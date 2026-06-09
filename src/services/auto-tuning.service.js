@@ -1,4 +1,5 @@
 const signalRepository = require("../repositories/signal.repository");
+const dynamicThresholdService = require("../modules/dynamic-threshold");
 
 function clamp(value, min = 0.65, max = 1.35) {
   return Math.max(min, Math.min(max, Number(value || 1)));
@@ -12,6 +13,7 @@ class AutoTuningService {
       bySymbol: stats.bySymbol || {},
       byHour: stats.byHour || {},
       byStrategy: stats.byStrategy || {},
+      byMarketRegime: stats.byMarketRegime || {},
       lossPatterns: stats.lossPatterns || {}
     };
   }
@@ -66,6 +68,19 @@ class AutoTuningService {
     };
   }
 
+  calculateMarketRegimeWeight(marketRegime, stats = {}) {
+    const regimeStats = stats.byMarketRegime?.[marketRegime];
+
+    if (!regimeStats || regimeStats.total < 6) return 1;
+
+    if (regimeStats.winrate >= 75) return 1.12;
+    if (regimeStats.winrate >= 65) return 1.06;
+    if (regimeStats.winrate <= 35) return 0.80;
+    if (regimeStats.winrate <= 45) return 0.90;
+
+    return 1;
+  }
+
   async applyAutoTuning(signal = {}) {
     const stats = await this.getTuningProfile();
 
@@ -76,6 +91,7 @@ class AutoTuningService {
       signal.strategy ||
       "unknown";
 
+    const marketRegime = signal.marketRegime || signal.market_regime || "NORMAL";
     const baseScore = Number(
       signal.finalScore ||
       signal.final_score ||
@@ -87,11 +103,20 @@ class AutoTuningService {
     const strategyWeight = this.calculateStrategyWeight(strategyName, stats);
     const symbolWeight = this.calculateSymbolWeight(symbol, stats);
     const hourData = this.calculateHourWeight(stats);
+    const marketRegimeWeight = this.calculateMarketRegimeWeight(marketRegime, stats);
+    const dynamicThresholds = signal.dynamicThresholds || await dynamicThresholdService.learn({
+      ...signal,
+      symbol,
+      strategyName,
+      marketRegime,
+      hour: hourData.hour
+    });
 
     const finalWeight = clamp(
-      (strategyWeight * 0.45) +
-      (symbolWeight * 0.35) +
-      (hourData.weight * 0.20)
+      (strategyWeight * 0.36) +
+      (symbolWeight * 0.29) +
+      (hourData.weight * 0.18) +
+      (marketRegimeWeight * 0.17)
     );
 
     const tunedScore = Math.max(
@@ -109,16 +134,27 @@ class AutoTuningService {
 
     if (hourData.weight > 1) reasons.push("Horário atual favorece operações.");
     if (hourData.weight < 1) reasons.push("Horário atual apresenta risco maior.");
+    if (marketRegimeWeight > 1) reasons.push("Regime de mercado favorece operações.");
+    if (marketRegimeWeight < 1) reasons.push("Regime de mercado exige redução preventiva.");
 
     return {
       tunedScore,
       tuningWeight: finalWeight,
-      tuningReasons: reasons,
+      tuningReasons: [...reasons, ...(dynamicThresholds.reasons || [])],
+      dynamicThresholds,
       tuningProfile: {
         strategyWeight,
         symbolWeight,
         hourWeight: hourData.weight,
-        hour: hourData.hour
+        marketRegimeWeight,
+        marketRegime,
+        hour: hourData.hour,
+        dynamicThresholds: {
+          minimumScore: dynamicThresholds.minimumScore,
+          confidence: dynamicThresholds.confidence,
+          sniperTiming: dynamicThresholds.sniperTiming,
+          adaptiveAdjustment: dynamicThresholds.adaptiveAdjustment
+        }
       }
     };
   }
