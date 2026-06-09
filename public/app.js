@@ -18,7 +18,9 @@ const state = {
     (_, index) => 48 + Math.sin(index / 2) * 10 + Math.random() * 12
   ),
   chartTimer: null,
-  aiTimer: null
+  aiTimer: null,
+  institutionalHeatmap: [],
+  proLogs: []
 };
 
 const el = {
@@ -355,6 +357,9 @@ function applyUserUI() {
 
 function applyPlanLocks() {
   const premium = isPremium();
+
+  ensureInstitutionalCenter();
+
   const premiumOnlyElements = document.querySelectorAll("[data-premium-only='true']");
 
   premiumOnlyElements.forEach((node) => {
@@ -365,6 +370,166 @@ function applyPlanLocks() {
   if (!premium) {
     setPremiumPlaceholders();
   }
+
+  updateInstitutionalCards();
+  renderInstitutionalHeatmap();
+}
+
+function ensureInstitutionalCenter() {
+  const contentPanel = document.querySelector(".content-panel");
+
+  if (!contentPanel || document.getElementById("institutionalCenter")) return;
+
+  const center = document.createElement("section");
+  center.className = "panel institutional-center-panel";
+  center.id = "institutionalCenter";
+  center.setAttribute("data-premium-only", "true");
+  center.innerHTML = `
+    <div class="institutional-center-header">
+      <div>
+        <span class="section-kicker">Centro Institucional</span>
+        <h3>Operational Command Center</h3>
+      </div>
+      <span class="institutional-status-pill" id="saasStatus">SaaS em sincronização</span>
+    </div>
+
+    <div class="institutional-metrics-grid">
+      <article class="institutional-metric-card">
+        <span>Módulos Engine</span>
+        <strong id="engineModules">12/14</strong>
+        <small>Confluência, risco, timing e histórico ativos</small>
+      </article>
+      <article class="institutional-metric-card">
+        <span>Adaptive Rank</span>
+        <strong id="adaptiveRank">A-</strong>
+        <small>Score recalibrado por assertividade recente</small>
+      </article>
+      <article class="institutional-metric-card">
+        <span>Anti-loss Level</span>
+        <strong id="antiLossLevel">Nível 3</strong>
+        <small>Filtro defensivo contra falso positivo</small>
+      </article>
+      <article class="institutional-metric-card">
+        <span>Status SaaS</span>
+        <strong id="saasStatusCard">Online</strong>
+        <small>API, Socket.IO, login, premium e engine preservados</small>
+      </article>
+    </div>
+
+    <div class="institutional-ops-grid">
+      <div class="institutional-subpanel">
+        <div class="subpanel-title">
+          <strong>Heatmap operacional</strong>
+          <span>tempo real</span>
+        </div>
+        <div class="institutional-heatmap" id="institutionalHeatmap"></div>
+      </div>
+
+      <div class="institutional-subpanel">
+        <div class="subpanel-title">
+          <strong>Logs profissionais</strong>
+          <span>auditoria de decisão</span>
+        </div>
+        <div class="pro-logs" id="proLogs"></div>
+      </div>
+    </div>
+  `;
+
+  const statsPanel = document.querySelector(".stats-panel");
+  if (statsPanel) {
+    contentPanel.insertBefore(center, statsPanel);
+  } else {
+    contentPanel.appendChild(center);
+  }
+}
+
+function buildInstitutionalHeatmap(signal = {}) {
+  const confidence = Number(signal.confidence || signal.score || 0);
+  const direction = String(signal.direction || "WAIT").toUpperCase();
+  const blocked = Boolean(signal.blocked || direction === "WAIT");
+  const risk = Number(signal.risk || signal.riskScore || signal.execution?.risk || 0);
+  const trendScore = Math.max(42, Math.min(97, confidence + (direction === "CALL" ? 4 : -2)));
+  const volatilityScore = Math.max(36, Math.min(94, 58 + risk + Math.random() * 10));
+  const liquidityScore = Math.max(48, Math.min(98, confidence - risk / 2 + 12));
+  const timingScore = blocked ? Math.max(18, Math.min(58, confidence)) : Math.max(55, Math.min(99, confidence + 6));
+
+  return [
+    { label: "Trend", value: trendScore, tone: trendScore >= 70 ? "hot" : "warm" },
+    { label: "Vol", value: volatilityScore, tone: volatilityScore >= 76 ? "risk" : "warm" },
+    { label: "Liq", value: liquidityScore, tone: liquidityScore >= 72 ? "hot" : "warm" },
+    { label: "Timing", value: timingScore, tone: blocked ? "cold" : "hot" },
+    { label: "Risk", value: Math.max(20, Math.min(92, 100 - risk * 2)), tone: blocked ? "risk" : "hot" },
+    { label: "IA", value: Math.max(40, Math.min(99, confidence || 61)), tone: blocked ? "cold" : "hot" }
+  ];
+}
+
+function renderInstitutionalHeatmap(signal = {}) {
+  ensureInstitutionalCenter();
+
+  const heatmap = document.getElementById("institutionalHeatmap");
+  if (!heatmap) return;
+
+  if (!state.institutionalHeatmap.length || signal.symbol || signal.asset) {
+    state.institutionalHeatmap = buildInstitutionalHeatmap(signal);
+  }
+
+  heatmap.innerHTML = state.institutionalHeatmap.map((item) => `
+    <div class="heatmap-cell ${item.tone}" style="--heat:${Math.max(0.18, Number(item.value) / 100)}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${Math.round(item.value)}%</strong>
+    </div>
+  `).join("");
+}
+
+function renderProLogs(signal = {}, message = null) {
+  ensureInstitutionalCenter();
+
+  const logs = document.getElementById("proLogs");
+  if (!logs) return;
+
+  const direction = String(signal.direction || "WAIT").toUpperCase();
+  const asset = signal.symbol || signal.asset || "DESK";
+  const confidence = Number(signal.confidence || signal.score || 0);
+  const blocked = Boolean(signal.blocked || direction === "WAIT");
+  const eventMessage = message || (blocked
+    ? `Bloqueio anti-loss aplicado em ${asset}; aguardando nova confluência.`
+    : `Sinal ${direction} em ${asset} validado com ${confidence}% de confiança.`);
+
+  state.proLogs.unshift({
+    time: new Date(),
+    level: message ? "ok" : blocked ? "risk" : "ok",
+    message: eventMessage
+  });
+
+  state.proLogs = state.proLogs.slice(0, 6);
+
+  logs.innerHTML = state.proLogs.map((log) => `
+    <div class="pro-log ${log.level}">
+      <time>${formatTime(log.time)}</time>
+      <span>${escapeHtml(log.message)}</span>
+    </div>
+  `).join("");
+}
+
+function updateInstitutionalCards(signal = {}) {
+  ensureInstitutionalCenter();
+
+  const confidence = Number(signal.confidence || signal.score || 0);
+  const direction = String(signal.direction || "WAIT").toUpperCase();
+  const blocked = Boolean(signal.blocked || direction === "WAIT");
+  const premium = isPremium();
+
+  const engineModules = document.getElementById("engineModules");
+  const adaptiveRank = document.getElementById("adaptiveRank");
+  const antiLossLevel = document.getElementById("antiLossLevel");
+  const saasStatus = document.getElementById("saasStatus");
+  const saasStatusCard = document.getElementById("saasStatusCard");
+
+  if (engineModules) engineModules.textContent = premium ? (blocked ? "11/14" : "14/14") : "6/14";
+  if (adaptiveRank) adaptiveRank.textContent = confidence >= 88 ? "A+" : confidence >= 76 ? "A" : confidence >= 62 ? "B+" : "B";
+  if (antiLossLevel) antiLossLevel.textContent = blocked ? "Nível 5" : confidence >= 80 ? "Nível 2" : "Nível 3";
+  if (saasStatus) saasStatus.textContent = premium ? "SaaS institucional online" : "SaaS premium bloqueado";
+  if (saasStatusCard) saasStatusCard.textContent = premium ? "Online" : "Free";
 }
 
 function setPremiumPlaceholders() {
@@ -671,6 +836,10 @@ function renderSignal(signal) {
     card.classList.add("flash");
   }
 
+  updateInstitutionalCards(signal);
+  renderInstitutionalHeatmap(signal);
+  renderProLogs(signal);
+
   pushChartPoint(confidence || 50);
   drawMiniChart();
 }
@@ -846,6 +1015,14 @@ function startChartLoop() {
     if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
     if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
     if (timing) timing.textContent = isPremium() ? "Validando candle" : "Premium";
+
+    if (state.institutionalHeatmap.length) {
+      state.institutionalHeatmap = state.institutionalHeatmap.map((item, index) => ({
+        ...item,
+        value: Math.max(18, Math.min(99, item.value + Math.sin(Date.now() / 900 + index) * 2.8))
+      }));
+      renderInstitutionalHeatmap();
+    }
   }, 1800);
 }
 
@@ -861,6 +1038,12 @@ async function bootPanel() {
   applyUserUI();
   applyPlanLocks();
   applyModeUI(state.currentMode, false);
+  ensureInstitutionalCenter();
+  updateInstitutionalCards();
+  renderInstitutionalHeatmap();
+  if (!state.proLogs.length) {
+    renderProLogs({}, isPremium() ? "Centro Institucional sincronizado com a engine." : "Centro Institucional aguardando ativação PREMIUM.");
+  }
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
@@ -955,6 +1138,8 @@ if (el.upgradeBtn) {
 
 socket.on("connect", () => {
   setConnection("Online");
+  updateInstitutionalCards();
+  renderProLogs({}, "Socket.IO conectado ao barramento em tempo real.");
 
   if (state.accessToken) {
     bootPanel();
@@ -963,6 +1148,11 @@ socket.on("connect", () => {
 
 socket.on("disconnect", () => {
   setConnection("Offline");
+  const saasStatus = document.getElementById("saasStatus");
+  const saasStatusCard = document.getElementById("saasStatusCard");
+  if (saasStatus) saasStatus.textContent = "SaaS reconectando";
+  if (saasStatusCard) saasStatusCard.textContent = "Reconectando";
+  renderProLogs({}, "Socket.IO desconectado; camada visual em modo de proteção.");
 });
 
 socket.on("connect_error", () => {
@@ -999,6 +1189,8 @@ window.setResult = setResult;
 
 document.addEventListener("DOMContentLoaded", async () => {
   startClock();
+  ensureInstitutionalCenter();
+  renderInstitutionalHeatmap();
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
