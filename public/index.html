@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=institutional-design-system-3" />
+  <link rel="stylesheet" href="/style.css?v=institutional-refine-ux-performance-4" />
 </head>
 
 <body class="mode-equilibrado plan-free sidebar-open design-system-institutional">
@@ -128,7 +128,19 @@
           <div class="headline-sub">Centro premium para sinais, IA, heatmap, curva de equity e auditoria operacional em tempo real.</div>
         </section>
 
-        <section class="hero-grid">
+        <section class="hero-grid refined-hero-grid">
+          <div class="panel best-opportunity-panel primary-opportunity-card premium-card" data-premium-only="true">
+            <div class="panel-header"><h3>Melhor oportunidade</h3><span>Alpha Spotlight</span></div>
+            <div class="best-opportunity-box">
+              <div class="best-opportunity-main">
+                <span class="micro-label">Setup institucional priorizado</span>
+                <strong id="bestAsset">---</strong>
+                <span id="bestReason">Aguardando leitura institucional.</span>
+              </div>
+              <div class="best-opportunity-score" id="bestScore">0%</div>
+            </div>
+          </div>
+
           <div class="signal-card panel premium-card" data-premium-only="true">
             <div class="signal-top">
               <div class="signal-mode" id="signalMode">PREMIUM SIGNAL</div>
@@ -147,22 +159,13 @@
               <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
               <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
             </div>
-            <div class="ai-content">
-              <span class="micro-label">IA operacional</span>
-              <p class="ai-text" id="aiExplanation">Recurso premium. A IA operacional será exibida após ativação.</p>
-            </div>
-          </div>
-
-          <div class="panel best-opportunity-panel premium-card" data-premium-only="true">
-            <div class="panel-header"><h3>Alpha Spotlight</h3><span>best setup</span></div>
-            <div class="best-opportunity-box">
-              <div class="best-opportunity-main">
-                <span class="micro-label">Melhor oportunidade</span>
-                <strong id="bestAsset">---</strong>
-                <span id="bestReason">Aguardando leitura institucional.</span>
+            <details class="technical-details signal-details">
+              <summary>Ver detalhes técnicos da IA</summary>
+              <div class="ai-content">
+                <span class="micro-label">IA operacional</span>
+                <p class="ai-text" id="aiExplanation">Recurso premium. A IA operacional será exibida após ativação.</p>
               </div>
-              <div class="best-opportunity-score" id="bestScore">0%</div>
-            </div>
+            </details>
           </div>
         </section>
 
@@ -189,19 +192,22 @@
             <article class="realtime-metric-card premium-card"><span>IA</span><strong id="metricAi">--</strong><small>Confiança adaptativa</small></article>
           </div>
 
-          <div class="institutional-ops-grid">
-            <div class="institutional-subpanel heatmap-panel">
-              <div class="subpanel-title"><strong>Heatmap Institucional</strong><span>market microstructure</span></div>
-              <div class="institutional-heatmap" id="institutionalHeatmap"></div>
-            </div>
+          <details class="technical-details command-details">
+            <summary>Ver detalhes técnicos: heatmap, insights e analytics</summary>
+            <div class="institutional-ops-grid">
+              <div class="institutional-subpanel heatmap-panel">
+                <div class="subpanel-title"><strong>Heatmap Institucional</strong><span>market microstructure</span></div>
+                <div class="institutional-heatmap" id="institutionalHeatmap"></div>
+              </div>
 
-            <div class="institutional-subpanel ai-insights-panel">
-              <div class="subpanel-title"><strong>IA Insights</strong><span>decision layer</span></div>
-              <div class="ai-insights-list" id="aiInsightsList">
-                <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional premium.</p></article>
+              <div class="institutional-subpanel ai-insights-panel">
+                <div class="subpanel-title"><strong>IA Insights</strong><span>decision layer</span></div>
+                <div class="ai-insights-list" id="aiInsightsList">
+                  <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional premium.</p></article>
+                </div>
               </div>
             </div>
-          </div>
+          </details>
         </section>
 
         <section class="analytics-grid">
@@ -263,6 +269,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=institutional-design-system-3"></script>
+  <script src="/app.js?v=institutional-refine-ux-performance-4"></script>
 </body>
 </html>
