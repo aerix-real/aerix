@@ -6,6 +6,45 @@ function clamp(value, min = 0.65, max = 1.35) {
 }
 
 class AutoTuningService {
+  getHealthyFrequencyModeConfig(mode = "balanced") {
+    const normalizedMode = mode === "conservative" || mode === "aggressive" ? mode : "balanced";
+
+    const configs = {
+      conservative: {
+        label: "CONSERVADOR",
+        maxSignals: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_MAX || 2),
+        burstWindowMs: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_WINDOW_MS || 20 * 60 * 1000),
+        droughtWindowMs: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_DROUGHT_MS || 75 * 60 * 1000),
+        minAnalysesForScarcity: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_MIN_ANALYSES || 12),
+        thresholdStep: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_THRESHOLD_STEP || 4),
+        maxThresholdAdjustment: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_THRESHOLD_MAX || 10),
+        penaltyRelief: Number(process.env.HEALTHY_FREQ_CONSERVATIVE_RELIEF || 1.5)
+      },
+      balanced: {
+        label: "EQUILIBRADO",
+        maxSignals: Number(process.env.HEALTHY_FREQ_BALANCED_MAX || 4),
+        burstWindowMs: Number(process.env.HEALTHY_FREQ_BALANCED_WINDOW_MS || 20 * 60 * 1000),
+        droughtWindowMs: Number(process.env.HEALTHY_FREQ_BALANCED_DROUGHT_MS || 45 * 60 * 1000),
+        minAnalysesForScarcity: Number(process.env.HEALTHY_FREQ_BALANCED_MIN_ANALYSES || 10),
+        thresholdStep: Number(process.env.HEALTHY_FREQ_BALANCED_THRESHOLD_STEP || 3),
+        maxThresholdAdjustment: Number(process.env.HEALTHY_FREQ_BALANCED_THRESHOLD_MAX || 8),
+        penaltyRelief: Number(process.env.HEALTHY_FREQ_BALANCED_RELIEF || 3)
+      },
+      aggressive: {
+        label: "AGRESSIVO",
+        maxSignals: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_MAX || 7),
+        burstWindowMs: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_WINDOW_MS || 20 * 60 * 1000),
+        droughtWindowMs: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_DROUGHT_MS || 30 * 60 * 1000),
+        minAnalysesForScarcity: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_MIN_ANALYSES || 8),
+        thresholdStep: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_THRESHOLD_STEP || 2),
+        maxThresholdAdjustment: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_THRESHOLD_MAX || 6),
+        penaltyRelief: Number(process.env.HEALTHY_FREQ_AGGRESSIVE_RELIEF || 4.5)
+      }
+    };
+
+    return configs[normalizedMode];
+  }
+
   async getTuningProfile() {
     const stats = await signalRepository.getStats();
 

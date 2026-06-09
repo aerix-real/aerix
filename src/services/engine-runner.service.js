@@ -40,6 +40,7 @@ class EngineRunnerService {
     this.historyStats = {};
     this.lastCycleAt = null;
     this.lastStatus = "standby";
+    this.signalFrequencyState = this.createSignalFrequencyState();
 
     this.rateLimiter = new RateLimiterService({
       maxPerMinute: Number(process.env.MAX_REQUESTS_PER_MINUTE || 8)
@@ -94,6 +95,160 @@ class EngineRunnerService {
     if (["agressivo", "aggressive"].includes(mode)) return "aggressive";
 
     return "balanced";
+  }
+
+  createSignalFrequencyState() {
+    return {
+      conservative: { signalTimestamps: [], analyzedTimestamps: [], firstAnalysisAt: 0, lastSignalAt: 0, lastAdjustment: null },
+      balanced: { signalTimestamps: [], analyzedTimestamps: [], firstAnalysisAt: 0, lastSignalAt: 0, lastAdjustment: null },
+      aggressive: { signalTimestamps: [], analyzedTimestamps: [], firstAnalysisAt: 0, lastSignalAt: 0, lastAdjustment: null }
+    };
+  }
+
+  getHealthyFrequencyConfig(mode = "balanced") {
+    return autoTuningService.getHealthyFrequencyModeConfig(mode);
+  }
+
+  pruneFrequencyWindow(items = [], now = Date.now(), windowMs = 20 * 60 * 1000) {
+    return items.filter((timestamp) => now - timestamp <= windowMs);
+  }
+
+  registerFrequencyAnalysis(mode = "balanced") {
+    const normalizedMode = mode === "conservative" || mode === "aggressive" ? mode : "balanced";
+    const state = this.signalFrequencyState[normalizedMode];
+    const config = this.getHealthyFrequencyConfig(normalizedMode);
+    const now = Date.now();
+
+    state.analyzedTimestamps = this.pruneFrequencyWindow(state.analyzedTimestamps, now, config.droughtWindowMs);
+    state.analyzedTimestamps.push(now);
+
+    if (!state.firstAnalysisAt) {
+      state.firstAnalysisAt = now;
+    }
+  }
+
+  registerFrequencySignal(mode = "balanced") {
+    const normalizedMode = mode === "conservative" || mode === "aggressive" ? mode : "balanced";
+    const state = this.signalFrequencyState[normalizedMode];
+    const config = this.getHealthyFrequencyConfig(normalizedMode);
+    const now = Date.now();
+
+    state.signalTimestamps = this.pruneFrequencyWindow(state.signalTimestamps, now, config.burstWindowMs);
+    state.signalTimestamps.push(now);
+    state.lastSignalAt = now;
+  }
+
+  getFrequencyControl(mode = "balanced") {
+    const normalizedMode = mode === "conservative" || mode === "aggressive" ? mode : "balanced";
+    const state = this.signalFrequencyState[normalizedMode];
+    const config = this.getHealthyFrequencyConfig(normalizedMode);
+    const now = Date.now();
+
+    state.signalTimestamps = this.pruneFrequencyWindow(state.signalTimestamps, now, config.burstWindowMs);
+    state.analyzedTimestamps = this.pruneFrequencyWindow(state.analyzedTimestamps, now, config.droughtWindowMs);
+
+    const extraSignals = Math.max(0, state.signalTimestamps.length - config.maxSignals);
+    const thresholdAdjustment = Math.min(
+      config.maxThresholdAdjustment,
+      extraSignals * config.thresholdStep
+    );
+    const lastSignalAt = state.lastSignalAt || 0;
+    const firstAnalysisAt = state.firstAnalysisAt || now;
+    const noSignalsYetWithMatureWindow =
+      !lastSignalAt &&
+      now - firstAnalysisAt >= config.droughtWindowMs &&
+      state.analyzedTimestamps.length >= config.minAnalysesForScarcity;
+    const isDrought = lastSignalAt
+      ? now - lastSignalAt >= config.droughtWindowMs
+      : noSignalsYetWithMatureWindow;
+    const scarcityRelief = isDrought && state.analyzedTimestamps.length >= config.minAnalysesForScarcity
+      ? config.penaltyRelief
+      : 0;
+    const reasons = [];
+
+    if (thresholdAdjustment > 0) {
+      reasons.push(
+        `Controle saudável ${config.label}: ${state.signalTimestamps.length}/${config.maxSignals} sinais na janela; threshold temporariamente +${thresholdAdjustment}.`
+      );
+    }
+
+    if (scarcityRelief > 0) {
+      reasons.push(
+        `Controle saudável ${config.label}: escassez prolongada; penalidades moderadas aliviadas em até ${scarcityRelief} pontos.`
+      );
+    }
+
+    state.lastAdjustment = {
+      mode: normalizedMode,
+      signalCount: state.signalTimestamps.length,
+      analyzedCount: state.analyzedTimestamps.length,
+      firstAnalysisAt: state.firstAnalysisAt ? new Date(state.firstAnalysisAt).toISOString() : null,
+      thresholdAdjustment,
+      scarcityRelief,
+      reasons,
+      updatedAt: new Date(now).toISOString()
+    };
+
+    return state.lastAdjustment;
+  }
+
+  hasCriticalFrequencyRisk(signal = {}) {
+    const severeTerms = [
+      "baixa liquidez severa",
+      "volatilidade extremamente baixa",
+      "inconsistência grave",
+      "inconsistencia grave",
+      "fallback",
+      "histórico insuficiente",
+      "historico insuficiente",
+      "risco extremo",
+      "padrão crítico",
+      "padrao critico",
+      "padrão severo",
+      "padrao severo",
+      "baixa performance histórica",
+      "baixa performance historica"
+    ];
+    const text = [
+      signal.blockReason,
+      signal.block_reason,
+      signal.explanation,
+      ...(signal.blocks || []),
+      ...(signal.reasons || []),
+      ...(signal.adaptiveReasons || []),
+      ...(signal.tuningReasons || [])
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return severeTerms.some((term) => text.includes(term));
+  }
+
+  hasModerateFrequencyPenalty(signal = {}) {
+    const moderateTerms = [
+      "penalidade",
+      "penalizou",
+      "redução preventiva",
+      "reducao preventiva",
+      "risco maior",
+      "fraco convertido",
+      "moderado entre timeframes",
+      "baixa volatilidade convertida",
+      "alta volatilidade aplicada"
+    ];
+    const text = [
+      ...(signal.reasons || []),
+      ...(signal.adaptiveReasons || []),
+      ...(signal.tuningReasons || []),
+      ...(signal.operationalTuning?.penaltyReasons || []),
+      ...(signal.predictiveAi?.moderateRisks || signal.predictive_ai?.moderateRisks || [])
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return moderateTerms.some((term) => text.includes(term));
   }
 
   getNextSymbols() {
@@ -313,6 +468,7 @@ class EngineRunnerService {
 
           const snapshot = await marketData.getMarketSnapshot(symbol);
           const indicators = this.buildIndicators(snapshot, mode);
+          this.registerFrequencyAnalysis(mode);
 
           const predictiveDecision = await predictiveAiService.evaluatePreSignal({
             symbol,
@@ -374,6 +530,7 @@ class EngineRunnerService {
 
           this.bestOpportunity = signal;
           this.latestResults = [signal, ...this.latestResults].slice(0, 30);
+          this.registerFrequencySignal(mode);
 
           emitToAll("signal", signal, { cacheLatest: true });
           emitToAll("bestOpportunity", signal, { cacheLatest: true });
@@ -460,6 +617,8 @@ class EngineRunnerService {
       reasons: Array.isArray(strategyResult.reasons) ? strategyResult.reasons : [],
       blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
       strategies: strategyResult.strategies || [],
+      operationalTuning: strategyResult.operationalTuning || null,
+      operational_tuning: strategyResult.operationalTuning || null,
       mtf: strategyResult.mtf || {},
       market: snapshot?.timeframes || {},
       dataQuality: snapshot?.dataQuality || {
@@ -551,6 +710,57 @@ class EngineRunnerService {
     signal.thresholdChanges = signal.dynamicThresholds?.thresholdChanges || signal.thresholdChanges || [];
     signal.thresholdPerformance = signal.dynamicThresholds?.thresholdPerformance || signal.thresholdPerformance || null;
 
+    const frequencyControl = this.getFrequencyControl(signal.mode);
+    const hasCriticalFrequencyRisk = this.hasCriticalFrequencyRisk(signal);
+    const hasModerateFrequencyPenalty = this.hasModerateFrequencyPenalty(signal);
+    const canApplyScarcityRelief =
+      !signal.blocked &&
+      !hasCriticalFrequencyRisk &&
+      hasModerateFrequencyPenalty &&
+      Number(frequencyControl.scarcityRelief || 0) > 0;
+
+    if (canApplyScarcityRelief) {
+      const relief = Number(frequencyControl.scarcityRelief || 0);
+      const relievedScore = Math.min(100, Number((signal.finalScore + relief).toFixed(2)));
+
+      signal.finalScore = relievedScore;
+      signal.final_score = relievedScore;
+      signal.frequencyPenaltyRelief = relief;
+      signal.frequency_penalty_relief = relief;
+    }
+
+    signal.frequencyControl = {
+      mode: frequencyControl.mode,
+      signalCount: frequencyControl.signalCount,
+      analyzedCount: frequencyControl.analyzedCount,
+      thresholdAdjustment: frequencyControl.thresholdAdjustment,
+      scarcityRelief: canApplyScarcityRelief ? frequencyControl.scarcityRelief : 0,
+      criticalRiskProtected: hasCriticalFrequencyRisk,
+      moderatePenaltyDetected: hasModerateFrequencyPenalty,
+      updatedAt: frequencyControl.updatedAt
+    };
+
+    const thresholdFrequencyReasons = (frequencyControl.reasons || []).filter((reason) =>
+      reason.includes("threshold temporariamente")
+    );
+
+    if (thresholdFrequencyReasons.length) {
+      signal.tuningReasons = [...(signal.tuningReasons || []), ...thresholdFrequencyReasons];
+      signal.adaptiveReasons = [...(signal.adaptiveReasons || []), ...thresholdFrequencyReasons];
+    }
+
+    if (frequencyControl.scarcityRelief > 0 && hasCriticalFrequencyRisk) {
+      const protectedReason = "Controle saudável: escassez detectada, mas risco crítico preservou todos os bloqueios institucionais.";
+      signal.tuningReasons = [...(signal.tuningReasons || []), protectedReason];
+      signal.adaptiveReasons = [...(signal.adaptiveReasons || []), protectedReason];
+    }
+
+    if (canApplyScarcityRelief) {
+      const reliefReason = `Controle saudável: alívio aplicado somente sobre penalidades moderadas (+${signal.frequencyPenaltyRelief}).`;
+      signal.tuningReasons = [...(signal.tuningReasons || []), reliefReason];
+      signal.adaptiveReasons = [...(signal.adaptiveReasons || []), reliefReason];
+    }
+
     signal.timing = this.buildTiming(signal);
 
     const minimumScore = Number(
@@ -562,8 +772,13 @@ class EngineRunnerService {
           : 68)
     );
 
+    const frequencyThresholdAdjustment = Number(frequencyControl.thresholdAdjustment || 0);
+    const adjustedMinimumScore = Math.min(96, minimumScore + frequencyThresholdAdjustment);
     const tolerance = signal.mode === "aggressive" ? 8 : signal.mode === "balanced" ? 4 : 0;
-    const scoreGap = minimumScore - signal.finalScore;
+    const scoreGap = adjustedMinimumScore - signal.finalScore;
+
+    signal.healthyFrequencyMinimumScore = adjustedMinimumScore;
+    signal.healthy_frequency_minimum_score = adjustedMinimumScore;
 
     if (scoreGap > tolerance) {
       signal.blocked = true;
@@ -575,7 +790,7 @@ class EngineRunnerService {
       this.appendFilterBlock(
         signal,
         "low_score_block",
-        `Score abaixo do mínimo institucional após auto tuning (${signal.finalScore.toFixed(1)} < ${minimumScore})`,
+        `Score abaixo do mínimo institucional após auto tuning (${signal.finalScore.toFixed(1)} < ${adjustedMinimumScore})`,
         {
           score: signal.confidence,
           finalScore: signal.finalScore
@@ -584,7 +799,7 @@ class EngineRunnerService {
     } else if (scoreGap > 0) {
       signal.reasons = [
         ...(signal.reasons || []),
-        `Score abaixo do mínimo aprendido tratado como penalidade em ${signal.mode} (${signal.finalScore.toFixed(1)} < ${minimumScore}).`
+        `Score abaixo do mínimo aprendido tratado como penalidade em ${signal.mode} (${signal.finalScore.toFixed(1)} < ${adjustedMinimumScore}).`
       ];
       signal.dynamicThresholdPenalty = true;
     }
@@ -693,6 +908,11 @@ class EngineRunnerService {
       thresholdHistory: signal.thresholdHistory || null,
       thresholdChanges: signal.thresholdChanges || [],
       thresholdPerformance: signal.thresholdPerformance || null,
+      frequencyControl: signal.frequencyControl || null,
+      frequencyPenaltyRelief: Number(signal.frequencyPenaltyRelief || signal.frequency_penalty_relief || 0),
+      frequency_penalty_relief: Number(signal.frequencyPenaltyRelief || signal.frequency_penalty_relief || 0),
+      healthyFrequencyMinimumScore: Number(signal.healthyFrequencyMinimumScore || signal.healthy_frequency_minimum_score || 0),
+      healthy_frequency_minimum_score: Number(signal.healthyFrequencyMinimumScore || signal.healthy_frequency_minimum_score || 0),
 
       market_regime: signal.market_regime || signal.marketRegime || "NORMAL",
       dataQuality: signal.dataQuality || signal.data_quality || null,
