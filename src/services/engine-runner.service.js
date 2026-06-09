@@ -138,8 +138,13 @@ class EngineRunnerService {
     }
 
     if (!this.isSniperMoment()) {
-      const penalty = signal.mode === "aggressive" ? 6 : signal.mode === "balanced" ? 8 : 10;
+      const penalty = signal.mode === "aggressive" ? 4 : signal.mode === "balanced" ? 6 : 10;
       const adjustedScore = Math.max(0, score - penalty);
+      const extremeTimingFloor = signal.mode === "aggressive"
+        ? Math.max(42, sniperThreshold - 38)
+        : signal.mode === "balanced"
+          ? Math.max(48, sniperThreshold - 34)
+          : Math.max(58, sniperThreshold - 22);
       const timingSignal = {
         ...signal,
         finalScore: adjustedScore,
@@ -155,7 +160,7 @@ class EngineRunnerService {
         ]
       };
 
-      if (adjustedScore < Math.max(58, sniperThreshold - 24)) {
+      if (adjustedScore < extremeTimingFloor) {
         const blockedSignal = {
           ...timingSignal,
           blocked: true,
@@ -562,7 +567,7 @@ class EngineRunnerService {
           : 68)
     );
 
-    const tolerance = signal.mode === "aggressive" ? 8 : signal.mode === "balanced" ? 4 : 0;
+    const tolerance = signal.mode === "aggressive" ? 10 : signal.mode === "balanced" ? 6 : 0;
     const scoreGap = minimumScore - signal.finalScore;
 
     if (scoreGap > tolerance) {
@@ -604,6 +609,18 @@ class EngineRunnerService {
     signal.adjusted_score = signal.adjustedScore;
     signal.aiAdjustments = validation.aiAdjustments || signal.aiAdjustments || null;
     signal.aiBlock = validation.aiBlock || signal.aiBlock || null;
+
+    if (Array.isArray(validation.aiPenaltyReasons) && validation.aiPenaltyReasons.length) {
+      signal.reasons = [
+        ...(signal.reasons || []),
+        ...validation.aiPenaltyReasons
+      ];
+      signal.antiLoss = {
+        ...(signal.antiLoss || {}),
+        blocked: false,
+        penaltyReasons: validation.aiPenaltyReasons
+      };
+    }
 
     if (!validation.allowed) {
       signal.blocked = true;

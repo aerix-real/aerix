@@ -244,7 +244,8 @@ function safeEvaluateStrategy(strategy, payload) {
 }
 
 function validateMarketConditions(snapshot, mtf, mode = "balanced") {
-  const rules = getModeRules(mode);
+  const normalizedMode = normalizeMode(mode);
+  const rules = getModeRules(normalizedMode);
   const h1 = snapshot?.timeframes?.h1 || {};
   const m15 = snapshot?.timeframes?.m15 || {};
   const m5 = snapshot?.timeframes?.m5 || {};
@@ -268,25 +269,35 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
     return candles.length < minimumCandles;
   });
 
+  const conservativeModerateBlocks = normalizedMode === "conservative"
+    ? [
+        isLowVolatility && !isVeryLowVolatility ? "Modo conservador bloqueou baixa volatilidade moderada." : null,
+        isWeakTrend && !isVeryWeakTrend ? "Modo conservador bloqueou trend strength fraco." : null,
+        isWeakAlignment && !isSevereWeakAlignment ? "Modo conservador bloqueou alinhamento intermediário." : null,
+        isHighVolatility ? "Modo conservador bloqueou volatilidade elevada." : null
+      ]
+    : [];
+
   const blocks = [
     isFallbackData ? "Fonte de dados em fallback; entrada operacional bloqueada." : null,
     hasInsufficientCandles ? "Histórico insuficiente de candles para validação institucional." : null,
     isVeryLowVolatility ? "Baixa liquidez severa / volatilidade extremamente baixa." : null,
     isVeryWeakTrend ? "Tendência muito fraca para entrada institucional." : null,
-    isSevereWeakAlignment ? "Inconsistência grave entre timeframes." : null
+    isSevereWeakAlignment ? "Inconsistência grave entre timeframes." : null,
+    ...conservativeModerateBlocks
   ].filter(Boolean);
 
   const penalties = [
-    isLowVolatility && !isVeryLowVolatility
+    isLowVolatility && !isVeryLowVolatility && normalizedMode !== "conservative"
       ? { reason: "Baixa volatilidade convertida em penalidade de score.", value: rules.penalties.lowVolatility }
       : null,
-    isWeakTrend && !isVeryWeakTrend
+    isWeakTrend && !isVeryWeakTrend && normalizedMode !== "conservative"
       ? { reason: "Trend strength fraco convertido em penalidade de score.", value: rules.penalties.weakTrend }
       : null,
-    isWeakAlignment && !isSevereWeakAlignment
+    isWeakAlignment && !isSevereWeakAlignment && normalizedMode !== "conservative"
       ? { reason: "Alinhamento moderado entre timeframes convertido em penalidade.", value: rules.penalties.weakAlignment }
       : null,
-    isHighVolatility
+    isHighVolatility && normalizedMode !== "conservative"
       ? { reason: "Alta volatilidade aplicada como ajuste conservador de score.", value: rules.penalties.highVolatility }
       : null
   ].filter(Boolean);

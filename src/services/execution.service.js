@@ -271,6 +271,7 @@ class ExecutionService {
     const key = this.getKey(signal);
     const hourKey = this.getHourKey(signal);
     const memory = this.lossMemory.get(key);
+    const mode = this.getMode(signal);
 
     const previousBlock = this.badHourBlocks.get(hourKey);
     const now = Date.now();
@@ -295,14 +296,21 @@ class ExecutionService {
 
     const lossRate = memory.losses / memory.total;
 
+    const thresholds = {
+      conservative: { total: 4, rate: 0.75, streakTotal: 6, streakRate: 0.70, longTotal: 8, longRate: 0.65 },
+      balanced: { total: 6, rate: 0.86, streakTotal: 8, streakRate: 0.78, longTotal: 10, longRate: 0.80 },
+      aggressive: { total: 8, rate: 0.92, streakTotal: 10, streakRate: 0.86, longTotal: 12, longRate: 0.88 }
+    }[mode];
+
+    const recentLossStreak = memory.lastResults?.slice(-3).every(r => r === "loss");
     const shouldBlock =
-      (memory.total >= 4 && lossRate >= 0.75) ||
+      (memory.total >= thresholds.total && lossRate >= thresholds.rate) ||
       (
-        memory.total >= 6 &&
-        lossRate >= 0.7 &&
-        memory.lastResults?.slice(-3).every(r => r === "loss")
+        memory.total >= thresholds.streakTotal &&
+        lossRate >= thresholds.streakRate &&
+        recentLossStreak
       ) ||
-      (memory.total >= 8 && lossRate >= 0.65);
+      (memory.total >= thresholds.longTotal && lossRate >= thresholds.longRate);
 
     if (!shouldBlock) {
       return {
@@ -439,6 +447,11 @@ class ExecutionService {
       adaptiveScoreAdjustment +
       lossPenalty +
       badHourPenalty;
+    const aiPenaltyReasons = [
+      lossPenalty < 0 ? `Anti-loss moderado convertido em penalidade de score (${lossPenalty}).` : null,
+      badHourPenalty < 0 ? `Horário com perda moderada convertido em penalidade de score (${badHourPenalty}).` : null,
+      adaptiveScoreAdjustment < 0 ? `IA adaptativa aplicou penalidade preventiva (${adaptiveScoreAdjustment}).` : null
+    ].filter(Boolean);
 
     if (!symbol) {
       return {
@@ -531,7 +544,7 @@ class ExecutionService {
       };
     }
 
-    const severeLossLimit = mode === "aggressive" ? -26 : mode === "balanced" ? -24 : -20;
+    const severeLossLimit = mode === "aggressive" ? -30 : mode === "balanced" ? -26 : -20;
 
     if (lossPenalty <= severeLossLimit || adaptiveScoreAdjustment <= severeLossLimit) {
       return {
@@ -548,7 +561,7 @@ class ExecutionService {
       };
     }
 
-    const scoreTolerance = mode === "aggressive" ? 7 : mode === "balanced" ? 3 : 0;
+    const scoreTolerance = mode === "aggressive" ? 10 : mode === "balanced" ? 6 : 0;
 
     if (adjustedScore < minimumScore - scoreTolerance) {
       return {
@@ -607,7 +620,7 @@ class ExecutionService {
       (mtf.m15?.aligned ? 1 : 0) +
       (mtf.m5?.aligned ? 1 : 0);
 
-    const minMtf = mode === "conservative" ? 2 : 1;
+    const minMtf = mode === "conservative" ? 2 : mode === "balanced" ? 1 : 0;
 
     if (aligned < minMtf) {
       return {
@@ -637,6 +650,7 @@ class ExecutionService {
       adjustedScore,
       mode,
       commercialSignal: true,
+      aiPenaltyReasons,
       aiAdjustments: {
         adaptiveScoreAdjustment,
         lossPenalty,
