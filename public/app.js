@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
 
 const state = {
   history: [],
+  ranking: [],
   user: null,
   accessToken: localStorage.getItem(STORAGE_KEYS.accessToken),
   refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken),
@@ -19,6 +20,8 @@ const state = {
   ),
   chartTimer: null,
   aiTimer: null,
+  analyticsTimer: null,
+  shadowModeRefreshTimer: null,
   institutionalHeatmap: [],
   proLogs: [],
   dashboardSnapshot: null,
@@ -991,6 +994,101 @@ async function loadShadowMode() {
   }
 }
 
+
+function buildSignalIdentity(signal = {}) {
+  if (signal.id !== undefined && signal.id !== null) return `id:${signal.id}`;
+
+  return [
+    signal.symbol || signal.asset || "UNKNOWN",
+    getOperationalDirection(signal) || signal.signal || signal.direction || "WAIT",
+    signal.created_at || signal.createdAt || signal.timestamp || signal.time || "no-time"
+  ].join(":");
+}
+
+function upsertHistorySignals(signals = [], { replace = false } = {}) {
+  const confirmed = filterConfirmedOperationalSignals(signals);
+
+  if (replace) {
+    state.history = confirmed.slice(0, 50);
+    return;
+  }
+
+  const merged = [...confirmed, ...state.history];
+  const seen = new Set();
+
+  state.history = merged.filter((signal) => {
+    const identity = buildSignalIdentity(signal);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  }).slice(0, 50);
+}
+
+function extractRuntimeData(payload = {}) {
+  return payload?.data && typeof payload.data === "object" ? payload.data : payload;
+}
+
+function extractBestOpportunity(data = {}) {
+  return (
+    data.signalCenter?.bestOpportunity ||
+    data.bestOpportunity ||
+    data.lastSignal ||
+    data.currentSignal ||
+    null
+  );
+}
+
+function scheduleShadowModeRefresh(delay = 0) {
+  if (state.shadowModeRefreshTimer) return;
+
+  state.shadowModeRefreshTimer = setTimeout(async () => {
+    state.shadowModeRefreshTimer = null;
+    await Promise.allSettled([loadFilterAnalytics(), loadShadowMode()]);
+  }, delay);
+}
+
+function applyRuntimeUpdate(payload = {}) {
+  const data = extractRuntimeData(payload);
+  if (!data || typeof data !== "object") return;
+
+  state.engineSnapshot = data;
+
+  const bestOpportunity = extractBestOpportunity(data);
+  const runtimeSignal = bestOpportunity || data.signal || data.currentSignal || {};
+
+  updateInstitutionalCards(runtimeSignal);
+  updateRealtimeMetrics(runtimeSignal);
+
+  if (bestOpportunity && isConfirmedOperationalSignal(bestOpportunity)) {
+    renderSignal(bestOpportunity);
+    upsertHistorySignals([bestOpportunity]);
+  }
+
+  if (Array.isArray(data.ranking)) {
+    state.ranking = filterConfirmedOperationalSignals(data.ranking);
+  }
+
+  if (Array.isArray(data.history)) {
+    upsertHistorySignals(data.history, { replace: true });
+  } else if (Array.isArray(data.ranking)) {
+    upsertHistorySignals(data.ranking);
+  }
+
+  renderHistory();
+  drawEquityCurve();
+
+  scheduleShadowModeRefresh(350);
+}
+
+function startAnalyticsRefreshLoop() {
+  if (state.analyticsTimer) clearInterval(state.analyticsTimer);
+
+  state.analyticsTimer = setInterval(() => {
+    if (!state.accessToken) return;
+    scheduleShadowModeRefresh(0);
+  }, 30000);
+}
+
 function renderHistory() {
   if (!el.historyList) return;
 
@@ -1418,8 +1516,7 @@ async function loadRuntimeIntegrations() {
   state.premiumSnapshot = premiumData?.data || premiumData || null;
 
   const runtimeState = state.engineSnapshot || state.dashboardSnapshot || {};
-  updateInstitutionalCards(runtimeState.lastSignal || runtimeState.currentSignal || {});
-  updateRealtimeMetrics(runtimeState.lastSignal || runtimeState.currentSignal || {});
+  applyRuntimeUpdate(runtimeState);
 }
 
 async function bootPanel() {
@@ -1439,6 +1536,7 @@ async function bootPanel() {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
+  startAnalyticsRefreshLoop();
   await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics(), loadShadowMode()]);
 }
 
@@ -1559,11 +1657,37 @@ socket.on("signal", (signal) => {
   }
 
   if (isConfirmedOperationalSignal(signal)) {
-    state.history.unshift(signal);
-    state.history = state.history.slice(0, 50);
+    upsertHistorySignals([signal]);
   }
   renderHistory();
   drawEquityCurve();
+});
+
+
+socket.on("bestOpportunity", (signal) => {
+  if (!signal || !isConfirmedOperationalSignal(signal)) return;
+
+  if (isPremium()) {
+    renderSignal(signal);
+  }
+
+  upsertHistorySignals([signal]);
+  renderHistory();
+  drawEquityCurve();
+});
+
+socket.on("history", (signals) => {
+  const incoming = Array.isArray(signals) ? signals : [signals].filter(Boolean);
+
+  upsertHistorySignals(incoming);
+  renderHistory();
+  drawEquityCurve();
+  loadStats();
+  scheduleShadowModeRefresh(0);
+});
+
+socket.on("engine:update", (payload) => {
+  applyRuntimeUpdate(payload);
 });
 
 socket.on("signal-result-updated", (signal) => {
