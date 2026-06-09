@@ -313,6 +313,9 @@ function buildPreCheckMetrics(predictiveDecision = {}) {
     risks: Array.isArray(predictiveDecision.risks)
       ? predictiveDecision.risks
       : [],
+    criticalRisks: Array.isArray(predictiveDecision.criticalRisks)
+      ? predictiveDecision.criticalRisks
+      : [],
     severeRisks: Array.isArray(predictiveDecision.severeRisks)
       ? predictiveDecision.severeRisks
       : [],
@@ -324,8 +327,8 @@ function buildPreCheckMetrics(predictiveDecision = {}) {
 }
 
 function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
-  const severeText = [
-    ...(preCheckMetrics.severeRisks || []),
+  const criticalText = [
+    ...(preCheckMetrics.criticalRisks || []),
     antiLoss.reason || ""
   ]
     .join(" ")
@@ -333,11 +336,10 @@ function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
 
   return (
     Boolean(antiLoss.blocked) ||
-    severeText.includes("padrão crítico") ||
-    severeText.includes("padrao critico") ||
-    severeText.includes("padrão severo") ||
-    severeText.includes("risco extremo") ||
-    severeText.includes("loss detectado")
+    criticalText.includes("padrão crítico") ||
+    criticalText.includes("padrao critico") ||
+    criticalText.includes("padrão severo") ||
+    criticalText.includes("risco extremo")
   );
 }
 
