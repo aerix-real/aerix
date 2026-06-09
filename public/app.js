@@ -751,15 +751,15 @@ function renderHistory() {
 
   state.history.forEach((signal) => {
     const item = document.createElement("div");
-    item.className = "history-item";
-
     const direction = getOperationalDirection(signal);
     const score = getOperationalScore(signal);
     const result = String(signal.result || "PENDING").toUpperCase();
-    const resultColor =
-      result === "WIN" ? "#18f2a3" :
-      result === "LOSS" ? "#ff4d6d" :
-      "#ffd166";
+
+    item.className = [
+      "history-item",
+      direction === "CALL" ? "history-call" : "history-put",
+      result === "WIN" ? "result-win" : result === "LOSS" ? "result-loss" : "result-pending"
+    ].join(" ");
 
     item.innerHTML = `
       <div>
@@ -773,7 +773,7 @@ function renderHistory() {
 
       <span class="score-badge">${score}%</span>
 
-      <span style="color:${resultColor}; font-weight:800;">
+      <span class="result-badge ${result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending"}">
         ${escapeHtml(result)}
       </span>
 
