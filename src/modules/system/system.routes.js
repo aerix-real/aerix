@@ -6,7 +6,7 @@ module.exports = () => {
   router.get("/health", (req, res) => {
     return res.json({
       ok: true,
-      service: "AERIX",
+      service: "AERIX API",
       status: "online",
       timestamp: new Date().toISOString()
     });
