@@ -1,3 +1,9 @@
+const {
+  CLASSIFICATIONS,
+  getHighConfidenceScore,
+  hasOperationalDirection
+} = require("../utils/signal-classification");
+
 let aiMemoryRepository = null;
 
 try {
@@ -38,6 +44,15 @@ class ExecutionService {
 
   getScore(signal) {
     return Number(signal.finalScore ?? signal.confidence ?? signal.score ?? 0);
+  }
+
+  getExecutionClassification(signal, adjustedScore, allowed, commercialSignal) {
+    if (signal?.blocked) return CLASSIFICATIONS.BLOCKED;
+    if (!allowed) return commercialSignal ? CLASSIFICATIONS.WATCHLIST : CLASSIFICATIONS.BLOCKED;
+
+    return adjustedScore >= getHighConfidenceScore({ ...signal, adjustedScore })
+      ? CLASSIFICATIONS.HIGH_CONFIDENCE
+      : CLASSIFICATIONS.MEDIUM_CONFIDENCE;
   }
 
   getDirection(signal) {
@@ -440,35 +455,28 @@ class ExecutionService {
       lossPenalty +
       badHourPenalty;
 
+    const buildDecision = (allowed, reason, commercialSignal, extra = {}) => ({
+      allowed,
+      reason,
+      adjustedScore,
+      mode,
+      commercialSignal,
+      classification: this.getExecutionClassification(signal, adjustedScore, allowed, commercialSignal),
+      ...extra
+    });
+
     if (!symbol) {
-      return {
-        allowed: false,
-        reason: "Ativo inválido",
-        adjustedScore,
-        mode,
-        commercialSignal: false
-      };
+      return buildDecision(false, "Ativo inválido", false);
     }
 
     if (["WAIT", "AGUARDAR", "AGUARDANDO"].includes(direction)) {
-      return {
-        allowed: false,
-        reason: "Sem direção definida",
-        adjustedScore,
-        mode,
-        commercialSignal: false
-      };
+      return buildDecision(false, "Sem direção definida", false);
     }
 
     const badHour = this.isBadHourBlocked(signal);
 
     if (badHour.blocked) {
-      return {
-        allowed: false,
-        reason: badHour.reason,
-        adjustedScore,
-        mode,
-        commercialSignal: false,
+      return buildDecision(false, badHour.reason, false, {
         aiBlock: {
           type: "BAD_HOUR",
           lossRate: Number((badHour.lossRate * 100).toFixed(2)),
@@ -479,22 +487,17 @@ class ExecutionService {
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     if (this.isOvertrading()) {
-      return {
-        allowed: false,
-        reason: "Bloqueado por overtrading",
-        adjustedScore,
-        mode,
-        commercialSignal: false,
+      return buildDecision(false, "Bloqueado por overtrading", false, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     if (
@@ -502,84 +505,59 @@ class ExecutionService {
       this.lastExecution.symbol === symbol &&
       Date.now() - this.lastExecution.time < 60000
     ) {
-      return {
-        allowed: false,
-        reason: "Entrada recente no mesmo ativo",
-        adjustedScore,
-        mode,
-        commercialSignal: true,
+      return buildDecision(false, "Entrada recente no mesmo ativo", true, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     if (signal.blocked) {
-      return {
-        allowed: false,
-        reason: signal.blockReason || "Bloqueado pela IA",
-        adjustedScore,
-        mode,
-        commercialSignal: adjustedScore >= minimumScore,
+      return buildDecision(false, signal.blockReason || "Bloqueado pela IA", adjustedScore >= minimumScore, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     const severeLossLimit = mode === "aggressive" ? -26 : mode === "balanced" ? -24 : -20;
 
     if (lossPenalty <= severeLossLimit || adaptiveScoreAdjustment <= severeLossLimit) {
-      return {
-        allowed: false,
-        reason: "IA bloqueou por baixa performance histórica",
-        adjustedScore,
-        mode,
-        commercialSignal: false,
+      return buildDecision(false, "IA bloqueou por baixa performance histórica", false, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     const scoreTolerance = mode === "aggressive" ? 7 : mode === "balanced" ? 3 : 0;
 
     if (adjustedScore < minimumScore - scoreTolerance) {
-      return {
-        allowed: false,
-        reason: `Score ajustado insuficiente (${adjustedScore}/${minimumScore})`,
-        adjustedScore,
-        mode,
-        commercialSignal: false,
+      return buildDecision(false, `Score ajustado insuficiente (${adjustedScore}/${minimumScore})`, hasOperationalDirection(signal), {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     const validTiming = ["ENTRAR AGORA", "PREPARAR ENTRADA"];
 
     if (!validTiming.includes(signal.timing) && signal.timing_mode !== "SNIPER_WAIT_SCORE_PENALTY") {
-      return {
-        allowed: false,
-        reason: "Fora da janela de entrada",
-        adjustedScore,
-        mode,
-        commercialSignal: true,
+      return buildDecision(false, "Fora da janela de entrada", true, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     if (
@@ -587,18 +565,13 @@ class ExecutionService {
       signal.candleAnalysis.candleBias !== "neutral" &&
       signal.candleAnalysis.candleBias !== direction
     ) {
-      return {
-        allowed: false,
-        reason: "Candle contra o sinal",
-        adjustedScore,
-        mode,
-        commercialSignal: true,
+      return buildDecision(false, "Candle contra o sinal", true, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     const mtf = signal.mtf || {};
@@ -610,18 +583,13 @@ class ExecutionService {
     const minMtf = mode === "conservative" ? 2 : 1;
 
     if (aligned < minMtf) {
-      return {
-        allowed: false,
-        reason: `Falta de alinhamento MTF (${aligned}/${minMtf})`,
-        adjustedScore,
-        mode,
-        commercialSignal: true,
+      return buildDecision(false, `Falta de alinhamento MTF (${aligned}/${minMtf})`, true, {
         aiAdjustments: {
           adaptiveScoreAdjustment,
           lossPenalty,
           badHourPenalty
         }
-      };
+      });
     }
 
     return {
@@ -637,6 +605,7 @@ class ExecutionService {
       adjustedScore,
       mode,
       commercialSignal: true,
+      classification: this.getExecutionClassification(signal, adjustedScore, true, true),
       aiAdjustments: {
         adaptiveScoreAdjustment,
         lossPenalty,

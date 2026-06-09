@@ -19,6 +19,11 @@ const {
   isConfirmedOperationalSignal,
   filterConfirmedOperationalSignals
 } = require("../utils/signal-history-filter");
+const {
+  CLASSIFICATIONS,
+  applySignalClassification,
+  hasOperationalDirection
+} = require("../utils/signal-classification");
 
 class EngineRunnerService {
   constructor() {
@@ -227,6 +232,9 @@ class EngineRunnerService {
       institutional_quality: "pre_signal_block",
       mode,
       blocked: true,
+      classification: CLASSIFICATIONS.BLOCKED,
+      signalClassification: CLASSIFICATIONS.BLOCKED,
+      signal_classification: CLASSIFICATIONS.BLOCKED,
       blockReason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
       block_reason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
       explanation: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
@@ -493,7 +501,10 @@ class EngineRunnerService {
         : null,
       block_reason: snapshot?.isFallback
         ? "Fonte de dados em fallback; entrada operacional bloqueada."
-        : null
+        : null,
+      classification: snapshot?.isFallback ? CLASSIFICATIONS.BLOCKED : CLASSIFICATIONS.WATCHLIST,
+      signalClassification: snapshot?.isFallback ? CLASSIFICATIONS.BLOCKED : CLASSIFICATIONS.WATCHLIST,
+      signal_classification: snapshot?.isFallback ? CLASSIFICATIONS.BLOCKED : CLASSIFICATIONS.WATCHLIST
     };
 
     baseSignal.timing = this.buildTiming(baseSignal);
@@ -566,15 +577,30 @@ class EngineRunnerService {
     const scoreGap = minimumScore - signal.finalScore;
 
     if (scoreGap > tolerance) {
-      signal.blocked = true;
-      signal.blockReason =
-        signal.blockReason || "Score abaixo do mínimo institucional após auto tuning";
+      const reason = "Score abaixo do mínimo institucional após auto tuning";
+
+      signal.blockReason = signal.blockReason || reason;
       signal.block_reason = signal.blockReason;
-      signal.signal = "WAIT";
-      signal.direction = "WAIT";
+
+      if (hasOperationalDirection(signal)) {
+        signal.blocked = false;
+        signal.classification = CLASSIFICATIONS.WATCHLIST;
+        signal.signalClassification = CLASSIFICATIONS.WATCHLIST;
+        signal.signal_classification = CLASSIFICATIONS.WATCHLIST;
+        signal.executionAllowed = false;
+        signal.execution_allowed = false;
+      } else {
+        signal.blocked = true;
+        signal.signal = "WAIT";
+        signal.direction = "WAIT";
+        signal.classification = CLASSIFICATIONS.BLOCKED;
+        signal.signalClassification = CLASSIFICATIONS.BLOCKED;
+        signal.signal_classification = CLASSIFICATIONS.BLOCKED;
+      }
+
       this.appendFilterBlock(
         signal,
-        "low_score_block",
+        "low_score_watchlist",
         `Score abaixo do mínimo institucional após auto tuning (${signal.finalScore.toFixed(1)} < ${minimumScore})`,
         {
           score: signal.confidence,
@@ -606,16 +632,22 @@ class EngineRunnerService {
     signal.aiBlock = validation.aiBlock || signal.aiBlock || null;
 
     if (!validation.allowed) {
-      signal.blocked = true;
       signal.blockReason =
         validation.reason || signal.blockReason || "Bloqueado pela validação operacional";
       signal.block_reason = signal.blockReason;
-      this.appendFilterBlock(signal, "execution_block", signal.blockReason, {
+
+      if (validation.classification === CLASSIFICATIONS.WATCHLIST) {
+        signal.blocked = false;
+      } else {
+        signal.blocked = true;
+      }
+
+      this.appendFilterBlock(signal, signal.blocked ? "execution_block" : "execution_watchlist", signal.blockReason, {
         finalScore: validation.adjustedScore ?? signal.finalScore
       });
     }
 
-    return signal;
+    return applySignalClassification(signal);
   }
 
   detectMarketRegime(snapshot) {
@@ -675,6 +707,9 @@ class EngineRunnerService {
       entry_quality: quality,
 
       blocked: Boolean(signal.blocked),
+      classification: signal.classification || signal.signalClassification || signal.signal_classification || CLASSIFICATIONS.WATCHLIST,
+      signalClassification: signal.signalClassification || signal.classification || signal.signal_classification || CLASSIFICATIONS.WATCHLIST,
+      signal_classification: signal.signal_classification || signal.classification || signal.signalClassification || CLASSIFICATIONS.WATCHLIST,
       blockReason,
       block_reason: blockReason,
       executionAllowed: signal.executionAllowed === true || signal.execution_allowed === true,

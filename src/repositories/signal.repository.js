@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { applySignalClassification } = require("../utils/signal-classification");
 
 const MINIMUM_SCORE_SQL = `
   COALESCE(
@@ -48,6 +49,27 @@ function finalizeBucket(bucket) {
   bucket.lossrate = bucket.total
     ? Math.round((bucket.losses / bucket.total) * 100)
     : 0;
+}
+
+function withClassification(row = {}) {
+  const classified = applySignalClassification({
+    ...row,
+    finalScore: row.finalScore ?? row.final_score,
+    adjustedScore: row.adjustedScore ?? row.adjusted_score,
+    minimumScore: row.minimumScore ?? row.minimum_score,
+    executionAllowed: row.executionAllowed ?? row.execution_allowed
+  });
+
+  return {
+    ...row,
+    classification: classified.classification,
+    signalClassification: classified.signalClassification,
+    signal_classification: classified.signal_classification
+  };
+}
+
+function withClassifications(rows = []) {
+  return rows.map(withClassification);
 }
 
 async function insertSignal(data) {
@@ -126,7 +148,7 @@ async function insertSignal(data) {
   ];
 
   const result = await db.query(query, values);
-  return result.rows[0];
+  return withClassification(result.rows[0]);
 }
 
 async function save(data) {
@@ -144,7 +166,7 @@ async function getLatest(limit = 20) {
     [limit]
   );
 
-  return result.rows;
+  return withClassifications(result.rows);
 }
 
 async function getLatestConfirmed(limit = 20) {
@@ -163,7 +185,7 @@ async function getLatestConfirmed(limit = 20) {
     [limit]
   );
 
-  return result.rows;
+  return withClassifications(result.rows);
 }
 
 async function getStats() {
@@ -327,7 +349,7 @@ async function updateSignalResult(id, result) {
     [result, id]
   );
 
-  return response.rows[0] || null;
+  return response.rows[0] ? withClassification(response.rows[0]) : null;
 }
 
 async function getExpiredPendingSignals(limit = 50) {
@@ -344,7 +366,7 @@ async function getExpiredPendingSignals(limit = 50) {
     [limit]
   );
 
-  return result.rows;
+  return withClassifications(result.rows);
 }
 
 async function finalizeSignalResult(id, { result, resultPrice }) {
@@ -361,7 +383,7 @@ async function finalizeSignalResult(id, { result, resultPrice }) {
     [result, resultPrice, id]
   );
 
-  return response.rows[0] || null;
+  return response.rows[0] ? withClassification(response.rows[0]) : null;
 }
 
 async function getTopSymbols(limit = 8) {
