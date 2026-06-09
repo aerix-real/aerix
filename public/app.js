@@ -8,6 +8,7 @@ const socket = typeof io === "function"
     };
 
 const MAX_HISTORY_ITEMS = 30;
+const COMPACT_HISTORY_ITEMS = 10;
 const SHADOW_EVENT_LIMIT = 12;
 const TIMELINE_EVENT_LIMIT = 7;
 
@@ -86,6 +87,20 @@ const el = {
   bestAsset: document.getElementById("bestAsset"),
   bestReason: document.getElementById("bestReason"),
   bestScore: document.getElementById("bestScore"),
+  bestDirection: document.getElementById("bestDirection"),
+  bestConfidence: document.getElementById("bestConfidence"),
+  bestExpiry: document.getElementById("bestExpiry"),
+  bestEntryStatus: document.getElementById("bestEntryStatus"),
+  marketRegime: document.getElementById("marketRegime"),
+  currentRisk: document.getElementById("currentRisk"),
+  decisionReason: document.getElementById("decisionReason"),
+  aiReleaseStatus: document.getElementById("aiReleaseStatus"),
+  engineOnlineStatus: document.getElementById("engineOnlineStatus"),
+  engineProcessStatus: document.getElementById("engineProcessStatus"),
+  lastCycleTime: document.getElementById("lastCycleTime"),
+  lastCycleCompact: document.getElementById("lastCycleCompact"),
+  rateLimitStatus: document.getElementById("rateLimitStatus"),
+  websocketStatus: document.getElementById("websocketStatus"),
 
   historyList: document.getElementById("historyList"),
   historyCount: document.getElementById("historyCount"),
@@ -678,6 +693,60 @@ function updateRealtimeMetrics(signal = {}) {
   setTextContent(metrics.metricAi, `${Math.round(aiScore)}%`);
 }
 
+function getDecisionReason(signal = {}) {
+  return signal.blockReason ||
+    signal.block_reason ||
+    signal.execution?.reason ||
+    signal.reason ||
+    signal.explanation ||
+    signal.aiExplanation ||
+    "IA aguardando confluência operacional.";
+}
+
+function getMarketRegime(signal = {}) {
+  const raw = signal.marketRegime || signal.market_regime || signal.regime || signal.trend || signal.context?.regime;
+  if (raw) return String(raw).toUpperCase();
+
+  const direction = getOperationalDirection(signal);
+  const score = getOperationalScore(signal);
+  if (!direction) return "NEUTRO";
+  if (score >= 85) return direction === "CALL" ? "TENDÊNCIA ALTA" : "TENDÊNCIA BAIXA";
+  return "VALIDANDO";
+}
+
+function getRiskLabel(signal = {}) {
+  const raw = Number(signal.risk || signal.riskScore || signal.execution?.risk || signal.context?.risk || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return signal.blocked ? "Elevado" : "Controlado";
+  if (raw >= 24) return "Elevado";
+  if (raw >= 12) return "Moderado";
+  return "Baixo";
+}
+
+function updateCompactOperations(signal = {}, source = "engine") {
+  const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
+  const score = getOperationalScore(signal);
+  const blocked = Boolean(signal.blocked || direction === "WAIT" || signal.executionAllowed === false || signal.execution_allowed === false);
+  const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Liberada" : "Aguardando";
+  const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
+  const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
+  const release = entryStatus === "Liberada" ? "Sinal liberado" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
+
+  setTextContent(el.bestDirection, direction || "WAIT");
+  setTextContent(el.bestConfidence, `${Math.round(score || Number(signal.confidence || 0))}%`);
+  setTextContent(el.bestExpiry, signal.expiry || signal.expiration || signal.countdown || "--");
+  setTextContent(el.bestEntryStatus, entryStatus);
+  setTextContent(el.marketRegime, getMarketRegime(signal));
+  setTextContent(el.currentRisk, getRiskLabel(signal));
+  setTextContent(el.decisionReason, getDecisionReason(signal));
+  setTextContent(el.aiReleaseStatus, release);
+  setTextContent(el.engineOnlineStatus, socket.connected ? "Online" : "Offline");
+  setTextContent(el.engineProcessStatus, source === "engine" || source === "bestOpportunity" ? "Processando" : "Aguardando");
+  setTextContent(el.lastCycleTime, cycleTime);
+  setTextContent(el.lastCycleCompact, cycleTime);
+  setTextContent(el.rateLimitStatus, rateLimit);
+  setTextContent(el.websocketStatus, socket.connected ? "Online" : "Reconectando");
+}
+
 function renderAIInsights(signal = {}) {
   const list = el.aiInsightsList || document.getElementById("aiInsightsList");
   if (!list) return;
@@ -863,6 +932,7 @@ function setPremiumPlaceholders() {
   if (el.bestAsset) el.bestAsset.textContent = "---";
   if (el.bestReason) el.bestReason.textContent = "Melhor oportunidade liberada para análise.";
   if (el.bestScore) el.bestScore.textContent = "0%";
+  updateCompactOperations({}, "placeholder");
 }
 
 function applyModeUI(mode, notify = true) {
@@ -1047,17 +1117,20 @@ function ensureShadowModePanel() {
   if (!contentPanel) return;
 
   const panel = document.createElement("section");
-  panel.className = "panel shadow-mode-panel premium-card";
+  panel.className = "panel shadow-mode-panel premium-card secondary-details-panel";
   panel.id = "shadowModePanel";
   panel.innerHTML = `
-    <div class="panel-header"><h3>Análises Bloqueadas</h3><span id="shadowModeUpdated">standby</span></div>
-    <div class="filter-summary-grid shadow-mode-summary">
-      <div class="stat-card"><span>Status</span><strong id="shadowModeStatus">Monitorando</strong></div>
-      <div class="stat-card"><span>Análises</span><strong id="shadowSignalsCount">0</strong></div>
-      <div class="stat-card"><span>Bloqueios</span><strong id="shadowBlockedCount">0</strong></div>
-      <div class="stat-card"><span>Execuções</span><strong id="shadowExecutionCount">0</strong></div>
-    </div>
-    <div class="filter-block-list" id="shadowModeList"><div class="history-empty">Aguardando eventos da engine</div></div>
+    <div class="panel-header"><h3>Shadow Mode</h3><span id="shadowModeUpdated">standby</span></div>
+    <details class="technical-details shadow-details">
+      <summary>Ver análises bloqueadas, shadow mode e execuções</summary>
+      <div class="filter-summary-grid shadow-mode-summary">
+        <div class="stat-card"><span>Status</span><strong id="shadowModeStatus">Monitorando</strong></div>
+        <div class="stat-card"><span>Análises</span><strong id="shadowSignalsCount">0</strong></div>
+        <div class="stat-card"><span>Bloqueios</span><strong id="shadowBlockedCount">0</strong></div>
+        <div class="stat-card"><span>Execuções</span><strong id="shadowExecutionCount">0</strong></div>
+      </div>
+      <div class="filter-block-list" id="shadowModeList"><div class="history-empty">Aguardando eventos da engine</div></div>
+    </details>
   `;
 
   const filterPanel = document.querySelector(".filter-analytics-panel");
@@ -1083,16 +1156,19 @@ function ensureFilterPerformancePanel() {
   if (!contentPanel) return;
 
   const panel = document.createElement("section");
-  panel.className = "panel filter-performance-panel premium-card";
+  panel.className = "panel filter-performance-panel premium-card secondary-details-panel";
   panel.id = "filterPerformancePanel";
   panel.innerHTML = `
-    <div class="panel-header"><h3>Métricas de Filtros</h3><span id="filterPerformanceUpdated">sem dados</span></div>
-    <div class="filter-summary-grid" id="filterPerformanceCards">
-      <div class="stat-card"><span>Sinais bloqueados</span><strong>0%</strong></div>
-      <div class="stat-card"><span>Filtro líder</span><strong>--</strong></div>
-      <div class="stat-card"><span>Ativo crítico</span><strong>--</strong></div>
-      <div class="stat-card"><span>Score médio bloqueado</span><strong>0.0</strong></div>
-    </div>
+    <div class="panel-header"><h3>Filter Performance</h3><span id="filterPerformanceUpdated">sem dados</span></div>
+    <details class="technical-details filter-performance-details">
+      <summary>Ver métricas detalhadas dos filtros</summary>
+      <div class="filter-summary-grid" id="filterPerformanceCards">
+        <div class="stat-card"><span>Sinais bloqueados</span><strong>0%</strong></div>
+        <div class="stat-card"><span>Filtro líder</span><strong>--</strong></div>
+        <div class="stat-card"><span>Ativo crítico</span><strong>--</strong></div>
+        <div class="stat-card"><span>Score médio bloqueado</span><strong>0.0</strong></div>
+      </div>
+    </details>
   `;
 
   if (filterPanel) {
@@ -1221,6 +1297,7 @@ function syncRuntimeDashboard(runtimePayload = {}) {
     renderOperationalHeatmap(latestSignal);
     renderAIInsights(latestSignal);
     renderShadowMode(latestSignal, "engine");
+    updateCompactOperations(latestSignal, "engine");
   }
 
   const stats = runtime.analytics?.historyStats || {};
@@ -1352,6 +1429,12 @@ async function loadFilterAnalytics() {
 }
 
 
+function getHistoryRenderLimit() {
+  return window.matchMedia("(min-width: 900px) and (max-width: 1400px)").matches
+    ? COMPACT_HISTORY_ITEMS
+    : MAX_HISTORY_ITEMS;
+}
+
 function renderHistory() {
   if (!el.historyList) return;
 
@@ -1363,7 +1446,7 @@ function renderHistory() {
     return;
   }
 
-  const visibleHistory = state.history.slice(0, MAX_HISTORY_ITEMS);
+  const visibleHistory = state.history.slice(0, getHistoryRenderLimit());
 
   visibleHistory.forEach((signal) => {
     const item = document.createElement("div");
@@ -1546,8 +1629,13 @@ function renderSignal(signal) {
       "Sinal detectado com leitura operacional.";
   }
   setTextContent(el.bestScore, `${confidence}%`);
+  updateCompactOperations(signal, "signal");
 
-  const card = document.querySelector(".signal-card");
+  let card = state.domCache.get("signalCard");
+  if (!card || !document.contains(card)) {
+    card = document.querySelector(".signal-card");
+    state.domCache.set("signalCard", card);
+  }
 
   if (card) {
     card.classList.remove("signal-call", "signal-put", "signal-wait", "flash");
@@ -1607,6 +1695,8 @@ function setConnection(status) {
   if (!el.connectionText || !el.connectionBadge) return;
 
   el.connectionText.textContent = status;
+  setTextContent(el.websocketStatus, status);
+  setTextContent(el.engineOnlineStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
 
   el.connectionBadge.classList.remove("online", "offline", "connecting", "reconnecting");
 
@@ -1766,6 +1856,7 @@ function startAIEngine() {
   if (state.aiTimer) clearInterval(state.aiTimer);
 
   state.aiTimer = setInterval(() => {
+    if (!state.isDocumentVisible) return;
     rotateAIState();
   }, 2800);
 }
@@ -1800,6 +1891,7 @@ async function loadRuntimeIntegrations() {
   const runtimeSignal = runtimeState.lastSignal || runtimeState.currentSignal || runtimeState.bestOpportunity || null;
   updateInstitutionalCards(runtimeSignal || {});
   updateRealtimeMetrics(runtimeSignal || {});
+  updateCompactOperations(runtimeSignal || {}, "runtime");
 
   if (runtimeSignal) {
     renderShadowMode(runtimeSignal, "runtime");
@@ -1887,8 +1979,9 @@ if (el.logoutBtn) {
 
 if (el.menuToggle) {
   el.menuToggle.addEventListener("click", () => {
-    document.body.classList.toggle("sidebar-open");
-    document.body.classList.toggle("sidebar-collapsed");
+    const opened = document.body.classList.toggle("sidebar-open");
+    document.body.classList.toggle("sidebar-collapsed", !opened);
+    el.menuToggle.setAttribute("aria-expanded", String(opened));
   });
 }
 
@@ -1896,6 +1989,7 @@ if (el.sidebarBackdrop) {
   el.sidebarBackdrop.addEventListener("click", () => {
     document.body.classList.remove("sidebar-open");
     document.body.classList.add("sidebar-collapsed");
+    if (el.menuToggle) el.menuToggle.setAttribute("aria-expanded", "false");
   });
 }
 
@@ -1925,6 +2019,7 @@ if (el.upgradeBtn) {
 const handleBestOpportunity = throttle((signal) => {
   if (!signal) return;
   renderShadowMode(signal, "bestOpportunity");
+  updateCompactOperations(signal, "bestOpportunity");
   renderSignal(signal);
   updateInstitutionalCards(signal);
   updateRealtimeMetrics(signal);
@@ -1945,6 +2040,14 @@ const handleExecutionUpdate = throttle((payload) => {
     blockReason: payload.reason,
     finalScore: payload.adjustedScore || payload.finalScore || payload.score || 0,
     timestamp: new Date().toISOString()
+  }, "execution");
+
+  updateCompactOperations({
+    ...payload,
+    blocked: payload.allowed === false,
+    blockReason: payload.reason,
+    direction: payload.allowed === false ? "WAIT" : payload.direction,
+    signal: payload.allowed === false ? "WAIT" : payload.signal
   }, "execution");
 
   if (payload.allowed === false) {
@@ -1981,6 +2084,7 @@ socket.on("connect_error", () => {
 
 socket.on("signal", (signal) => {
   renderShadowMode(signal, "signal");
+  updateCompactOperations(signal, "signal");
 
   renderSignal(signal);
 

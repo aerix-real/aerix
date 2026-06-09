@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=institutional-refine-ux-performance-4" />
+  <link rel="stylesheet" href="/style.css?v=split-screen-compact-1" />
 </head>
 
-<body class="mode-equilibrado plan-premium sidebar-open design-system-institutional">
+<body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box glass-card">
       <div class="login-brand">
@@ -45,7 +45,7 @@
   <div class="app-shell">
     <header class="topbar premium-topbar">
       <div class="topbar-left">
-        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menu">☰</button>
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menu" aria-expanded="false">☰</button>
 
         <div class="brand-terminal glass-card">
           <div class="logo-banner">
@@ -65,7 +65,7 @@
         </div>
 
         <div class="live-clock-card glass-card">
-          <span>Tempo real</span>
+          <span>Tempo real · ciclo <b id="lastCycleCompact">--</b></span>
           <strong id="liveClock">00:00:00</strong>
         </div>
       </div>
@@ -138,6 +138,12 @@
               </div>
               <div class="best-opportunity-score" id="bestScore">0%</div>
             </div>
+            <div class="opportunity-essential-grid" aria-label="Parâmetros essenciais da melhor oportunidade">
+              <div class="opportunity-essential-item"><span>Direção</span><strong id="bestDirection">WAIT</strong></div>
+              <div class="opportunity-essential-item"><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
+              <div class="opportunity-essential-item"><span>Tempo/expiração</span><strong id="bestExpiry">--</strong></div>
+              <div class="opportunity-essential-item"><span>Status entrada</span><strong id="bestEntryStatus">Aguardando</strong></div>
+            </div>
           </div>
 
           <div class="signal-card panel premium-card">
@@ -168,7 +174,28 @@
           </div>
         </section>
 
-        <section class="panel institutional-center-panel" id="institutionalCenter">
+        <section class="operational-compact-grid" aria-label="Painel operacional essencial para tela dividida">
+          <article class="panel compact-ai-panel premium-card">
+            <div class="panel-header"><h3>IA operacional</h3><span id="aiReleaseStatus">Aguardando</span></div>
+            <div class="compact-status-grid">
+              <div class="compact-status-item"><span>Regime</span><strong id="marketRegime">Neutro</strong></div>
+              <div class="compact-status-item"><span>Risco atual</span><strong id="currentRisk">--</strong></div>
+            </div>
+            <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
+          </article>
+
+          <article class="panel compact-engine-panel premium-card">
+            <div class="panel-header"><h3>Status da engine</h3><span id="engineOnlineStatus">Sincronizando</span></div>
+            <div class="compact-status-grid engine-status-grid">
+              <div class="compact-status-item"><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div>
+              <div class="compact-status-item"><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div>
+              <div class="compact-status-item"><span>Rate limit</span><strong id="rateLimitStatus">OK</strong></div>
+              <div class="compact-status-item"><span>WebSocket</span><strong id="websocketStatus">Conectando</strong></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel institutional-center-panel secondary-details-panel" id="institutionalCenter">
           <div class="institutional-center-header">
             <div>
               <span class="section-kicker">Centro de Operações IA</span>
@@ -226,15 +253,17 @@
           </section>
         </section>
 
-        <section class="panel filter-analytics-panel premium-card">
+        <section class="panel filter-analytics-panel premium-card secondary-details-panel">
           <div class="panel-header"><h3>Análises Bloqueadas / Filtros</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
-          <div class="filter-summary-grid">
-            <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
-            <div class="stat-card"><span>Sinais analisados</span><strong id="filterTotalSignals">0</strong></div>
-            <div class="stat-card"><span>Sinais confirmados</span><strong id="filterApprovedSignals">0</strong></div>
-            <div class="stat-card"><span>Sinais bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
-          </div>
-          <div class="filter-analytics-grid">
+          <details class="technical-details filter-details">
+            <summary>Ver Filter Analytics, bloqueios, reasons e auditoria</summary>
+            <div class="filter-summary-grid">
+              <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
+              <div class="stat-card"><span>Sinais analisados</span><strong id="filterTotalSignals">0</strong></div>
+              <div class="stat-card"><span>Sinais confirmados</span><strong id="filterApprovedSignals">0</strong></div>
+              <div class="stat-card"><span>Sinais bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
+            </div>
+            <div class="filter-analytics-grid">
             <div class="institutional-subpanel">
               <div class="subpanel-title"><strong>Top filtros bloqueadores</strong><span>ranking</span></div>
               <div class="filter-ranking-list" id="filterRankingList"><div class="history-empty">Nenhum bloqueio registrado</div></div>
@@ -251,7 +280,8 @@
               <div class="subpanel-title"><strong>Últimos bloqueios</strong><span>auditoria</span></div>
               <div class="filter-block-list" id="filterBlockList"><div class="history-empty">Aguardando bloqueios da engine</div></div>
             </div>
-          </div>
+            </div>
+          </details>
         </section>
 
         <section class="panel history-panel">
@@ -259,15 +289,17 @@
           <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
         </section>
 
-        <section class="panel pro-audit-panel">
-          <div class="panel-header"><h3>Auditoria de Decisão</h3><span>logs profissionais</span></div>
-          <div class="pro-logs" id="proLogs"></div>
+        <section class="panel pro-audit-panel secondary-details-panel">
+          <details class="technical-details audit-details">
+            <summary>Ver logs profissionais e auditoria de decisão</summary>
+            <div class="pro-logs" id="proLogs"></div>
+          </details>
         </section>
       </section>
     </main>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=institutional-refine-ux-performance-4"></script>
+  <script src="/app.js?v=split-screen-compact-1"></script>
 </body>
 </html>
