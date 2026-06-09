@@ -666,3 +666,166 @@ canvas { max-width: 100%; }
   .filter-summary-grid { grid-template-columns: 1fr; }
   .filter-block-item > div { flex-direction: column; }
 }
+
+/* Institutional refinement layer: preserves black/gold identity while reducing visual noise. */
+body.design-system-institutional {
+  --panel: rgba(8, 9, 10, 0.7);
+  --panel-strong: rgba(14, 14, 12, 0.9);
+  --line: rgba(222, 184, 105, 0.14);
+  --line-strong: rgba(246, 213, 142, 0.32);
+  --shadow: 0 22px 64px rgba(0, 0, 0, 0.48);
+  --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.34);
+  background:
+    radial-gradient(circle at 10% -10%, rgba(246, 213, 142, 0.14), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(117, 88, 34, 0.16), transparent 26%),
+    linear-gradient(135deg, #010101 0%, #060706 52%, #020203 100%);
+}
+
+body.design-system-institutional::after { opacity: 0.24; }
+
+.panel,
+.glass-card {
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(12px) saturate(112%);
+}
+
+.panel:hover,
+.premium-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.075);
+}
+
+.brand-terminal::after,
+.signal-card::before,
+.institutional-center-panel::before {
+  opacity: 0.38;
+  animation-duration: 16s;
+}
+
+.refined-hero-grid {
+  grid-template-columns: minmax(340px, 0.94fr) minmax(0, 1.06fr);
+  align-items: stretch;
+}
+
+.primary-opportunity-card {
+  border-color: rgba(246, 213, 142, 0.3);
+  background:
+    radial-gradient(circle at 82% 18%, rgba(240, 207, 130, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(17, 16, 13, 0.94), rgba(5, 6, 6, 0.9));
+}
+
+.primary-opportunity-card .panel-header h3 { color: var(--gold-strong); }
+.primary-opportunity-card .best-opportunity-box { min-height: 276px; }
+.primary-opportunity-card .best-opportunity-main strong { font-size: clamp(2.55rem, 5vw, 5rem); }
+.primary-opportunity-card .best-opportunity-score {
+  width: 112px;
+  height: 112px;
+  box-shadow: 0 0 0 1px rgba(255, 228, 163, 0.2), 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+.signal-card { min-height: 0; }
+.signal-main { margin: 22px 0 18px; }
+.signal-meta-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.signal-meta-card,
+.stat-card,
+.institutional-metric-card,
+.realtime-metric-card,
+.heatmap-cell,
+.ai-insight-item,
+.filter-rank-item,
+.filter-block-item {
+  border-color: rgba(240, 207, 130, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.044), rgba(255, 255, 255, 0.014)), rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.signal-meta-card strong,
+.stat-card strong,
+.institutional-metric-card strong,
+.realtime-metric-card strong,
+.best-opportunity-score,
+.score-badge,
+.rank-right,
+.live-clock-card strong {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.signal-direction.call,
+.signal-direction.buy,
+.direction-badge.call,
+.badge.call,
+.result-badge.win {
+  color: var(--buy);
+  background: rgba(65, 230, 167, 0.1);
+  border-color: rgba(65, 230, 167, 0.28);
+}
+
+.signal-direction.put,
+.signal-direction.sell,
+.direction-badge.put,
+.badge.put,
+.result-badge.loss {
+  color: var(--sell);
+  background: rgba(255, 100, 127, 0.1);
+  border-color: rgba(255, 100, 127, 0.28);
+}
+
+.technical-details {
+  margin-top: 14px;
+  border: 1px solid rgba(240, 207, 130, 0.14);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.technical-details > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 14px;
+  color: var(--gold-2);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.technical-details > summary::-webkit-details-marker { display: none; }
+.technical-details > summary::after { content: "+"; float: right; color: var(--muted); }
+.technical-details[open] > summary::after { content: "–"; }
+.technical-details .ai-content { margin: 0 12px 12px; }
+.command-details { padding-bottom: 12px; }
+.command-details .institutional-ops-grid { padding: 0 12px; }
+
+.history-list { max-height: 420px; }
+.history-item {
+  grid-template-columns: minmax(150px, 1fr) auto auto auto minmax(104px, auto);
+  padding: 11px 12px;
+  background: rgba(4, 5, 6, 0.5);
+}
+.history-item strong { font-size: 0.98rem; letter-spacing: 0.01em; }
+.history-meta { font-size: 0.8rem; }
+
+.realtime-paused .brand-terminal::after,
+.realtime-paused .signal-card::before,
+.realtime-paused .institutional-center-panel::before,
+.realtime-paused .ai-live-dots i,
+.realtime-paused .connection-badge.connecting,
+.realtime-paused .connection-badge.reconnecting,
+.realtime-paused .signal-card.flash {
+  animation-play-state: paused !important;
+}
+
+.realtime-paused .panel,
+.realtime-paused .glass-card {
+  backdrop-filter: none;
+}
+
+@media (max-width: 1180px) {
+  .refined-hero-grid { grid-template-columns: 1fr; }
+  .primary-opportunity-card { order: -1; }
+}
+
+@media (max-width: 760px) {
+  .primary-opportunity-card .best-opportunity-box { min-height: 0; }
+  .primary-opportunity-card .best-opportunity-score { width: 92px; height: 92px; }
+  .technical-details > summary { line-height: 1.45; }
+}

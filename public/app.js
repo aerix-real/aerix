@@ -1,4 +1,15 @@
-const socket = io();
+const socket = typeof io === "function"
+  ? io()
+  : {
+      connected: false,
+      on() {},
+      emit() {},
+      disconnect() {}
+    };
+
+const MAX_HISTORY_ITEMS = 30;
+const SHADOW_EVENT_LIMIT = 12;
+const TIMELINE_EVENT_LIMIT = 7;
 
 const STORAGE_KEYS = {
   accessToken: "aerix_access_token",
@@ -26,6 +37,12 @@ const state = {
   premiumSnapshot: null,
   filterAnalytics: null,
   filterPerformance: null,
+  domCache: new Map(),
+  rafQueue: new Map(),
+  visualFrame: null,
+  pendingHistoryRender: false,
+  pendingEquityDraw: false,
+  isDocumentVisible: document.visibilityState === "visible",
   shadowMode: {
     signals: [],
     blocked: [],
@@ -79,10 +96,10 @@ const el = {
   statWinrate: document.getElementById("statWinrate"),
   statsUpdated: document.getElementById("statsUpdated"),
 
-  metricLatency: document.getElementById("metricLatency"),
-  metricFlow: document.getElementById("metricFlow"),
-  metricRisk: document.getElementById("metricRisk"),
-  metricAi: document.getElementById("metricAi"),
+  metricLatency: getCachedElement("metricLatency"),
+  metricFlow: getCachedElement("metricFlow"),
+  metricRisk: getCachedElement("metricRisk"),
+  metricAi: getCachedElement("metricAi"),
 
   aiInsightsList: document.getElementById("aiInsightsList"),
   operationTimeline: document.getElementById("operationTimeline"),
@@ -109,6 +126,97 @@ const el = {
   filterPerformanceCards: document.getElementById("filterPerformanceCards"),
   filterPerformanceUpdated: document.getElementById("filterPerformanceUpdated")
 };
+
+
+function getCachedElement(id) {
+  if (!id) return null;
+
+  const cached = state.domCache.get(id);
+
+  if (cached && document.contains(cached)) {
+    return cached;
+  }
+
+  const node = document.getElementById(id);
+  state.domCache.set(id, node);
+
+  return node;
+}
+
+function setTextContent(node, value) {
+  if (!node) return;
+
+  const nextValue = String(value ?? "");
+  if (node.textContent !== nextValue) {
+    node.textContent = nextValue;
+  }
+}
+
+function scheduleVisualUpdate(key, task) {
+  state.rafQueue.set(key, task);
+
+  if (state.visualFrame) return;
+
+  state.visualFrame = requestAnimationFrame(() => {
+    const jobs = Array.from(state.rafQueue.values());
+    state.rafQueue.clear();
+    state.visualFrame = null;
+
+    jobs.forEach((job) => job());
+  });
+}
+
+function throttle(fn, wait = 300) {
+  let lastRun = 0;
+  let timeout = null;
+  let lastArgs = null;
+
+  return (...args) => {
+    lastArgs = args;
+    const remaining = wait - (Date.now() - lastRun);
+
+    if (remaining <= 0) {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+
+      lastRun = Date.now();
+      fn(...lastArgs);
+      lastArgs = null;
+      return;
+    }
+
+    if (!timeout) {
+      timeout = setTimeout(() => {
+        lastRun = Date.now();
+        timeout = null;
+        fn(...lastArgs);
+        lastArgs = null;
+      }, remaining);
+    }
+  };
+}
+
+function scheduleHistoryRender() {
+  if (state.pendingHistoryRender) return;
+
+  state.pendingHistoryRender = true;
+  scheduleVisualUpdate("history", () => {
+    state.pendingHistoryRender = false;
+    renderHistory();
+  });
+}
+
+function scheduleEquityDraw() {
+  if (state.pendingEquityDraw || !state.isDocumentVisible) return;
+
+  state.pendingEquityDraw = true;
+  scheduleVisualUpdate("equity", () => {
+    state.pendingEquityDraw = false;
+    drawEquityCurve();
+  });
+}
 
 const AI_STATES = [
   "IA analisando alinhamento de tendência",
@@ -532,7 +640,7 @@ function buildInstitutionalHeatmap(signal = {}) {
 function renderInstitutionalHeatmap(signal = {}) {
   ensureInstitutionalCenter();
 
-  const heatmap = document.getElementById("institutionalHeatmap");
+  const heatmap = getCachedElement("institutionalHeatmap");
   if (!heatmap) return;
 
   if (!state.institutionalHeatmap.length || signal.symbol || signal.asset) {
@@ -553,10 +661,10 @@ function renderOperationalHeatmap(signal = {}) {
 
 function getRealtimeMetricElements() {
   return {
-    metricLatency: el.metricLatency || document.getElementById("metricLatency"),
-    metricFlow: el.metricFlow || document.getElementById("metricFlow"),
-    metricRisk: el.metricRisk || document.getElementById("metricRisk"),
-    metricAi: el.metricAi || document.getElementById("metricAi")
+    metricLatency: el.metricLatency || getCachedElement("metricLatency"),
+    metricFlow: el.metricFlow || getCachedElement("metricFlow"),
+    metricRisk: el.metricRisk || getCachedElement("metricRisk"),
+    metricAi: el.metricAi || getCachedElement("metricAi")
   };
 }
 
@@ -573,10 +681,10 @@ function updateRealtimeMetrics(signal = {}) {
   const aiScore = premium ? Math.max(48, Math.min(99, confidence || 72)) : 0;
   const latency = connected ? Math.round(42 + Math.random() * 64) : 0;
 
-  if (metrics.metricLatency) metrics.metricLatency.textContent = connected ? `${latency}ms` : "offline";
-  if (metrics.metricFlow) metrics.metricFlow.textContent = premium ? `${Math.round(flow)}%` : "FREE";
-  if (metrics.metricRisk) metrics.metricRisk.textContent = premium ? `${Math.max(0, Math.min(100, Math.round(100 - risk * 3)))}%` : "--";
-  if (metrics.metricAi) metrics.metricAi.textContent = premium ? `${Math.round(aiScore)}%` : "premium";
+  setTextContent(metrics.metricLatency, connected ? `${latency}ms` : "offline");
+  setTextContent(metrics.metricFlow, premium ? `${Math.round(flow)}%` : "FREE");
+  setTextContent(metrics.metricRisk, premium ? `${Math.max(0, Math.min(100, Math.round(100 - risk * 3)))}%` : "--");
+  setTextContent(metrics.metricAi, premium ? `${Math.round(aiScore)}%` : "premium");
 }
 
 function renderAIInsights(signal = {}) {
@@ -622,7 +730,7 @@ function pushTimelineEvent(message) {
   item.innerHTML = `<time>${formatTime(new Date())}</time><span>${escapeHtml(message)}</span>`;
   timeline.prepend(item);
 
-  Array.from(timeline.querySelectorAll(".timeline-event")).slice(7).forEach((node) => node.remove());
+  Array.from(timeline.querySelectorAll(".timeline-event")).slice(TIMELINE_EVENT_LIMIT).forEach((node) => node.remove());
 
   const count = el.timelineCount || document.getElementById("timelineCount");
   if (count) count.textContent = `${timeline.querySelectorAll(".timeline-event").length} eventos`;
@@ -849,19 +957,19 @@ async function loadHistory() {
     const data = await response.json().catch(() => null);
 
     if (data?.ok && Array.isArray(data.signals)) {
-      state.history = filterConfirmedOperationalSignals(data.signals);
+      state.history = filterConfirmedOperationalSignals(data.signals).slice(0, MAX_HISTORY_ITEMS);
     } else if (data?.ok && Array.isArray(data.data)) {
-      state.history = filterConfirmedOperationalSignals(data.data);
+      state.history = filterConfirmedOperationalSignals(data.data).slice(0, MAX_HISTORY_ITEMS);
     } else {
       state.history = [];
     }
 
-    renderHistory();
-    drawEquityCurve();
+    scheduleHistoryRender();
+    scheduleEquityDraw();
   } catch (error) {
     state.history = [];
-    renderHistory();
-    drawEquityCurve();
+    scheduleHistoryRender();
+    scheduleEquityDraw();
   }
 }
 
@@ -1026,14 +1134,14 @@ function renderShadowMode(signal = null, eventType = "sync") {
   ensureShadowModePanel();
 
   if (signal && typeof signal === "object") {
-    state.shadowMode.signals = upsertBySignature(state.shadowMode.signals, signal, 20);
+    state.shadowMode.signals = upsertBySignature(state.shadowMode.signals, signal, SHADOW_EVENT_LIMIT);
 
     if (signal.blocked || signal.signal === "WAIT" || signal.direction === "WAIT" || eventType === "execution") {
-      state.shadowMode.blocked = upsertBySignature(state.shadowMode.blocked, signal, 20);
+      state.shadowMode.blocked = upsertBySignature(state.shadowMode.blocked, signal, SHADOW_EVENT_LIMIT);
     }
 
     if (eventType === "execution") {
-      state.shadowMode.executions = upsertBySignature(state.shadowMode.executions, signal, 12);
+      state.shadowMode.executions = upsertBySignature(state.shadowMode.executions, signal, SHADOW_EVENT_LIMIT);
     }
 
     state.shadowMode.lastUpdated = new Date().toISOString();
@@ -1042,7 +1150,7 @@ function renderShadowMode(signal = null, eventType = "sync") {
   const allEvents = [
     ...state.shadowMode.blocked.map((item) => ({ ...item, __shadowType: "BLOQUEIO" })),
     ...state.shadowMode.signals.map((item) => ({ ...item, __shadowType: "OBSERVADO" }))
-  ].slice(0, 12);
+  ].slice(0, SHADOW_EVENT_LIMIT);
 
   const signalsCount = document.getElementById("shadowSignalsCount");
   const blockedCount = document.getElementById("shadowBlockedCount");
@@ -1122,9 +1230,9 @@ function syncRuntimeDashboard(runtimePayload = {}) {
   }
 
   if (runtime.history.length) {
-    state.history = filterConfirmedOperationalSignals(runtime.history).slice(0, 50);
-    renderHistory();
-    drawEquityCurve();
+    state.history = filterConfirmedOperationalSignals(runtime.history).slice(0, MAX_HISTORY_ITEMS);
+    scheduleHistoryRender();
+    scheduleEquityDraw();
   }
 
   if (latestSignal) {
@@ -1275,7 +1383,9 @@ function renderHistory() {
     return;
   }
 
-  state.history.forEach((signal) => {
+  const visibleHistory = state.history.slice(0, MAX_HISTORY_ITEMS);
+
+  visibleHistory.forEach((signal) => {
     const item = document.createElement("div");
     item.className = "history-item";
 
@@ -1321,7 +1431,7 @@ function renderHistory() {
   });
 
   if (el.historyCount) {
-    el.historyCount.textContent = `${state.history.length} sinais`;
+    el.historyCount.textContent = `${visibleHistory.length} sinais`;
   }
 }
 
@@ -1395,7 +1505,7 @@ function renderSignal(signal) {
   const dataSource = dataQuality.source || signal.source || "mercado";
   const dataOperational = dataQuality.operational !== false && !dataQuality.isFallback;
 
-  if (el.signalAsset) el.signalAsset.textContent = signal.symbol || signal.asset || "---";
+  setTextContent(el.signalAsset, signal.symbol || signal.asset || "---");
 
   if (el.signalDirection) {
     el.signalDirection.textContent = direction || "AGUARDANDO";
@@ -1414,11 +1524,11 @@ function renderSignal(signal) {
     }
   }
 
-  if (el.signalEntry) el.signalEntry.textContent = blocked ? "--" : signal.entry || signal.entryTime || "--";
-  if (el.signalExpiry) el.signalExpiry.textContent = blocked ? "--" : signal.expiry || signal.expiration || "--";
-  if (el.signalConfidence) el.signalConfidence.textContent = `${confidence}%`;
-  if (el.signalCountdown) el.signalCountdown.textContent = blocked ? "Bloqueado" : signal.countdown || "--";
-  if (el.signalTime) el.signalTime.textContent = formatTime(signal.created_at || new Date());
+  setTextContent(el.signalEntry, blocked ? "--" : signal.entry || signal.entryTime || "--");
+  setTextContent(el.signalExpiry, blocked ? "--" : signal.expiry || signal.expiration || "--");
+  setTextContent(el.signalConfidence, `${confidence}%`);
+  setTextContent(el.signalCountdown, blocked ? "Bloqueado" : signal.countdown || "--");
+  setTextContent(el.signalTime, formatTime(signal.created_at || new Date()));
 
   if (el.aiExplanation) {
     el.aiExplanation.classList.remove("is-typing");
@@ -1433,7 +1543,7 @@ function renderSignal(signal) {
         `${qualityText} IA analisando confluencia, tendencia, timing e qualidade do candle.`;
   }
 
-  if (el.bestAsset) el.bestAsset.textContent = signal.symbol || signal.asset || "---";
+  setTextContent(el.bestAsset, signal.symbol || signal.asset || "---");
   if (el.bestReason) {
     el.bestReason.textContent =
       blockReason ||
@@ -1441,7 +1551,7 @@ function renderSignal(signal) {
       signal.explanation ||
       "Sinal premium detectado com leitura operacional.";
   }
-  if (el.bestScore) el.bestScore.textContent = `${confidence}%`;
+  setTextContent(el.bestScore, `${confidence}%`);
 
   const card = document.querySelector(".signal-card");
 
@@ -1458,8 +1568,9 @@ function renderSignal(signal) {
       card.classList.add("signal-wait");
     }
 
-    void card.offsetWidth;
-    card.classList.add("flash");
+    if (state.isDocumentVisible) {
+      requestAnimationFrame(() => card.classList.add("flash"));
+    }
   }
 
   updateInstitutionalCards(signal);
@@ -1468,10 +1579,12 @@ function renderSignal(signal) {
   renderAIInsights(signal);
   renderProLogs(signal);
   pushTimelineEvent(`${direction} ${signal.symbol || signal.asset || "ativo"} · score ${Math.round(confidence)}%`);
-  drawEquityCurve();
+  scheduleEquityDraw();
 
-  pushChartPoint(confidence || 50);
-  drawMiniChart();
+  if (state.isDocumentVisible) {
+    pushChartPoint(confidence || 50);
+    drawMiniChart();
+  }
 }
 
 async function setResult(id, result) {
@@ -1632,6 +1745,8 @@ function startChartLoop() {
   if (state.chartTimer) clearInterval(state.chartTimer);
 
   state.chartTimer = setInterval(() => {
+    if (!state.isDocumentVisible) return;
+
     pushChartPoint(45 + Math.random() * 35);
     drawMiniChart();
     drawEquityCurve();
@@ -1818,6 +1933,36 @@ if (el.upgradeBtn) {
   });
 }
 
+const handleBestOpportunity = throttle((signal) => {
+  if (!signal) return;
+  renderShadowMode(signal, "bestOpportunity");
+  renderSignal(signal);
+  updateInstitutionalCards(signal);
+  updateRealtimeMetrics(signal);
+}, 260);
+
+const handleEngineUpdate = throttle((payload) => {
+  syncRuntimeDashboard(payload);
+}, 360);
+
+const handleExecutionUpdate = throttle((payload) => {
+  if (!payload) return;
+  renderShadowMode({
+    ...payload,
+    symbol: payload.symbol || payload.asset || "ENGINE",
+    signal: payload.allowed === false ? "WAIT" : payload.signal,
+    direction: payload.allowed === false ? "WAIT" : payload.direction,
+    blocked: payload.allowed === false,
+    blockReason: payload.reason,
+    finalScore: payload.adjustedScore || payload.finalScore || payload.score || 0,
+    timestamp: new Date().toISOString()
+  }, "execution");
+
+  if (payload.allowed === false) {
+    loadFilterAnalytics();
+  }
+}, 420);
+
 socket.on("connect", () => {
   setConnection("Online");
   updateInstitutionalCards();
@@ -1854,10 +1999,10 @@ socket.on("signal", (signal) => {
 
   if (isConfirmedOperationalSignal(signal)) {
     state.history.unshift(signal);
-    state.history = state.history.slice(0, 50);
+    state.history = state.history.slice(0, MAX_HISTORY_ITEMS);
   }
-  renderHistory();
-  drawEquityCurve();
+  scheduleHistoryRender();
+  scheduleEquityDraw();
 });
 
 socket.on("signal-result-updated", (signal) => {
@@ -1871,52 +2016,28 @@ socket.on("signal-result-updated", (signal) => {
     } else {
       state.history.splice(index, 1);
     }
-    renderHistory();
-    drawEquityCurve();
+    scheduleHistoryRender();
+    scheduleEquityDraw();
     loadStats();
     loadFilterAnalytics();
   }
 });
 
-socket.on("bestOpportunity", (signal) => {
-  if (!signal) return;
-  renderShadowMode(signal, "bestOpportunity");
-  renderSignal(signal);
-  updateInstitutionalCards(signal);
-  updateRealtimeMetrics(signal);
-});
+socket.on("bestOpportunity", handleBestOpportunity);
 
-socket.on("engine:update", (payload) => {
-  syncRuntimeDashboard(payload);
-});
+socket.on("engine:update", handleEngineUpdate);
 
 socket.on("history", (signals) => {
   const confirmed = filterConfirmedOperationalSignals(normalizeSignalCollection(signals));
   if (!confirmed.length) return;
 
-  state.history = confirmed.slice(0, 50);
-  renderHistory();
-  drawEquityCurve();
+  state.history = confirmed.slice(0, MAX_HISTORY_ITEMS);
+  scheduleHistoryRender();
+  scheduleEquityDraw();
   loadStats();
 });
 
-socket.on("execution", (payload) => {
-  if (!payload) return;
-  renderShadowMode({
-    ...payload,
-    symbol: payload.symbol || payload.asset || "ENGINE",
-    signal: payload.allowed === false ? "WAIT" : payload.signal,
-    direction: payload.allowed === false ? "WAIT" : payload.direction,
-    blocked: payload.allowed === false,
-    blockReason: payload.reason,
-    finalScore: payload.adjustedScore || payload.finalScore || payload.score || 0,
-    timestamp: new Date().toISOString()
-  }, "execution");
-
-  if (payload.allowed === false) {
-    loadFilterAnalytics();
-  }
-});
+socket.on("execution", handleExecutionUpdate);
 
 socket.on("filter-analytics:update", (payload) => {
   const analytics = payload?.data || payload;
@@ -1929,6 +2050,16 @@ socket.on("filter-analytics:update", (payload) => {
 });
 
 window.setResult = setResult;
+
+document.addEventListener("visibilitychange", () => {
+  state.isDocumentVisible = document.visibilityState === "visible";
+  document.body.classList.toggle("realtime-paused", !state.isDocumentVisible);
+
+  if (state.isDocumentVisible) {
+    drawEquityCurve();
+    renderOperationalHeatmap();
+  }
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   startClock();
