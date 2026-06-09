@@ -63,7 +63,12 @@ const el = {
   statWins: document.getElementById("statWins"),
   statLosses: document.getElementById("statLosses"),
   statWinrate: document.getElementById("statWinrate"),
-  statsUpdated: document.getElementById("statsUpdated")
+  statsUpdated: document.getElementById("statsUpdated"),
+  metricLatency: document.getElementById("metricLatency"),
+  metricFlow: document.getElementById("metricFlow"),
+  metricRisk: document.getElementById("metricRisk"),
+  metricAi: document.getElementById("metricAi"),
+  opHeatmap: document.getElementById("opHeatmap")
 };
 
 const AI_STATES = [
@@ -633,6 +638,8 @@ function renderSignal(signal) {
   }
 
   pushChartPoint(confidence || 50);
+  updateRealtimeMetrics(confidence || 0);
+  renderOperationalHeatmap();
   drawMiniChart();
 }
 
@@ -807,7 +814,28 @@ function startChartLoop() {
     if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
     if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
     if (timing) timing.textContent = isPremium() ? "Validando candle" : "Premium";
+    updateRealtimeMetrics(last);
+    renderOperationalHeatmap();
   }, 1800);
+}
+
+
+function renderOperationalHeatmap() {
+  if (!el.opHeatmap) return;
+  const assets = ["EURUSD","GBPUSD","USDJPY","BTCUSD","ETHUSD","XAUUSD","US30","NAS100","EURJPY","AUDUSD","USDCHF","SPX500"];
+  el.opHeatmap.innerHTML = assets.map((asset) => {
+    const last = state.chartData[state.chartData.length - 1] || 50;
+    const delta = (Math.random() * 18 - 9) + (last - 50) * 0.15;
+    const level = delta > 4 ? "hot" : delta < -4 ? "cool" : "warm";
+    return `<div class="heat-cell" data-level="${level}">${asset}</div>`;
+  }).join("");
+}
+
+function updateRealtimeMetrics(confidence = 0) {
+  if (el.metricLatency) el.metricLatency.textContent = `${Math.round(22 + Math.random() * 45)} ms`;
+  if (el.metricFlow) el.metricFlow.textContent = confidence >= 70 ? "Comprador" : confidence <= 40 ? "Vendedor" : "Neutro";
+  if (el.metricRisk) el.metricRisk.textContent = confidence >= 82 ? "Baixo" : confidence >= 60 ? "Moderado" : "Alerta";
+  if (el.metricAi) el.metricAi.textContent = `${Math.max(0, Math.min(99, Math.round(confidence || 0)))}%`;
 }
 
 function startAIEngine() {
@@ -825,6 +853,8 @@ async function bootPanel() {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
+  renderOperationalHeatmap();
+  updateRealtimeMetrics(0);
   await Promise.allSettled([loadHistory(), loadStats()]);
 }
 
