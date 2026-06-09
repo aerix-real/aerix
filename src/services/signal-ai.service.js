@@ -108,7 +108,10 @@ function applyLossPenalty(signal = {}, history = []) {
 
   if (recentLosses >= 3) {
     const currentScore = Number(signal.finalScore || signal.confidence || signal.score || 0);
+    const mode = String(signal.mode || signal.tradingMode || "balanced").toLowerCase();
+    const severeMinimum = mode === "aggressive" || mode === "agressivo" ? 58 : mode === "conservative" || mode === "conservador" ? 72 : 64;
     const adjustedScore = clamp(currentScore - 8);
+    const severeBlock = recentLosses >= 5 || adjustedScore < severeMinimum;
 
     return {
       ...signal,
@@ -116,18 +119,20 @@ function applyLossPenalty(signal = {}, history = []) {
       final_score: adjustedScore,
       adjustedScore,
       adjusted_score: adjustedScore,
-      blocked: adjustedScore < 72,
+      blocked: severeBlock ? true : signal.blocked,
       blockReason:
-        adjustedScore < 72
-          ? "Sequência recente de losses detectada pela IA"
+        severeBlock
+          ? "Sequência severa de losses detectada pela IA"
           : signal.blockReason || signal.block_reason || null,
       block_reason:
-        adjustedScore < 72
-          ? "Sequência recente de losses detectada pela IA"
+        severeBlock
+          ? "Sequência severa de losses detectada pela IA"
           : signal.blockReason || signal.block_reason || null,
       adaptiveReasons: [
         ...(signal.adaptiveReasons || []),
-        "IA aplicou penalidade por sequência recente de losses"
+        severeBlock
+          ? "Anti Loss bloqueou padrão severo de losses"
+          : "Anti Loss aplicou penalidade por padrão moderado de losses"
       ]
     };
   }

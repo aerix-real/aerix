@@ -138,27 +138,45 @@ class EngineRunnerService {
     }
 
     if (!this.isSniperMoment()) {
-      const blockedSignal = {
+      const penalty = signal.mode === "aggressive" ? 6 : signal.mode === "balanced" ? 8 : 10;
+      const adjustedScore = Math.max(0, score - penalty);
+      const timingSignal = {
         ...signal,
-        blocked: true,
-        signal: "WAIT",
-        direction: "WAIT",
+        finalScore: adjustedScore,
+        final_score: adjustedScore,
+        adjustedScore,
+        adjusted_score: adjustedScore,
         timing: "AGUARDANDO VIRADA DA VELA",
-        timing_mode: "SNIPER_WAIT",
-        timing_confidence: 60,
-        blockReason: signal.blockReason || "Fora da janela sniper de entrada",
-        block_reason: signal.blockReason || "Fora da janela sniper de entrada",
-        blocks: [
-          ...(signal.blocks || []),
-          "Fora da janela sniper de entrada"
+        timing_mode: "SNIPER_WAIT_SCORE_PENALTY",
+        timing_confidence: Math.max(40, 75 - penalty),
+        reasons: [
+          ...(signal.reasons || []),
+          `Fora da janela sniper: score reduzido em ${penalty} pontos.`
         ]
       };
 
-      return this.appendFilterBlock(
-        blockedSignal,
-        "sniper_block",
-        "Fora da janela sniper de entrada"
-      );
+      if (adjustedScore < Math.max(58, sniperThreshold - 24)) {
+        const blockedSignal = {
+          ...timingSignal,
+          blocked: true,
+          signal: "WAIT",
+          direction: "WAIT",
+          blockReason: signal.blockReason || "Cenário sniper extremamente ruim fora da janela de entrada",
+          block_reason: signal.blockReason || "Cenário sniper extremamente ruim fora da janela de entrada",
+          blocks: [
+            ...(signal.blocks || []),
+            "Cenário sniper extremamente ruim fora da janela de entrada"
+          ]
+        };
+
+        return this.appendFilterBlock(
+          blockedSignal,
+          "sniper_block",
+          "Cenário sniper extremamente ruim fora da janela de entrada"
+        );
+      }
+
+      return timingSignal;
     }
 
     return {
@@ -238,23 +256,31 @@ class EngineRunnerService {
   }
 
   applyPredictiveDecisionToSignal(signal, predictiveDecision) {
+    const scoreAdjustment = Number(predictiveDecision.scoreAdjustment || 0);
+    const finalScore = Math.max(0, Math.min(100, Number(signal.finalScore || 0) + scoreAdjustment));
+
     return {
       ...signal,
+      finalScore,
+      final_score: finalScore,
       predictiveAi: predictiveDecision,
       predictive_ai: predictiveDecision,
       preSignalScore: predictiveDecision.preScore || 0,
       pre_signal_score: predictiveDecision.preScore || 0,
+      preSignalScoreAdjustment: scoreAdjustment,
+      pre_signal_score_adjustment: scoreAdjustment,
       reasons: [
         ...(signal.reasons || []),
-        ...(predictiveDecision.reasons || [])
+        ...(predictiveDecision.reasons || []),
+        ...(predictiveDecision.moderateRisks || []).map((risk) => `Predictive AI penalizou score: ${risk}`)
       ],
-      blocks: [
-        ...(signal.blocks || []),
-        ...(predictiveDecision.risks || [])
-      ],
+      blocks: predictiveDecision.blocked
+        ? [...(signal.blocks || []), ...(predictiveDecision.severeRisks || predictiveDecision.risks || [])]
+        : [...(signal.blocks || [])],
       adaptiveReasons: [
         ...(signal.adaptiveReasons || []),
-        `Pre-score IA: ${predictiveDecision.preScore || 0}%`
+        `Pre-score IA: ${predictiveDecision.preScore || 0}%`,
+        `Ajuste Predictive AI: ${scoreAdjustment}`
       ],
       explanation: signal.explanation
         ? `${signal.explanation} ${predictiveDecision.explanation || ""}`.trim()
@@ -479,7 +505,7 @@ class EngineRunnerService {
       reasons: baseSignal.reasons,
       modeConfig: {
         label: mode,
-        minimumConfidence: mode === "conservative" ? 78 : mode === "aggressive" ? 66 : 72
+        minimumConfidence: mode === "conservative" ? 78 : mode === "aggressive" ? 61 : 68
       }
     });
 
@@ -532,11 +558,14 @@ class EngineRunnerService {
       (signal.mode === "conservative"
         ? 78
         : signal.mode === "aggressive"
-          ? 66
-          : 72)
+          ? 61
+          : 68)
     );
 
-    if (signal.finalScore < minimumScore) {
+    const tolerance = signal.mode === "aggressive" ? 8 : signal.mode === "balanced" ? 4 : 0;
+    const scoreGap = minimumScore - signal.finalScore;
+
+    if (scoreGap > tolerance) {
       signal.blocked = true;
       signal.blockReason =
         signal.blockReason || "Score abaixo do mínimo institucional após auto tuning";
@@ -552,6 +581,12 @@ class EngineRunnerService {
           finalScore: signal.finalScore
         }
       );
+    } else if (scoreGap > 0) {
+      signal.reasons = [
+        ...(signal.reasons || []),
+        `Score abaixo do mínimo aprendido tratado como penalidade em ${signal.mode} (${signal.finalScore.toFixed(1)} < ${minimumScore}).`
+      ];
+      signal.dynamicThresholdPenalty = true;
     }
 
     return signal;
@@ -747,6 +782,21 @@ class EngineRunnerService {
     const confirmedThisCycle = filterConfirmedOperationalSignals(cycleResults);
     const blockedAnalyses = cycleResults.filter((item) => !isConfirmedOperationalSignal(item));
 
+    const approvalRate = cycleResults.length
+      ? Number(((confirmedThisCycle.length / cycleResults.length) * 100).toFixed(2))
+      : 0;
+    const blockedRate = cycleResults.length
+      ? Number(((blockedAnalyses.length / cycleResults.length) * 100).toFixed(2))
+      : 0;
+    const shadowApprovedBlocks = blockedAnalyses.filter((item) => {
+      const mode = item.mode === "aggressive" ? "aggressive" : item.mode === "conservative" ? "conservative" : "balanced";
+      const minimum = mode === "conservative" ? 88 : mode === "aggressive" ? 64 : 72;
+      return Number(item.finalScore || item.adjustedScore || item.confidence || 0) >= minimum;
+    }).length;
+    const filterEfficiency = blockedAnalyses.length
+      ? Number((((blockedAnalyses.length - shadowApprovedBlocks) / blockedAnalyses.length) * 100).toFixed(2))
+      : 0;
+
     emitToAll("engine:update", {
       ok: true,
       data: {
@@ -766,9 +816,13 @@ class EngineRunnerService {
           analyzedSignals: cycleResults.length,
           blockedSignals: blockedAnalyses.length,
           confirmedSignals: confirmedThisCycle.length,
-          approvalRate: cycleResults.length
-            ? Number(((confirmedThisCycle.length / cycleResults.length) * 100).toFixed(2))
-            : 0
+          approvalRate,
+          blockedRate,
+          filterEfficiency,
+          shadowMode: {
+            wouldApproveBlockedSignals: shadowApprovedBlocks,
+            blockedSignals: blockedAnalyses.length
+          }
         },
         analytics: {
           historyStats: this.historyStats

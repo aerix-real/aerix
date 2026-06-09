@@ -31,15 +31,15 @@ function getBaseThresholds(mode = "balanced") {
       adaptiveAdjustment: 0
     },
     balanced: {
-      minimumScore: 72,
-      confidence: 72,
-      sniperTiming: 88,
+      minimumScore: 68,
+      confidence: 68,
+      sniperTiming: 86,
       adaptiveAdjustment: 0
     },
     aggressive: {
-      minimumScore: 66,
-      confidence: 66,
-      sniperTiming: 84,
+      minimumScore: 61,
+      confidence: 61,
+      sniperTiming: 82,
       adaptiveAdjustment: 0
     }
   };

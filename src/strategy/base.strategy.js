@@ -28,23 +28,35 @@ function getModeProfile(mode = "balanced") {
         forbidLowVolatility: true,
         forbidNearResistanceCall: true,
         forbidNearSupportPut: true
+      },
+      penalties: {
+        counterTrend: 8,
+        lowVolatility: 8,
+        nearBarrier: 8,
+        weakTrend: 8
       }
     },
     balanced: {
-      minConfidence: 72,
+      minConfidence: 68,
       trendWeight: 1.0,
       timingWeight: 1.0,
       momentumWeight: 1.0,
       blockers: {
         requireStrongTrend: false,
-        forbidCounterTrend: true,
-        forbidLowVolatility: true,
-        forbidNearResistanceCall: true,
-        forbidNearSupportPut: true
+        forbidCounterTrend: false,
+        forbidLowVolatility: false,
+        forbidNearResistanceCall: false,
+        forbidNearSupportPut: false
+      },
+      penalties: {
+        counterTrend: 7,
+        lowVolatility: 7,
+        nearBarrier: 6,
+        weakTrend: 7
       }
     },
     aggressive: {
-      minConfidence: 64,
+      minConfidence: 60,
       trendWeight: 0.9,
       timingWeight: 1.2,
       momentumWeight: 1.15,
@@ -54,6 +66,12 @@ function getModeProfile(mode = "balanced") {
         forbidLowVolatility: false,
         forbidNearResistanceCall: false,
         forbidNearSupportPut: false
+      },
+      penalties: {
+        counterTrend: 5,
+        lowVolatility: 5,
+        nearBarrier: 4,
+        weakTrend: 5
       }
     }
   };

@@ -5,8 +5,8 @@ const MINIMUM_SCORE_SQL = `
     NULLIF(minimum_score, 0),
     CASE
       WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 70
-      ELSE 78
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
+      ELSE 72
     END
   )
 `;

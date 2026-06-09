@@ -5,8 +5,8 @@ const MINIMUM_SCORE_SQL = `
     NULLIF(minimum_score, 0),
     CASE
       WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 70
-      ELSE 78
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
+      ELSE 72
     END
   )
 `;
@@ -250,7 +250,15 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
         COUNT(DISTINCT filter_name)::int AS total_filters,
         COUNT(DISTINCT symbol)::int AS total_assets,
         COALESCE(AVG(final_score), 0)::numeric(10,2) AS avg_final_score,
-        MAX(event_timestamp) AS last_block_at
+        MAX(event_timestamp) AS last_block_at,
+        COUNT(*) FILTER (
+          WHERE COALESCE(final_score, 0) >=
+            CASE
+              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
+              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
+              ELSE 72
+            END
+        )::int AS shadow_approved_blocks
       FROM public.filter_block_events
     `),
     db.query(
@@ -325,6 +333,13 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
   const approvalRate = totalSignals
     ? Number(((approvedSignals / totalSignals) * 100).toFixed(2))
     : 0;
+  const blockedRate = totalSignals
+    ? Number(((blockedSignals / totalSignals) * 100).toFixed(2))
+    : 0;
+  const shadowApprovedBlocks = Number(blockSummaryResult.rows[0]?.shadow_approved_blocks || 0);
+  const filterEfficiency = blockedSignals
+    ? Number((((blockedSignals - shadowApprovedBlocks) / blockedSignals) * 100).toFixed(2))
+    : 0;
 
   return {
     totalSignals,
@@ -334,6 +349,14 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
     blockedSignals,
     blockedAnalyses: blockedSignals,
     approvalRate,
+    blockedRate,
+    filterEfficiency,
+    shadowMode: {
+      wouldApproveBlockedSignals: shadowApprovedBlocks,
+      blockedSignals,
+      filterEfficiency,
+      description: "Valida quantos bloqueios ainda ficariam aprovados por score no Shadow Mode."
+    },
     blocksByFilter: filterResult.rows,
     topBlockingFilters: filterResult.rows,
     blocksByAsset: assetResult.rows,
@@ -343,7 +366,10 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
       total_filters: Number(blockSummaryResult.rows[0]?.total_filters || 0),
       total_assets: Number(blockSummaryResult.rows[0]?.total_assets || 0),
       avg_score: Number(blockSummaryResult.rows[0]?.avg_final_score || 0),
-      last_block_at: blockSummaryResult.rows[0]?.last_block_at || null
+      last_block_at: blockSummaryResult.rows[0]?.last_block_at || null,
+      blocked_rate: blockedRate,
+      filter_efficiency: filterEfficiency,
+      shadow_approved_blocks: shadowApprovedBlocks
     },
     ranking: filterResult.rows.map((row) => ({
       filter_name: row.filterName,

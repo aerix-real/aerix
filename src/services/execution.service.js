@@ -52,6 +52,7 @@ class ExecutionService {
     const rawMode =
       signal.tradingMode ||
       signal.operationMode ||
+      signal.mode ||
       process.env.TRADING_MODE ||
       "balanced";
 
@@ -67,9 +68,9 @@ class ExecutionService {
     const mode = this.getMode(signal);
 
     if (mode === "conservative") return 88;
-    if (mode === "aggressive") return 70;
+    if (mode === "aggressive") return 64;
 
-    return 78;
+    return 72;
   }
 
   normalizeResultList(list) {
@@ -530,7 +531,9 @@ class ExecutionService {
       };
     }
 
-    if (lossPenalty <= -20 || adaptiveScoreAdjustment <= -20) {
+    const severeLossLimit = mode === "aggressive" ? -26 : mode === "balanced" ? -24 : -20;
+
+    if (lossPenalty <= severeLossLimit || adaptiveScoreAdjustment <= severeLossLimit) {
       return {
         allowed: false,
         reason: "IA bloqueou por baixa performance histórica",
@@ -545,7 +548,9 @@ class ExecutionService {
       };
     }
 
-    if (adjustedScore < minimumScore) {
+    const scoreTolerance = mode === "aggressive" ? 7 : mode === "balanced" ? 3 : 0;
+
+    if (adjustedScore < minimumScore - scoreTolerance) {
       return {
         allowed: false,
         reason: `Score ajustado insuficiente (${adjustedScore}/${minimumScore})`,
@@ -562,7 +567,7 @@ class ExecutionService {
 
     const validTiming = ["ENTRAR AGORA", "PREPARAR ENTRADA"];
 
-    if (!validTiming.includes(signal.timing)) {
+    if (!validTiming.includes(signal.timing) && signal.timing_mode !== "SNIPER_WAIT_SCORE_PENALTY") {
       return {
         allowed: false,
         reason: "Fora da janela de entrada",

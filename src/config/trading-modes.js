@@ -13,7 +13,7 @@ const TRADING_MODES = {
   balanced: {
     key: "balanced",
     label: "Equilibrado",
-    minimumConfidence: 76,
+    minimumConfidence: 72,
     confirmationWeight: 1.0,
     trendWeight: 1.0,
     volatilityTolerance: 1.0,
@@ -24,7 +24,7 @@ const TRADING_MODES = {
   aggressive: {
     key: "aggressive",
     label: "Agressivo",
-    minimumConfidence: 68,
+    minimumConfidence: 62,
     confirmationWeight: 0.9,
     trendWeight: 0.9,
     volatilityTolerance: 1.2,
