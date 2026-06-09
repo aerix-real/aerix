@@ -201,6 +201,54 @@ async function ensureUserSettingsTable() {
   `);
 }
 
+async function ensureFilterBlockEventsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.filter_block_events (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      filter_name TEXT NOT NULL,
+      filter_label TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      score NUMERIC DEFAULT 0,
+      reason TEXT NOT NULL,
+      signal TEXT DEFAULT 'WAIT',
+      mode TEXT,
+      market_regime TEXT,
+      strategy_name TEXT,
+      source TEXT NOT NULL DEFAULT 'engine',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await ensureColumn("filter_block_events", "user_id", "INTEGER");
+  await ensureColumn("filter_block_events", "filter_name", "TEXT NOT NULL DEFAULT 'institutional_quality_filter'");
+  await ensureColumn("filter_block_events", "filter_label", "TEXT NOT NULL DEFAULT 'Filtro de qualidade institucional'");
+  await ensureColumn("filter_block_events", "symbol", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
+  await ensureColumn("filter_block_events", "score", "NUMERIC DEFAULT 0");
+  await ensureColumn("filter_block_events", "reason", "TEXT NOT NULL DEFAULT 'Bloqueio institucional sem motivo detalhado.'");
+  await ensureColumn("filter_block_events", "signal", "TEXT DEFAULT 'WAIT'");
+  await ensureColumn("filter_block_events", "mode", "TEXT");
+  await ensureColumn("filter_block_events", "market_regime", "TEXT");
+  await ensureColumn("filter_block_events", "strategy_name", "TEXT");
+  await ensureColumn("filter_block_events", "source", "TEXT NOT NULL DEFAULT 'engine'");
+  await ensureColumn("filter_block_events", "created_at", "TIMESTAMP NOT NULL DEFAULT NOW()");
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_filter_name
+      ON public.filter_block_events(filter_name);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_symbol
+      ON public.filter_block_events(symbol);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_created_at
+      ON public.filter_block_events(created_at DESC);
+  `);
+}
+
 async function logSignalHistoryColumns() {
   const cols = await db.query(`
     SELECT column_name
@@ -226,6 +274,7 @@ async function bootstrapDatabase() {
   await ensureSignalHistoryTable();
   await ensureBillingTable();
   await ensureAuditLogsTable();
+  await ensureFilterBlockEventsTable();
 
   console.log("✅ Banco pronto para IA institucional");
   await logSignalHistoryColumns();
