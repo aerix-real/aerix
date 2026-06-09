@@ -149,11 +149,18 @@ class EngineRunnerService {
         timing: "AGUARDANDO VIRADA DA VELA",
         timing_mode: "SNIPER_WAIT_SCORE_PENALTY",
         timing_confidence: Math.max(40, 75 - penalty),
-        reasons: [
-          ...(signal.reasons || []),
-          `Fora da janela sniper: score reduzido em ${penalty} pontos.`
-        ]
+        reasons: [...(signal.reasons || [])]
       };
+
+      this.appendFilterPenalty(
+        timingSignal,
+        "sniper_timing_penalty",
+        `Fora da janela sniper: score reduzido em ${penalty} pontos.`,
+        {
+          originalScore: score,
+          adjustedScore
+        }
+      );
 
       if (adjustedScore < Math.max(58, sniperThreshold - 24)) {
         const blockedSignal = {
@@ -187,17 +194,57 @@ class EngineRunnerService {
     };
   }
 
-  appendFilterBlock(signal, filterName, reason, extra = {}) {
-    const blockReason = reason || signal.blockReason || signal.block_reason || "Bloqueio institucional sem motivo detalhado.";
+  appendFilterEfficiencyEvent(signal, filterName, action, reason, extra = {}) {
+    const originalScore = Number(
+      extra.originalScore ??
+      extra.score ??
+      signal.originalScore ??
+      signal.score ??
+      signal.confidence ??
+      signal.finalScore ??
+      signal.final_score ??
+      0
+    );
+    const adjustedScore = Number(
+      extra.adjustedScore ??
+      extra.finalScore ??
+      signal.adjustedScore ??
+      signal.adjusted_score ??
+      signal.finalScore ??
+      signal.final_score ??
+      originalScore
+    );
     const event = {
       filterName,
-      reason: blockReason,
+      action,
+      reason: reason || "Evento interno de eficiência de filtro sem motivo detalhado.",
       symbol: signal.symbol || signal.asset,
-      score: Number(extra.score ?? signal.score ?? signal.confidence ?? 0),
-      finalScore: Number(extra.finalScore ?? signal.finalScore ?? signal.final_score ?? signal.adjustedScore ?? 0),
+      mode: extra.mode || signal.mode || "balanced",
+      originalScore,
+      adjustedScore,
+      score: originalScore,
+      finalScore: adjustedScore,
       strategyName: signal.strategyName || signal.strategy_name || signal.strategy,
       timestamp: new Date().toISOString()
     };
+
+    signal.filterEfficiencyEvents = [...(signal.filterEfficiencyEvents || []), event];
+    return event;
+  }
+
+  appendFilterPenalty(signal, filterName, reason, extra = {}) {
+    this.appendFilterEfficiencyEvent(signal, filterName, "penalty", reason, extra);
+
+    if (reason) {
+      signal.reasons = [...(signal.reasons || []), reason];
+    }
+
+    return signal;
+  }
+
+  appendFilterBlock(signal, filterName, reason, extra = {}) {
+    const blockReason = reason || signal.blockReason || signal.block_reason || "Bloqueio institucional sem motivo detalhado.";
+    const event = this.appendFilterEfficiencyEvent(signal, filterName, "block", blockReason, extra);
 
     signal.filterBlocks = [...(signal.filterBlocks || []), event];
 
@@ -241,10 +288,14 @@ class EngineRunnerService {
       filterBlocks: [
         {
           filterName: "predictive_ai_block",
+          action: "block",
           reason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
           score: predictiveDecision.preScore || 0,
+          originalScore: predictiveDecision.preScore || 0,
           finalScore: predictiveDecision.preScore || 0,
-          strategyName: "predictive_ai_gate"
+          adjustedScore: predictiveDecision.preScore || 0,
+          strategyName: "predictive_ai_gate",
+          timestamp: new Date().toISOString()
         }
       ],
       predictiveAi: predictiveDecision,
@@ -257,9 +308,9 @@ class EngineRunnerService {
 
   applyPredictiveDecisionToSignal(signal, predictiveDecision) {
     const scoreAdjustment = Number(predictiveDecision.scoreAdjustment || 0);
-    const finalScore = Math.max(0, Math.min(100, Number(signal.finalScore || 0) + scoreAdjustment));
-
-    return {
+    const originalScore = Number(signal.finalScore || 0);
+    const finalScore = Math.max(0, Math.min(100, originalScore + scoreAdjustment));
+    const adjustedSignal = {
       ...signal,
       finalScore,
       final_score: finalScore,
@@ -286,6 +337,20 @@ class EngineRunnerService {
         ? `${signal.explanation} ${predictiveDecision.explanation || ""}`.trim()
         : predictiveDecision.explanation || signal.explanation
     };
+
+    if (scoreAdjustment < 0) {
+      this.appendFilterPenalty(
+        adjustedSignal,
+        "predictive_ai_penalty",
+        predictiveDecision.explanation || "IA preditiva reduziu o score antes da validação operacional.",
+        {
+          originalScore,
+          adjustedScore: finalScore
+        }
+      );
+    }
+
+    return adjustedSignal;
   }
 
   async runCycle() {
@@ -329,7 +394,7 @@ class EngineRunnerService {
 
             cycleResults.push(blockedSignal);
             this.emitBlocked(blockedSignal);
-            await this.recordFilterAnalytics(blockedSignal, "predictive_ai");
+            await this.recordFilterEfficiency(blockedSignal, "predictive_ai");
 
             await this.auditDecision("predictive_ai_pre_block", blockedSignal);
             continue;
@@ -357,9 +422,10 @@ class EngineRunnerService {
 
           cycleResults.push(signal);
 
+          await this.recordFilterEfficiency(signal, "engine");
+
           if (signal.blocked || signal.signal === "WAIT") {
             this.emitBlocked(signal);
-            await this.recordFilterAnalytics(signal, "engine");
             await this.auditDecision("signal_blocked", signal);
             continue;
           }
@@ -513,8 +579,9 @@ class EngineRunnerService {
   }
 
   async applyAdaptiveLayers(signal) {
+    const adaptiveOriginalScore = Number(signal.finalScore || signal.confidence || 0);
     const adaptive = await adaptiveService.applyAdaptiveScore(
-      signal.finalScore || signal.confidence,
+      adaptiveOriginalScore,
       signal
     );
 
@@ -529,6 +596,18 @@ class EngineRunnerService {
     signal.thresholdPerformance = signal.dynamicThresholds?.thresholdPerformance || null;
     signal.learningProfile = adaptive.learningProfile || null;
 
+    if (signal.finalScore < adaptiveOriginalScore) {
+      this.appendFilterPenalty(
+        signal,
+        "adaptive_penalty",
+        "IA adaptativa reduziu o score conforme histórico e contexto operacional.",
+        {
+          originalScore: adaptiveOriginalScore,
+          adjustedScore: signal.finalScore
+        }
+      );
+    }
+
     const hardBlock = await adaptiveService.shouldHardBlock(signal);
 
     if (hardBlock?.blocked) {
@@ -538,6 +617,7 @@ class EngineRunnerService {
       this.appendFilterBlock(signal, "adaptive_block", signal.blockReason);
     }
 
+    const tuningOriginalScore = Number(signal.finalScore || 0);
     const tuning = await autoTuningService.applyAutoTuning(signal);
 
     signal.finalScore = Number(tuning.tunedScore || signal.finalScore || 0);
@@ -550,6 +630,18 @@ class EngineRunnerService {
     signal.thresholdHistory = signal.dynamicThresholds?.thresholdHistory || signal.thresholdHistory || null;
     signal.thresholdChanges = signal.dynamicThresholds?.thresholdChanges || signal.thresholdChanges || [];
     signal.thresholdPerformance = signal.dynamicThresholds?.thresholdPerformance || signal.thresholdPerformance || null;
+
+    if (signal.finalScore < tuningOriginalScore) {
+      this.appendFilterPenalty(
+        signal,
+        "auto_tuning_penalty",
+        "Auto tuning reduziu o score para preservar assertividade institucional.",
+        {
+          originalScore: tuningOriginalScore,
+          adjustedScore: signal.finalScore
+        }
+      );
+    }
 
     signal.timing = this.buildTiming(signal);
 
@@ -582,10 +674,15 @@ class EngineRunnerService {
         }
       );
     } else if (scoreGap > 0) {
-      signal.reasons = [
-        ...(signal.reasons || []),
-        `Score abaixo do mínimo aprendido tratado como penalidade em ${signal.mode} (${signal.finalScore.toFixed(1)} < ${minimumScore}).`
-      ];
+      this.appendFilterPenalty(
+        signal,
+        "dynamic_threshold_penalty",
+        `Score abaixo do mínimo aprendido tratado como penalidade em ${signal.mode} (${signal.finalScore.toFixed(1)} < ${minimumScore}).`,
+        {
+          originalScore: signal.finalScore,
+          adjustedScore: signal.finalScore
+        }
+      );
       signal.dynamicThresholdPenalty = true;
     }
 
@@ -604,6 +701,18 @@ class EngineRunnerService {
     signal.adjusted_score = signal.adjustedScore;
     signal.aiAdjustments = validation.aiAdjustments || signal.aiAdjustments || null;
     signal.aiBlock = validation.aiBlock || signal.aiBlock || null;
+
+    if (Number(signal.adjustedScore) < Number(signal.finalScore)) {
+      this.appendFilterPenalty(
+        signal,
+        "execution_penalty",
+        validation.reason || "Validação operacional reduziu o score ajustado do sinal.",
+        {
+          originalScore: signal.finalScore,
+          adjustedScore: signal.adjustedScore
+        }
+      );
+    }
 
     if (!validation.allowed) {
       signal.blocked = true;
@@ -724,11 +833,11 @@ class EngineRunnerService {
     };
   }
 
-  async recordFilterAnalytics(signal, source = "engine") {
+  async recordFilterEfficiency(signal, source = "engine") {
     try {
-      await filterAnalyticsService.recordBlockedSignal(signal, source);
+      await filterAnalyticsService.recordFilterEfficiency(signal, source);
     } catch (error) {
-      console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
+      console.error("Erro ao registrar eficiência de filtros:", error.message || error);
     }
   }
 

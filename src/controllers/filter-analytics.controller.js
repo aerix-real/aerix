@@ -16,6 +16,23 @@ async function getFilterAnalytics(req, res) {
   }
 }
 
+async function getFilterEfficiency(req, res) {
+  try {
+    const data = await filterAnalyticsService.getFilterEfficiency({
+      limit: req.query.limit,
+      rankingLimit: req.query.rankingLimit
+    });
+
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      message: error.message || "Erro ao carregar métricas de eficiência dos filtros."
+    });
+  }
+}
+
 module.exports = {
-  getFilterAnalytics
+  getFilterAnalytics,
+  getFilterEfficiency
 };

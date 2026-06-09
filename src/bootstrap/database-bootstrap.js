@@ -238,9 +238,12 @@ async function ensureFilterBlockEventsTable() {
       user_id INTEGER,
       filter_name TEXT NOT NULL,
       filter_label TEXT NOT NULL,
+      action TEXT NOT NULL DEFAULT 'block',
       symbol TEXT NOT NULL,
       score NUMERIC DEFAULT 0,
       final_score NUMERIC DEFAULT 0,
+      original_score NUMERIC DEFAULT 0,
+      adjusted_score NUMERIC DEFAULT 0,
       reason TEXT NOT NULL,
       signal TEXT DEFAULT 'WAIT',
       mode TEXT,
@@ -255,9 +258,12 @@ async function ensureFilterBlockEventsTable() {
   await ensureColumn("filter_block_events", "user_id", "INTEGER");
   await ensureColumn("filter_block_events", "filter_name", "TEXT NOT NULL DEFAULT 'institutional_quality_filter'");
   await ensureColumn("filter_block_events", "filter_label", "TEXT NOT NULL DEFAULT 'Filtro de qualidade institucional'");
+  await ensureColumn("filter_block_events", "action", "TEXT NOT NULL DEFAULT 'block'");
   await ensureColumn("filter_block_events", "symbol", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
   await ensureColumn("filter_block_events", "score", "NUMERIC DEFAULT 0");
   await ensureColumn("filter_block_events", "final_score", "NUMERIC DEFAULT 0");
+  await ensureColumn("filter_block_events", "original_score", "NUMERIC DEFAULT 0");
+  await ensureColumn("filter_block_events", "adjusted_score", "NUMERIC DEFAULT 0");
   await ensureColumn("filter_block_events", "reason", "TEXT NOT NULL DEFAULT 'Bloqueio institucional sem motivo detalhado.'");
   await ensureColumn("filter_block_events", "signal", "TEXT DEFAULT 'WAIT'");
   await ensureColumn("filter_block_events", "mode", "TEXT");
@@ -273,6 +279,11 @@ async function ensureFilterBlockEventsTable() {
   `);
 
   await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_action
+      ON public.filter_block_events(action);
+  `);
+
+  await db.query(`
     CREATE INDEX IF NOT EXISTS idx_filter_block_events_symbol
       ON public.filter_block_events(symbol);
   `);
@@ -285,6 +296,17 @@ async function ensureFilterBlockEventsTable() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_filter_block_events_event_timestamp
       ON public.filter_block_events(event_timestamp DESC);
+  `);
+
+  await db.query(`
+    UPDATE public.filter_block_events
+    SET
+      original_score = COALESCE(NULLIF(original_score, 0), score, final_score, 0),
+      adjusted_score = COALESCE(NULLIF(adjusted_score, 0), final_score, score, 0)
+    WHERE original_score IS NULL
+       OR adjusted_score IS NULL
+       OR original_score = 0
+       OR adjusted_score = 0;
   `);
 }
 
