@@ -1,34 +1,47 @@
 const express = require("express");
-const authMiddleware = require("../middlewares/auth.middleware");
+const cors = require("cors");
+const path = require("path");
 
-const router = express.Router();
+const apiRoutes = require("./routes");
+const productionRoutes = require("./routes/production.routes");
+const billingController = require("./controllers/billing.controller");
 
-router.get("/dashboard", authMiddleware, async (req, res) => {
-  const user = req.user || {};
-  const role = String(user.role || "").toLowerCase();
+function createApp() {
+  const app = express();
 
-  const premium =
-    role === "admin" ||
-    String(user.plan || "").toLowerCase() === "premium";
+  app.post(
+    "/api/billing/webhook",
+    express.raw({ type: "application/json" }),
+    billingController.handleWebhook
+  );
 
-  if (!premium) {
-    return res.status(403).json({
-      ok: false,
-      message: "Acesso premium não liberado para esta conta."
+  app.use(cors({
+    origin: process.env.CORS_ORIGIN || "*"
+  }));
+
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  app.use(express.static(path.join(__dirname, "../public")));
+
+  app.use("/api", productionRoutes);
+
+  app.get("/api/health", (req, res) => {
+    return res.json({
+      ok: true,
+      service: "AERIX",
+      status: "online",
+      timestamp: new Date().toISOString()
     });
-  }
-
-  return res.status(200).json({
-    ok: true,
-    data: {
-      premium: true,
-      features: {
-        advancedRanking: true,
-        premiumSignals: true,
-        premiumIntelligence: true
-      }
-    }
   });
-});
 
-module.exports = router;
+  app.use("/api", apiRoutes);
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../public/index.html"));
+  });
+
+  return app;
+}
+
+module.exports = createApp;
