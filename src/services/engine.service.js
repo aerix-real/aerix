@@ -6,6 +6,7 @@ const { analyzeIndicators } = require("./indicator-engine.service");
 const { runStrategies } = require("../strategy/strategy-runner.service");
 const adaptiveService = require("./adaptive.service");
 const predictiveAiService = require("./predictive-ai.service");
+const filterAnalyticsService = require("./filter-analytics.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -394,6 +395,27 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão crítico de perda."] : [])
   ]);
 
+  const filterBlocks = [
+    ...(preCheckBlocked
+      ? [{
+          filterName: "predictive_ai_block",
+          reason: preCheckMetrics.explanation || preCheckMetrics.risks[0] || "IA preditiva bloqueou antes do sinal.",
+          score: preCheckMetrics.preScore,
+          finalScore: preCheckMetrics.preScore,
+          strategyName: strategyResult.strategyName || "predictive_ai_gate"
+        }]
+      : []),
+    ...(antiLoss.blocked || criticalLossDetected
+      ? [{
+          filterName: "adaptive_block",
+          reason: antiLoss.reason || "Anti-loss forçou WAIT por padrão crítico de perda.",
+          score: strategyResult.confidence,
+          finalScore: adaptive.finalScore,
+          strategyName: strategyResult.strategyName
+        }]
+      : [])
+  ];
+
   antiLoss.forcedWait = forceWait && criticalLossDetected;
 
   const explanation =
@@ -417,6 +439,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     direction: finalSignal,
     finalScore: forceWait ? Math.min(Number(adaptive.finalScore || 0), preCheckMetrics.preScore) : adaptive.finalScore,
     blocks: finalBlocks,
+    filterBlocks,
     blocked: forceWait,
     blockReason: forceWait ? finalBlocks.join(" ") : null,
     adaptiveAdjustment: Number(adaptive.adaptiveAdjustment || 0),
@@ -444,6 +467,21 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     snapshot,
     strategyMode
   );
+
+  if (finalResult.blocked) {
+    try {
+      await filterAnalyticsService.recordBlockedSignal({
+        ...finalResult,
+        symbol,
+        asset: symbol,
+        userId,
+        mode: strategyMode,
+        timestamp: snapshot?.timestamp || new Date().toISOString()
+      }, "engine_api");
+    } catch (error) {
+      console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
+    }
+  }
 
   return {
     symbol,

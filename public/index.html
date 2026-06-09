@@ -222,17 +222,25 @@
         </section>
 
         <section class="panel filter-analytics-panel premium-card" data-premium-only="true">
-          <div class="panel-header"><h3>Análise de Bloqueios</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
+          <div class="panel-header"><h3>FILTER ANALYTICS</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
           <div class="filter-summary-grid">
-            <div class="stat-card"><span>Bloqueios</span><strong id="filterTotalBlocks">0</strong></div>
-            <div class="stat-card"><span>Filtros</span><strong id="filterTotalFilters">0</strong></div>
-            <div class="stat-card"><span>Ativos</span><strong id="filterTotalAssets">0</strong></div>
-            <div class="stat-card"><span>Score médio</span><strong id="filterAvgScore">0</strong></div>
+            <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
+            <div class="stat-card"><span>Sinais totais</span><strong id="filterTotalSignals">0</strong></div>
+            <div class="stat-card"><span>Aprovados</span><strong id="filterApprovedSignals">0</strong></div>
+            <div class="stat-card"><span>Bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
           </div>
           <div class="filter-analytics-grid">
             <div class="institutional-subpanel">
-              <div class="subpanel-title"><strong>Top filtros que bloqueiam</strong><span>ranking</span></div>
+              <div class="subpanel-title"><strong>Top filtros bloqueadores</strong><span>ranking</span></div>
               <div class="filter-ranking-list" id="filterRankingList"><div class="history-empty">Nenhum bloqueio registrado</div></div>
+            </div>
+            <div class="institutional-subpanel">
+              <div class="subpanel-title"><strong>Ativos mais bloqueados</strong><span>assets</span></div>
+              <div class="filter-ranking-list" id="filterAssetList"><div class="history-empty">Nenhum ativo bloqueado</div></div>
+            </div>
+            <div class="institutional-subpanel">
+              <div class="subpanel-title"><strong>Horários mais bloqueados</strong><span>UTC</span></div>
+              <div class="filter-ranking-list" id="filterHourList"><div class="history-empty">Nenhum horário mapeado</div></div>
             </div>
             <div class="institutional-subpanel">
               <div class="subpanel-title"><strong>Últimos bloqueios</strong><span>auditoria</span></div>
