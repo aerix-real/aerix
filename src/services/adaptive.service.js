@@ -139,19 +139,55 @@ class AdaptiveService {
     const symbol = item.symbol || item.asset || "unknown";
     const signal = item.signal || item.direction || "WAIT";
     const strategyName = item.strategyName || item.strategy_name || item.strategy || "unknown";
+    const mode = item.mode === "conservative" || item.mode === "aggressive" ? item.mode : "balanced";
 
     const profile = await this.getLearningProfile(symbol, signal, strategyName, item);
     const reasons = [];
+    const thresholds = {
+      conservative: {
+        lossPatternTotal: 6,
+        lossPatternRate: 80,
+        symbolSignalTotal: 8,
+        symbolSignalRate: 75,
+        hourTotal: 8,
+        hourRate: 75
+      },
+      balanced: {
+        lossPatternTotal: 7,
+        lossPatternRate: 86,
+        symbolSignalTotal: 10,
+        symbolSignalRate: 82,
+        hourTotal: 10,
+        hourRate: 82
+      },
+      aggressive: {
+        lossPatternTotal: 8,
+        lossPatternRate: 92,
+        symbolSignalTotal: 12,
+        symbolSignalRate: 88,
+        hourTotal: 12,
+        hourRate: 90
+      }
+    }[mode];
 
-    if (profile.lossPattern?.total >= 6 && profile.lossPattern.lossrate >= 80) {
-      reasons.push("Padrão crítico de loss detectado pela IA.");
+    if (
+      profile.lossPattern?.total >= thresholds.lossPatternTotal &&
+      profile.lossPattern.lossrate >= thresholds.lossPatternRate
+    ) {
+      reasons.push("Padrão severo de loss detectado pela IA.");
     }
 
-    if (profile.symbolSignalStats?.total >= 8 && profile.symbolSignalStats.lossrate >= 75) {
-      reasons.push("Ativo e direção com histórico altamente desfavorável.");
+    if (
+      profile.symbolSignalStats?.total >= thresholds.symbolSignalTotal &&
+      profile.symbolSignalStats.lossrate >= thresholds.symbolSignalRate
+    ) {
+      reasons.push("Ativo e direção com risco extremo historicamente validado.");
     }
 
-    if (profile.hourStats?.total >= 8 && profile.hourStats.lossrate >= 75) {
+    if (
+      profile.hourStats?.total >= thresholds.hourTotal &&
+      profile.hourStats.lossrate >= thresholds.hourRate
+    ) {
       reasons.push("Horário operacional com risco extremo.");
     }
 

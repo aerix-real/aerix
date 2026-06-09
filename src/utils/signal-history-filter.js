@@ -69,9 +69,9 @@ function getMinimumValidatedScore(signal = {}) {
   const mode = String(signal.mode || signal.tradingMode || signal.operationMode || "balanced").toLowerCase();
 
   if (["conservador", "conservative"].includes(mode)) return 88;
-  if (["agressivo", "aggressive"].includes(mode)) return 70;
+  if (["agressivo", "aggressive"].includes(mode)) return 64;
 
-  return 78;
+  return 72;
 }
 
 function isBlockedSignal(signal = {}) {

@@ -18,6 +18,22 @@ function getModeRules(mode = "balanced") {
   const rules = {
     conservative: {
       minScore: 78,
+      targetApprovalRate: "10-20%",
+      penalties: {
+        weakTrend: 8,
+        lowVolatility: 10,
+        weakAlignment: 9,
+        highVolatility: 6,
+        regime: 0
+      },
+      blockers: {
+        lowVolatility: 0.12,
+        veryLowVolatility: 0.12,
+        veryWeakTrend: 0.08,
+        weakAlignment: 1,
+        insufficientCandles: 60,
+        fallbackData: true
+      },
       weights: {
         trend_continuation: 1.18,
         pullback: 1.12,
@@ -27,23 +43,55 @@ function getModeRules(mode = "balanced") {
       }
     },
     balanced: {
-      minScore: 72,
+      minScore: 68,
+      targetApprovalRate: "20-35%",
+      penalties: {
+        weakTrend: 7,
+        lowVolatility: 7,
+        weakAlignment: 6,
+        highVolatility: 4,
+        regime: 0
+      },
+      blockers: {
+        lowVolatility: 0.06,
+        veryLowVolatility: 0.05,
+        veryWeakTrend: 0.045,
+        weakAlignment: 1,
+        insufficientCandles: 45,
+        fallbackData: true
+      },
       weights: {
         trend_continuation: 1.05,
         pullback: 1.02,
-        breakout: 1.0,
-        momentum: 1.0,
-        reversal: 0.9
+        breakout: 1.03,
+        momentum: 1.03,
+        reversal: 0.94
       }
     },
     aggressive: {
-      minScore: 66,
+      minScore: 61,
+      targetApprovalRate: "35-55%",
+      penalties: {
+        weakTrend: 5,
+        lowVolatility: 5,
+        weakAlignment: 4,
+        highVolatility: 3,
+        regime: 0
+      },
+      blockers: {
+        lowVolatility: 0.04,
+        veryLowVolatility: 0.035,
+        veryWeakTrend: 0.03,
+        weakAlignment: 0,
+        insufficientCandles: 30,
+        fallbackData: true
+      },
       weights: {
-        trend_continuation: 0.95,
-        pullback: 0.96,
-        breakout: 1.08,
-        momentum: 1.1,
-        reversal: 1.02
+        trend_continuation: 0.98,
+        pullback: 0.99,
+        breakout: 1.12,
+        momentum: 1.14,
+        reversal: 1.06
       }
     }
   };
@@ -92,29 +140,60 @@ function classifyMarketRegime(snapshot, mtf = buildMtfContext(snapshot)) {
   const volatility = Number(m5.volatilityPercent || 0);
   const h1Strength = Number(h1.strengthPercent || 0);
   const m15Strength = Number(m15.strengthPercent || 0);
+  const m5Strength = Number(m5.strengthPercent || 0);
+  const avgStrength = (h1Strength + m15Strength + m5Strength) / 3;
   const dataQuality = snapshot?.dataQuality || {};
 
   if (snapshot?.isFallback || dataQuality.isFallback) return "FALLBACK_DATA";
-  if (volatility > 0 && volatility < 0.12) return "LOW_VOLATILITY";
+  if (volatility > 0 && volatility < 0.1) return "LOW_VOLATILITY";
   if (volatility >= 0.6) return "HIGH_VOLATILITY";
-  if (mtf.isAligned && (h1Strength >= 0.4 || m15Strength >= 0.25)) return "STRONG_TREND";
-  if (mtf.alignment < 2) return "CHOPPY_MARKET";
+  if (mtf.isAligned && (h1Strength >= 0.35 || m15Strength >= 0.24)) return "TRENDING";
+  if (mtf.alignment >= 2 && volatility >= 0.36 && avgStrength >= 0.22) return "BREAKOUT";
+  if (mtf.alignment === 2 && h1.direction && m5.direction && h1.direction !== m5.direction) return "REVERSAL";
+  if (mtf.alignment < 2 || avgStrength < 0.14) return "RANGING";
 
-  return "NORMAL";
+  return "TRENDING";
+}
+
+function getRegimeThresholdOffset(marketRegime, mode = "balanced") {
+  const normalizedMode = normalizeMode(mode);
+  const offsets = {
+    conservative: {
+      TRENDING: -2,
+      RANGING: 5,
+      BREAKOUT: 2,
+      REVERSAL: 7,
+      HIGH_VOLATILITY: 6,
+      LOW_VOLATILITY: 6,
+      FALLBACK_DATA: 12
+    },
+    balanced: {
+      TRENDING: -3,
+      RANGING: 2,
+      BREAKOUT: -1,
+      REVERSAL: 3,
+      HIGH_VOLATILITY: 3,
+      LOW_VOLATILITY: 4,
+      FALLBACK_DATA: 12
+    },
+    aggressive: {
+      TRENDING: -5,
+      RANGING: 0,
+      BREAKOUT: -4,
+      REVERSAL: -1,
+      HIGH_VOLATILITY: 1,
+      LOW_VOLATILITY: 2,
+      FALLBACK_DATA: 12
+    }
+  };
+
+  return offsets[normalizedMode][marketRegime] ?? 0;
 }
 
 function getDynamicMinScore(modeRules, marketRegime, mode = "balanced") {
-  let dynamicMinScore = Number(modeRules?.minScore || 72);
+  const dynamicMinScore = Number(modeRules?.minScore || 68) + getRegimeThresholdOffset(marketRegime, mode);
 
-  const normalizedMode = normalizeMode(mode);
-
-  if (marketRegime === "STRONG_TREND") dynamicMinScore -= normalizedMode === "aggressive" ? 4 : 2;
-  if (marketRegime === "HIGH_VOLATILITY") dynamicMinScore += normalizedMode === "conservative" ? 6 : 3;
-  if (marketRegime === "LOW_VOLATILITY") dynamicMinScore += normalizedMode === "aggressive" ? 4 : 6;
-  if (marketRegime === "CHOPPY_MARKET") dynamicMinScore += normalizedMode === "aggressive" ? 3 : 5;
-  if (marketRegime === "FALLBACK_DATA") dynamicMinScore += 12;
-
-  return Math.max(60, Math.min(92, Number(dynamicMinScore.toFixed(2))));
+  return Math.max(58, Math.min(92, Number(dynamicMinScore.toFixed(2))));
 }
 
 function applyWeight(result, weight = 1) {
@@ -164,26 +243,68 @@ function safeEvaluateStrategy(strategy, payload) {
   }
 }
 
-// 🔥 NOVO: filtro institucional
-function validateMarketConditions(snapshot, mtf) {
+function validateMarketConditions(snapshot, mtf, mode = "balanced") {
+  const rules = getModeRules(mode);
+  const h1 = snapshot?.timeframes?.h1 || {};
+  const m15 = snapshot?.timeframes?.m15 || {};
   const m5 = snapshot?.timeframes?.m5 || {};
   const volatility = Number(m5.volatilityPercent || 0);
+  const h1Strength = Number(h1.strengthPercent || 0);
+  const m15Strength = Number(m15.strengthPercent || 0);
+  const avgTrendStrength = (h1Strength + m15Strength) / 2;
   const dataQuality = snapshot?.dataQuality || {};
 
-  const isLowVolatility = volatility < 0.12;
+  const isLowVolatility = volatility > 0 && volatility < 0.12;
+  const isVeryLowVolatility = volatility > 0 && volatility < rules.blockers.veryLowVolatility;
+  const isWeakTrend = avgTrendStrength > 0 && avgTrendStrength < 0.14;
+  const isVeryWeakTrend = avgTrendStrength > 0 && avgTrendStrength < rules.blockers.veryWeakTrend;
   const isWeakAlignment = mtf.alignment < 2;
+  const isSevereWeakAlignment = mtf.alignment <= rules.blockers.weakAlignment;
+  const isHighVolatility = volatility >= 0.6;
   const isFallbackData = Boolean(snapshot?.isFallback || dataQuality.isFallback);
+  const minimumCandles = rules.blockers.insufficientCandles;
   const hasInsufficientCandles = ["m5", "m15", "h1"].some((timeframe) => {
     const candles = snapshot?.timeframes?.[timeframe]?.candles || [];
-    return candles.length < 60;
+    return candles.length < minimumCandles;
   });
+
+  const blocks = [
+    isFallbackData ? "Fonte de dados em fallback; entrada operacional bloqueada." : null,
+    hasInsufficientCandles ? "Histórico insuficiente de candles para validação institucional." : null,
+    isVeryLowVolatility ? "Baixa liquidez severa / volatilidade extremamente baixa." : null,
+    isVeryWeakTrend ? "Tendência muito fraca para entrada institucional." : null,
+    isSevereWeakAlignment ? "Inconsistência grave entre timeframes." : null
+  ].filter(Boolean);
+
+  const penalties = [
+    isLowVolatility && !isVeryLowVolatility
+      ? { reason: "Baixa volatilidade convertida em penalidade de score.", value: rules.penalties.lowVolatility }
+      : null,
+    isWeakTrend && !isVeryWeakTrend
+      ? { reason: "Trend strength fraco convertido em penalidade de score.", value: rules.penalties.weakTrend }
+      : null,
+    isWeakAlignment && !isSevereWeakAlignment
+      ? { reason: "Alinhamento moderado entre timeframes convertido em penalidade.", value: rules.penalties.weakAlignment }
+      : null,
+    isHighVolatility
+      ? { reason: "Alta volatilidade aplicada como ajuste conservador de score.", value: rules.penalties.highVolatility }
+      : null
+  ].filter(Boolean);
 
   return {
     isLowVolatility,
+    isVeryLowVolatility,
+    isWeakTrend,
+    isVeryWeakTrend,
     isWeakAlignment,
+    isSevereWeakAlignment,
+    isHighVolatility,
     isFallbackData,
     hasInsufficientCandles,
-    shouldBlock: isLowVolatility || isWeakAlignment || isFallbackData || hasInsufficientCandles
+    penaltyScore: penalties.reduce((total, penalty) => total + penalty.value, 0),
+    penaltyReasons: penalties.map((penalty) => penalty.reason),
+    blocks,
+    shouldBlock: blocks.length > 0
   };
 }
 
@@ -219,44 +340,30 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     .sort((a, b) => b.weightedScore - a.weightedScore);
 
   const best = validStrategies[0] || null;
-  const isBelowDynamicMinScore = Boolean(best) && best.weightedScore < dynamicMinScore;
+  const marketValidation = validateMarketConditions(snapshot, mtf, mode);
 
-  const marketValidation = validateMarketConditions(snapshot, mtf);
-
-  // 🔥 BLOQUEIO INTELIGENTE
-  if (
-    !best ||
-    isBelowDynamicMinScore ||
-    marketValidation.shouldBlock
-  ) {
+  if (!best || marketValidation.shouldBlock) {
     return {
       signal: "WAIT",
       confidence: 0,
       entryQuality: "weak",
       strategyName: null,
       explanation: "Mercado sem qualidade suficiente para entrada.",
-      reasons: [],
-      blocks: [
-        marketValidation.isLowVolatility
-          ? "Baixa volatilidade detectada."
-          : null,
-        marketValidation.isWeakAlignment
-          ? "Falta de alinhamento entre timeframes."
-          : null,
-        marketValidation.isFallbackData
-          ? "Fonte de dados em fallback; entrada operacional bloqueada."
-          : null,
-        marketValidation.hasInsufficientCandles
-          ? "Histórico insuficiente de candles para validação institucional."
-          : null,
-        isBelowDynamicMinScore
-          ? `Score ${best.weightedScore} abaixo do mínimo dinâmico ${dynamicMinScore}.`
-          : null
-      ].filter(Boolean),
+      reasons: marketValidation.penaltyReasons,
+      blocks: marketValidation.blocks.length
+        ? marketValidation.blocks
+        : ["Nenhuma estratégia válida encontrada."],
       strategies: evaluated,
       mtf,
       marketRegime,
-      dynamicMinScore
+      dynamicMinScore,
+      operationalTuning: {
+        mode: normalizeMode(mode),
+        targetApprovalRate: rules.targetApprovalRate,
+        penaltyScore: marketValidation.penaltyScore,
+        penaltyReasons: marketValidation.penaltyReasons,
+        hardBlocks: marketValidation.blocks
+      }
     };
   }
 
@@ -266,11 +373,39 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 
   let confidence = best.weightedScore;
 
-  // 🔥 bônus mais inteligente
   if (mtf.isAligned) confidence += 6;
   confidence += Math.min(10, (sameDirection.length - 1) * 3);
+  confidence -= marketValidation.penaltyScore;
 
-  confidence = Math.min(99, Number(confidence.toFixed(2)));
+  confidence = Math.min(99, Math.max(0, Number(confidence.toFixed(2))));
+  const isBelowDynamicMinScore = confidence < dynamicMinScore;
+
+  if (isBelowDynamicMinScore) {
+    return {
+      signal: "WAIT",
+      confidence,
+      entryQuality: buildEntryQuality(confidence),
+      strategyName: best.name,
+      explanation: "Score consistente insuficiente para liberar sinal.",
+      reasons: unique([
+        ...marketValidation.penaltyReasons,
+        `Regime de mercado: ${marketRegime}`,
+        `Score mínimo dinâmico: ${dynamicMinScore}`
+      ]),
+      blocks: [`Score ${confidence} abaixo do mínimo dinâmico ${dynamicMinScore}.`],
+      strategies: evaluated,
+      mtf,
+      marketRegime,
+      dynamicMinScore,
+      operationalTuning: {
+        mode: normalizeMode(mode),
+        targetApprovalRate: rules.targetApprovalRate,
+        penaltyScore: marketValidation.penaltyScore,
+        penaltyReasons: marketValidation.penaltyReasons,
+        hardBlocks: []
+      }
+    };
+  }
 
   return {
     signal: best.direction,
@@ -283,13 +418,21 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       `Direção dominante: ${mtf.dominantDirection}`,
       `Regime de mercado: ${marketRegime}`,
       `Score mínimo dinâmico: ${dynamicMinScore}`,
-      `Confirmação: ${sameDirection.length} estratégias`
+      `Confirmação: ${sameDirection.length} estratégias`,
+      ...marketValidation.penaltyReasons
     ]),
     blocks: [],
     strategies: evaluated,
     mtf,
     marketRegime,
-    dynamicMinScore
+    dynamicMinScore,
+    operationalTuning: {
+      mode: normalizeMode(mode),
+      targetApprovalRate: rules.targetApprovalRate,
+      penaltyScore: marketValidation.penaltyScore,
+      penaltyReasons: marketValidation.penaltyReasons,
+      hardBlocks: []
+    }
   };
 }
 

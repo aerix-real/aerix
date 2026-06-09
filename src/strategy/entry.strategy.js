@@ -36,8 +36,13 @@ function evaluateEntry(direction, m5, modeProfile) {
     if (stochasticState === "bullish") {
       score += 12;
       reasons.push("Stochastic do M5 confirma timing de compra.");
-    } else if (stochasticState === "overbought" && modeProfile.blockers.forbidCounterTrend) {
-      blocks.push("Stochastic esticado para compra.");
+    } else if (stochasticState === "overbought") {
+      if (modeProfile.blockers.forbidCounterTrend) {
+        blocks.push("Stochastic esticado para compra.");
+      } else {
+        score -= modeProfile.penalties?.counterTrend || 0;
+        reasons.push("Stochastic esticado para compra tratado como penalidade de timing.");
+      }
     }
 
     if (bollingerState === "upper_half") {
@@ -53,8 +58,13 @@ function evaluateEntry(direction, m5, modeProfile) {
       reasons.push("Preço próximo de suporte favorece CALL.");
     }
 
-    if (priceZone === "near_resistance" && modeProfile.blockers.forbidNearResistanceCall) {
-      blocks.push("Preço muito próximo da resistência para CALL.");
+    if (priceZone === "near_resistance") {
+      if (modeProfile.blockers.forbidNearResistanceCall) {
+        blocks.push("Preço muito próximo da resistência para CALL.");
+      } else {
+        score -= modeProfile.penalties?.nearBarrier || 0;
+        reasons.push("Proximidade da resistência para CALL tratada como penalidade de score.");
+      }
     }
   }
 
@@ -75,8 +85,13 @@ function evaluateEntry(direction, m5, modeProfile) {
     if (stochasticState === "bearish") {
       score += 12;
       reasons.push("Stochastic do M5 confirma timing de venda.");
-    } else if (stochasticState === "oversold" && modeProfile.blockers.forbidCounterTrend) {
-      blocks.push("Stochastic esticado para venda.");
+    } else if (stochasticState === "oversold") {
+      if (modeProfile.blockers.forbidCounterTrend) {
+        blocks.push("Stochastic esticado para venda.");
+      } else {
+        score -= modeProfile.penalties?.counterTrend || 0;
+        reasons.push("Stochastic esticado para venda tratado como penalidade de timing.");
+      }
     }
 
     if (bollingerState === "lower_half") {
@@ -92,8 +107,13 @@ function evaluateEntry(direction, m5, modeProfile) {
       reasons.push("Preço próximo de resistência favorece PUT.");
     }
 
-    if (priceZone === "near_support" && modeProfile.blockers.forbidNearSupportPut) {
-      blocks.push("Preço muito próximo do suporte para PUT.");
+    if (priceZone === "near_support") {
+      if (modeProfile.blockers.forbidNearSupportPut) {
+        blocks.push("Preço muito próximo do suporte para PUT.");
+      } else {
+        score -= modeProfile.penalties?.nearBarrier || 0;
+        reasons.push("Proximidade do suporte para PUT tratada como penalidade de score.");
+      }
     }
   }
 
@@ -103,8 +123,13 @@ function evaluateEntry(direction, m5, modeProfile) {
   } else if (atrClass === "high") {
     score += 8;
     reasons.push("Volatilidade elevada com potencial de deslocamento.");
-  } else if (atrClass === "low" && modeProfile.blockers.forbidLowVolatility) {
-    blocks.push("Volatilidade baixa para entrada segura.");
+  } else if (atrClass === "low") {
+    if (modeProfile.blockers.forbidLowVolatility) {
+      blocks.push("Volatilidade baixa para entrada segura.");
+    } else {
+      score -= modeProfile.penalties?.lowVolatility || 0;
+      reasons.push("Volatilidade baixa tratada como penalidade de score.");
+    }
   }
 
   return {

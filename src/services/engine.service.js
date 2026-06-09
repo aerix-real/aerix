@@ -304,6 +304,7 @@ function buildPreCheckMetrics(predictiveDecision = {}) {
     decision: predictiveDecision.decision || null,
     preScore: Number(predictiveDecision.preScore || 0),
     minimum: Number(predictiveDecision.minimum || 0),
+    scoreAdjustment: Number(predictiveDecision.scoreAdjustment || 0),
     probableDirection: predictiveDecision.probableDirection || "WAIT",
     hour: predictiveDecision.hour ?? null,
     reasons: Array.isArray(predictiveDecision.reasons)
@@ -312,13 +313,19 @@ function buildPreCheckMetrics(predictiveDecision = {}) {
     risks: Array.isArray(predictiveDecision.risks)
       ? predictiveDecision.risks
       : [],
+    severeRisks: Array.isArray(predictiveDecision.severeRisks)
+      ? predictiveDecision.severeRisks
+      : [],
+    moderateRisks: Array.isArray(predictiveDecision.moderateRisks)
+      ? predictiveDecision.moderateRisks
+      : [],
     explanation: predictiveDecision.explanation || null
   };
 }
 
 function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
-  const riskText = [
-    ...(preCheckMetrics.risks || []),
+  const severeText = [
+    ...(preCheckMetrics.severeRisks || []),
     antiLoss.reason || ""
   ]
     .join(" ")
@@ -326,11 +333,18 @@ function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
 
   return (
     Boolean(antiLoss.blocked) ||
-    riskText.includes("padrão crítico") ||
-    riskText.includes("critico") ||
-    riskText.includes("alto índice de loss") ||
-    riskText.includes("loss detectado")
+    severeText.includes("padrão crítico") ||
+    severeText.includes("padrao critico") ||
+    severeText.includes("padrão severo") ||
+    severeText.includes("risco extremo") ||
+    severeText.includes("loss detectado")
   );
+}
+
+function getDynamicThresholdTolerance(mode) {
+  if (mode === "aggressive") return 8;
+  if (mode === "balanced") return 4;
+  return 0;
 }
 
 function uniqueMessages(messages = []) {
@@ -382,14 +396,18 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   };
 
   const adaptive = await adaptiveService.applyAdaptiveScore(
-    strategyResult.finalScore,
+    Number(strategyResult.finalScore || 0) + Number(preCheckMetrics.scoreAdjustment || 0),
     adaptiveContext
   );
   const hardBlock = await adaptiveService.shouldHardBlock(adaptiveContext);
   const dynamicThresholds = adaptive.dynamicThresholds || null;
   const dynamicMinimumScore = Number(dynamicThresholds?.minimumScore || strategyResult.dynamicMinScore || 0);
+  const dynamicThresholdGap = dynamicMinimumScore - Number(adaptive.finalScore || 0);
   const dynamicThresholdBlocked = Boolean(
-    dynamicMinimumScore && Number(adaptive.finalScore || 0) < dynamicMinimumScore
+    dynamicMinimumScore && dynamicThresholdGap > getDynamicThresholdTolerance(strategyMode)
+  );
+  const dynamicThresholdPenalty = Boolean(
+    dynamicMinimumScore && dynamicThresholdGap > 0 && !dynamicThresholdBlocked
   );
 
   const antiLoss = {
@@ -405,9 +423,9 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const finalSignal = forceWait ? "WAIT" : strategyResult.signal;
   const finalBlocks = uniqueMessages([
     ...strategyResult.blocks,
-    ...(preCheckBlocked ? preCheckMetrics.risks : []),
+    ...(preCheckBlocked ? preCheckMetrics.severeRisks : []),
     ...(antiLoss.blocked ? [antiLoss.reason] : []),
-    ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão crítico de perda."] : []),
+    ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão severo de perda."] : []),
     ...(dynamicThresholdBlocked
       ? [`Score abaixo do mínimo aprendido (${Number(adaptive.finalScore || 0).toFixed(1)} < ${dynamicMinimumScore}).`]
       : [])
@@ -489,6 +507,8 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     predictiveAi: predictiveDecision,
     preSignalScore: preCheckMetrics.preScore,
     preSignalMinimum: preCheckMetrics.minimum,
+    preSignalScoreAdjustment: preCheckMetrics.scoreAdjustment,
+    dynamicThresholdPenalty,
     explanation: forceWait
       ? `${explanation} ${preCheckMetrics.explanation || ""} ${antiLoss.reason || ""}`.trim()
       : explanation

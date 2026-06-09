@@ -33,15 +33,24 @@ function detectMarketRisk(snapshot = {}) {
   const m15Strength = Number(snapshot?.timeframes?.m15?.strengthPercent || 0);
 
   if (m5Vol < 0.08) {
-    risks.push("Mercado com volatilidade muito baixa antes do sinal.");
+    risks.push({
+      severity: m5Vol < 0.04 ? "severe" : "moderate",
+      reason: "Mercado com volatilidade muito baixa antes do sinal."
+    });
   }
 
   if (h1Strength < 0.08 && m15Strength < 0.08) {
-    risks.push("Sem força direcional suficiente em H1/M15.");
+    risks.push({
+      severity: h1Strength < 0.04 && m15Strength < 0.04 ? "severe" : "moderate",
+      reason: "Sem força direcional suficiente em H1/M15."
+    });
   }
 
   if (m5Vol > 1.2) {
-    risks.push("Volatilidade excessiva antes do sinal.");
+    risks.push({
+      severity: m5Vol > 1.8 ? "severe" : "moderate",
+      reason: "Volatilidade excessiva antes do sinal."
+    });
   }
 
   return risks;
@@ -69,7 +78,7 @@ class PredictiveAiService {
 
     if (probableDirection === "WAIT") {
       preScore -= 18;
-      risks.push("Direção provável indefinida antes da estratégia.");
+      risks.push({ severity: mode === "aggressive" ? "moderate" : "severe", reason: "Direção provável indefinida antes da estratégia." });
     } else {
       preScore += 8;
       reasons.push(`Direção provável detectada: ${probableDirection}.`);
@@ -83,7 +92,7 @@ class PredictiveAiService {
 
       if (symbolStats.lossrate >= 60) {
         preScore -= 14;
-        risks.push("Ativo possui histórico recente desfavorável.");
+        risks.push({ severity: symbolStats.lossrate >= 75 ? "severe" : "moderate", reason: "Ativo possui histórico recente desfavorável." });
       }
     }
 
@@ -95,7 +104,7 @@ class PredictiveAiService {
 
       if (hourStats.lossrate >= 65) {
         preScore -= 16;
-        risks.push("Horário operacional com alto índice de loss.");
+        risks.push({ severity: hourStats.lossrate >= 78 ? "severe" : "moderate", reason: "Horário operacional com alto índice de loss." });
       }
     }
 
@@ -107,7 +116,7 @@ class PredictiveAiService {
 
       if (directionStats.lossrate >= 65) {
         preScore -= 10;
-        risks.push("Direção provável tem histórico fraco.");
+        risks.push({ severity: directionStats.lossrate >= 78 ? "severe" : "moderate", reason: "Direção provável tem histórico fraco." });
       }
     }
 
@@ -119,7 +128,7 @@ class PredictiveAiService {
 
       if (symbolDirectionStats.lossrate >= 65) {
         preScore -= 18;
-        risks.push("Ativo + direção apresentam padrão ruim de loss.");
+        risks.push({ severity: symbolDirectionStats.lossrate >= 78 ? "severe" : "moderate", reason: "Ativo + direção apresentam padrão ruim de loss." });
       }
     }
 
@@ -136,7 +145,7 @@ class PredictiveAiService {
 
     if (criticalPattern) {
       preScore -= 28;
-      risks.push("Memória de IA detectou padrão crítico antes do sinal.");
+      risks.push({ severity: "severe", reason: "Memória de IA detectou padrão crítico antes do sinal." });
     }
 
     if (mode === "conservative") {
@@ -153,24 +162,37 @@ class PredictiveAiService {
       mode === "conservative"
         ? 58
         : mode === "aggressive"
-          ? 42
-          : 50;
+          ? 38
+          : 46;
 
-    const blocked = preScore < minimum || risks.length >= 3;
+    const severeRisks = risks.filter((risk) => risk.severity === "severe");
+    const moderateRisks = risks.filter((risk) => risk.severity !== "severe");
+    const severeLimit = mode === "aggressive" ? 2 : 1;
+    const scoreAdjustment = clamp(
+      Math.round((50 - preScore) * -0.45) - moderateRisks.length * 2,
+      -18,
+      8
+    );
+    const blocked = preScore < minimum || severeRisks.length >= severeLimit;
+    const riskReasons = risks.map((risk) => risk.reason);
 
     return {
       blocked,
       preScore,
       minimum,
+      scoreAdjustment,
       symbol,
       hour,
       probableDirection,
       reasons,
-      risks,
-      decision: blocked ? "PRE_BLOCKED" : "PRE_APPROVED",
+      risks: riskReasons,
+      riskDetails: risks,
+      severeRisks: severeRisks.map((risk) => risk.reason),
+      moderateRisks: moderateRisks.map((risk) => risk.reason),
+      decision: blocked ? "PRE_BLOCKED" : "PRE_APPROVED_WITH_SCORE_ADJUSTMENT",
       explanation: blocked
-        ? `IA preditiva bloqueou antes do sinal. Pre-score ${preScore}%. ${risks.join(" ")}`
-        : `IA preditiva aprovou análise inicial. Pre-score ${preScore}%. ${reasons.join(" ")}`
+        ? `IA preditiva bloqueou risco severo antes do sinal. Pre-score ${preScore}%. ${riskReasons.join(" ")}`
+        : `IA preditiva aplicou ajuste de score (${scoreAdjustment}). Pre-score ${preScore}%. ${reasons.join(" ")}`
     };
   }
 }
