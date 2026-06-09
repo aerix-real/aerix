@@ -23,7 +23,8 @@ const state = {
   proLogs: [],
   dashboardSnapshot: null,
   engineSnapshot: null,
-  premiumSnapshot: null
+  premiumSnapshot: null,
+  filterAnalytics: null
 };
 
 const el = {
@@ -79,7 +80,15 @@ const el = {
   operationTimeline: document.getElementById("operationTimeline"),
   timelineCount: document.getElementById("timelineCount"),
   equityCurveCanvas: document.getElementById("equityCurveCanvas"),
-  equityStatus: document.getElementById("equityStatus")
+  equityStatus: document.getElementById("equityStatus"),
+
+  filterAnalyticsUpdated: document.getElementById("filterAnalyticsUpdated"),
+  filterTotalBlocks: document.getElementById("filterTotalBlocks"),
+  filterTotalFilters: document.getElementById("filterTotalFilters"),
+  filterTotalAssets: document.getElementById("filterTotalAssets"),
+  filterAvgScore: document.getElementById("filterAvgScore"),
+  filterRankingList: document.getElementById("filterRankingList"),
+  filterBlockList: document.getElementById("filterBlockList")
 };
 
 const AI_STATES = [
@@ -867,6 +876,68 @@ function resetStats() {
   if (el.statsUpdated) el.statsUpdated.textContent = "Sem dados";
 }
 
+function renderFilterAnalytics(data = {}) {
+  const summary = data.summary || {};
+  const ranking = Array.isArray(data.ranking) ? data.ranking : [];
+  const recentBlocks = Array.isArray(data.recentBlocks) ? data.recentBlocks : [];
+
+  if (el.filterTotalBlocks) el.filterTotalBlocks.textContent = summary.total_blocks ?? 0;
+  if (el.filterTotalFilters) el.filterTotalFilters.textContent = summary.total_filters ?? 0;
+  if (el.filterTotalAssets) el.filterTotalAssets.textContent = summary.total_assets ?? 0;
+  if (el.filterAvgScore) el.filterAvgScore.textContent = Number(summary.avg_score || 0).toFixed(1);
+  if (el.filterAnalyticsUpdated) el.filterAnalyticsUpdated.textContent = summary.last_block_at ? formatTime(summary.last_block_at) : "sem bloqueios";
+
+  if (el.filterRankingList) {
+    el.filterRankingList.innerHTML = ranking.length
+      ? ranking.map((item, index) => `
+        <div class="filter-rank-item">
+          <div class="rank-left">
+            <span class="rank-position">#${index + 1}</span>
+            <div>
+              <strong>${escapeHtml(item.filter_label || item.filter_name || "Filtro")}</strong>
+              <span>${escapeHtml(item.affected_assets || 0)} ativos impactados · score médio ${Number(item.avg_score || 0).toFixed(1)}</span>
+            </div>
+          </div>
+          <div class="rank-right">${escapeHtml(item.total_blocks || 0)}</div>
+        </div>
+      `).join("")
+      : `<div class="history-empty">Nenhum bloqueio registrado</div>`;
+  }
+
+  if (el.filterBlockList) {
+    el.filterBlockList.innerHTML = recentBlocks.length
+      ? recentBlocks.slice(0, 8).map((item) => `
+        <div class="filter-block-item">
+          <div>
+            <strong>${escapeHtml(item.symbol || "UNKNOWN")}</strong>
+            <span>${escapeHtml(item.filter_label || item.filter_name || "Filtro institucional")}</span>
+          </div>
+          <p>${escapeHtml(item.reason || "Bloqueio institucional sem motivo detalhado.")}</p>
+          <small>${formatTime(item.created_at)} · score ${Number(item.score || 0).toFixed(1)}</small>
+        </div>
+      `).join("")
+      : `<div class="history-empty">Aguardando bloqueios da engine</div>`;
+  }
+}
+
+async function loadFilterAnalytics() {
+  try {
+    const response = await apiFetch("/api/filter-analytics?limit=30&rankingLimit=8");
+    const data = await response.json().catch(() => null);
+
+    if (data?.ok) {
+      state.filterAnalytics = data.data;
+      renderFilterAnalytics(data.data);
+      return;
+    }
+
+    renderFilterAnalytics({});
+  } catch (error) {
+    renderFilterAnalytics({});
+  }
+}
+
+
 function renderHistory() {
   if (!el.historyList) return;
 
@@ -1315,7 +1386,7 @@ async function bootPanel() {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
-  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations()]);
+  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics()]);
 }
 
 function escapeHtml(value) {
@@ -1454,6 +1525,7 @@ socket.on("signal-result-updated", (signal) => {
     renderHistory();
     drawEquityCurve();
     loadStats();
+    loadFilterAnalytics();
   }
 });
 

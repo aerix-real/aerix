@@ -6,6 +6,7 @@ const autoTuningService = require("./auto-tuning.service");
 const executionService = require("./execution.service");
 const resultCheckerService = require("./result-checker.service");
 const predictiveAiService = require("./predictive-ai.service");
+const filterAnalyticsService = require("./filter-analytics.service");
 
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { explainSignal, applyLossPenalty } = require("./signal-ai.service");
@@ -263,6 +264,7 @@ class EngineRunnerService {
 
             cycleResults.push(blockedSignal);
             this.emitBlocked(blockedSignal);
+            await this.recordFilterAnalytics(blockedSignal, "predictive_ai");
 
             await this.auditDecision("predictive_ai_pre_block", blockedSignal);
             continue;
@@ -292,6 +294,7 @@ class EngineRunnerService {
 
           if (signal.blocked || signal.signal === "WAIT") {
             this.emitBlocked(signal);
+            await this.recordFilterAnalytics(signal, "engine");
             await this.auditDecision("signal_blocked", signal);
             continue;
           }
@@ -607,6 +610,14 @@ class EngineRunnerService {
 
       result: signal.result || "pending"
     };
+  }
+
+  async recordFilterAnalytics(signal, source = "engine") {
+    try {
+      await filterAnalyticsService.recordBlockedSignal(signal, source);
+    } catch (error) {
+      console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
+    }
   }
 
   async checkResults() {
