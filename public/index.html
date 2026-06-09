@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AERIX</title>
-  <meta name="description" content="AERIX · Dashboard moderno de inteligência operacional com dados em tempo real." />
-  <link rel="stylesheet" href="/style.css?v=auth-free-premium-2" />
+  <title>AERIX · Institutional Trading Terminal</title>
+  <meta name="description" content="AERIX · Plataforma institucional premium de trading, sinais, IA operacional e monitoramento em tempo real." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/style.css?v=hedge-fund-institutional-1" />
 </head>
 
 <body class="mode-equilibrado plan-free sidebar-open">
   <div class="login-overlay" id="loginOverlay">
-    <div class="login-box">
+    <div class="login-box glass-card">
       <div class="login-brand">
         <div class="brand-mark">A</div>
         <div>
@@ -24,33 +25,17 @@
       <form id="loginForm" class="login-form" autocomplete="on">
         <div class="field">
           <label for="loginUser">E-mail</label>
-          <input
-            id="loginUser"
-            name="email"
-            type="email"
-            autocomplete="username"
-            placeholder="Digite seu e-mail"
-            required
-          />
+          <input id="loginUser" name="email" type="email" autocomplete="username" placeholder="Digite seu e-mail" required />
         </div>
 
         <div class="field">
           <label for="loginPass">Senha</label>
-          <input
-            id="loginPass"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            placeholder="Digite sua senha"
-            required
-          />
+          <input id="loginPass" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
         </div>
 
-        <button type="submit" class="login-btn" id="loginButton">Entrar</button>
+        <button type="submit" class="login-btn" id="loginButton">Entrar no terminal</button>
 
-        <p class="login-note">
-          Ambiente institucional com execução e monitoramento em nível hedge fund.
-        </p>
+        <p class="login-note">Ambiente institucional com execução, IA e monitoramento em nível hedge fund.</p>
       </form>
     </div>
   </div>
@@ -58,20 +43,26 @@
   <div class="app-shell">
     <header class="topbar premium-topbar">
       <div class="topbar-left">
-        <button class="menu-toggle" id="menuToggle" type="button">☰</button>
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menu">☰</button>
 
-        <div class="logo-banner">
-          <img src="/logo.png" class="logo-banner-img" alt="AERIX" />
+        <div class="brand-terminal glass-card">
+          <div class="logo-banner">
+            <img src="/logo.png" class="logo-banner-img" alt="AERIX" />
+          </div>
+          <div class="brand-copy">
+            <span>Institutional Alpha OS</span>
+            <strong>Trading Intelligence Command</strong>
+          </div>
         </div>
       </div>
 
       <div class="topbar-right">
-        <div class="top-status-card">
+        <div class="top-status-card glass-card">
           <span class="connection-badge connecting" id="connectionBadge"></span>
           <span id="connectionText">Conectando...</span>
         </div>
 
-        <div class="live-clock-card">
+        <div class="live-clock-card glass-card">
           <span>Tempo real</span>
           <strong id="liveClock">00:00:00</strong>
         </div>
@@ -83,10 +74,7 @@
     <main class="main-layout">
       <aside class="side-panel">
         <section class="panel user-panel">
-          <div class="panel-header">
-            <h3>Usuário</h3>
-          </div>
-
+          <div class="panel-header"><h3>Investor Console</h3></div>
           <div class="user-box">
             <div class="user-avatar">A</div>
             <div class="user-meta">
@@ -94,122 +82,80 @@
               <span id="userEmail">---</span>
             </div>
           </div>
-
           <div class="plan-row">
             <span>Plano atual</span>
             <strong class="plan-badge free" id="planBadge">FREE</strong>
           </div>
-
           <button class="logout-btn" id="logoutBtn" type="button">Sair</button>
         </section>
 
         <section class="panel premium-panel">
-          <div class="panel-header">
-            <h3>Status Premium</h3>
-          </div>
-
-          <div class="premium-status" id="premiumStatus">
-            Infra institucional bloqueada até ativação PREMIUM.
-          </div>
-
+          <div class="panel-header"><h3>Prime Access</h3></div>
+          <div class="premium-status" id="premiumStatus">Infra institucional bloqueada até ativação PREMIUM.</div>
           <ul class="premium-list">
             <li>Cockpit multi-estratégia institucional</li>
             <li>Engine quantitativa em tempo real</li>
             <li>Gestão de risco e tracking de execução</li>
             <li>Camada de IA tática com contexto macro</li>
           </ul>
-
-          <button class="upgrade-btn" id="upgradeBtn" type="button" data-free-only="true">
-            Fazer upgrade
-          </button>
+          <button class="upgrade-btn" id="upgradeBtn" type="button" data-free-only="true">Fazer upgrade</button>
         </section>
 
         <section class="panel mode-panel" data-premium-only="true">
-          <div class="panel-header">
-            <h3>Modo operacional</h3>
-          </div>
-
+          <div class="panel-header"><h3>Mandato Operacional</h3></div>
           <div class="mode-switcher">
-            <button class="mode-btn" data-mode="conservador" type="button">
-              Conservador
-              <span class="mode-risk">baixo risco</span>
-            </button>
-
-            <button class="mode-btn active" data-mode="equilibrado" type="button">
-              Equilibrado
-              <span class="mode-risk">padrão</span>
-            </button>
-
-            <button class="mode-btn" data-mode="agressivo" type="button">
-              Agressivo
-              <span class="mode-risk">mais sinais</span>
-            </button>
+            <button class="mode-btn" data-mode="conservador" type="button">Conservador <span class="mode-risk">baixo risco</span></button>
+            <button class="mode-btn active" data-mode="equilibrado" type="button">Equilibrado <span class="mode-risk">padrão</span></button>
+            <button class="mode-btn" data-mode="agressivo" type="button">Agressivo <span class="mode-risk">mais sinais</span></button>
           </div>
+          <p class="mode-description" id="modeDescription">Modo equilibrado ativo. Ajuste fino disponível para usuários PREMIUM.</p>
+        </section>
 
-          <p class="mode-description" id="modeDescription">
-            Modo equilibrado ativo. Ajuste fino disponível para usuários PREMIUM.
-          </p>
+        <section class="panel timeline-panel" data-premium-only="true">
+          <div class="panel-header"><h3>Timeline Operacional</h3><span id="timelineCount">live</span></div>
+          <div class="operation-timeline" id="operationTimeline">
+            <div class="timeline-event"><time>--:--</time><span>Terminal aguardando sincronização da engine.</span></div>
+          </div>
         </section>
       </aside>
 
       <section class="content-panel">
-        <div class="headline-wrap">
-          <div class="headline" id="headlineText">
-            Desk institucional AERIX: fluxo, risco e direção em leitura unificada.
-          </div>
-          <div class="headline-sub">
-            Novo layout com foco em leitura rápida, clareza visual e priorização de decisão.
-          </div>
-        </div>
+        <section class="headline-wrap command-hero">
+          <div class="headline-kicker">AERIX PRIME DESK</div>
+          <div class="headline" id="headlineText">Desk institucional AERIX: fluxo, risco e direção em leitura unificada.</div>
+          <div class="headline-sub">Centro premium para sinais, IA, heatmap, curva de equity e auditoria operacional em tempo real.</div>
+        </section>
 
         <section class="hero-grid">
-          <div class="signal-card panel" data-premium-only="true">
+          <div class="signal-card panel premium-card" data-premium-only="true">
             <div class="signal-top">
-              <div class="signal-mode" id="signalMode">PREMIUM</div>
+              <div class="signal-mode" id="signalMode">PREMIUM SIGNAL</div>
               <div class="signal-time" id="signalTime">Aguardando dados</div>
             </div>
-
             <div class="signal-main">
-              <div class="signal-asset" id="signalAsset">---</div>
+              <div>
+                <span class="micro-label">Ativo monitorado</span>
+                <div class="signal-asset" id="signalAsset">---</div>
+              </div>
               <div class="signal-direction neutral" id="signalDirection">AGUARDANDO</div>
             </div>
-
             <div class="signal-meta-grid">
-              <div class="signal-meta-card">
-                <span>Entrada</span>
-                <strong id="signalEntry">--</strong>
-              </div>
-
-              <div class="signal-meta-card">
-                <span>Expiração</span>
-                <strong id="signalExpiry">--</strong>
-              </div>
-
-              <div class="signal-meta-card">
-                <span>Confiança</span>
-                <strong id="signalConfidence">0%</strong>
-              </div>
-
-              <div class="signal-meta-card">
-                <span>Timing</span>
-                <strong id="signalCountdown">--</strong>
-              </div>
+              <div class="signal-meta-card"><span>Entrada</span><strong id="signalEntry">--</strong></div>
+              <div class="signal-meta-card"><span>Expiração</span><strong id="signalExpiry">--</strong></div>
+              <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
+              <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
             </div>
-
             <div class="ai-content">
-              <p class="ai-text" id="aiExplanation">
-                Recurso premium. A IA operacional será exibida após ativação.
-              </p>
+              <span class="micro-label">IA operacional</span>
+              <p class="ai-text" id="aiExplanation">Recurso premium. A IA operacional será exibida após ativação.</p>
             </div>
           </div>
 
-          <div class="panel best-opportunity-panel" data-premium-only="true">
-            <div class="panel-header">
-              <h3>Alpha Spotlight</h3>
-            </div>
-
+          <div class="panel best-opportunity-panel premium-card" data-premium-only="true">
+            <div class="panel-header"><h3>Alpha Spotlight</h3><span>best setup</span></div>
             <div class="best-opportunity-box">
               <div class="best-opportunity-main">
+                <span class="micro-label">Melhor oportunidade</span>
                 <strong id="bestAsset">---</strong>
                 <span id="bestReason">Aguardando leitura institucional.</span>
               </div>
@@ -218,71 +164,75 @@
           </div>
         </section>
 
-        <section class="panel stats-panel">
-          <div class="panel-header">
-            <h3>Performance Desk</h3>
-            <span id="statsUpdated">---</span>
+        <section class="panel institutional-center-panel" id="institutionalCenter" data-premium-only="true">
+          <div class="institutional-center-header">
+            <div>
+              <span class="section-kicker">Centro de Operações IA</span>
+              <h3>Operational Command Center</h3>
+            </div>
+            <span class="institutional-status-pill" id="saasStatus">SaaS em sincronização</span>
           </div>
 
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span>Total</span>
-              <strong id="statTotal">0</strong>
+          <div class="institutional-metrics-grid">
+            <article class="institutional-metric-card premium-card"><span>Módulos Engine</span><strong id="engineModules">12/14</strong><small>Confluência, risco, timing e histórico ativos</small></article>
+            <article class="institutional-metric-card premium-card"><span>Adaptive Rank</span><strong id="adaptiveRank">A-</strong><small>Score recalibrado por assertividade recente</small></article>
+            <article class="institutional-metric-card premium-card"><span>Anti-loss Level</span><strong id="antiLossLevel">Nível 3</strong><small>Filtro defensivo contra falso positivo</small></article>
+            <article class="institutional-metric-card premium-card"><span>Status SaaS</span><strong id="saasStatusCard">Online</strong><small>API, Socket.IO, login, premium e engine preservados</small></article>
+          </div>
+
+          <div class="realtime-metrics-grid" aria-label="Indicadores institucionais em tempo real">
+            <article class="realtime-metric-card premium-card"><span>Latência</span><strong id="metricLatency">--ms</strong><small>Socket.IO + API</small></article>
+            <article class="realtime-metric-card premium-card"><span>Fluxo</span><strong id="metricFlow">--</strong><small>Intensidade operacional</small></article>
+            <article class="realtime-metric-card premium-card"><span>Risco</span><strong id="metricRisk">--</strong><small>Filtro anti-loss</small></article>
+            <article class="realtime-metric-card premium-card"><span>IA</span><strong id="metricAi">--</strong><small>Confiança adaptativa</small></article>
+          </div>
+
+          <div class="institutional-ops-grid">
+            <div class="institutional-subpanel heatmap-panel">
+              <div class="subpanel-title"><strong>Heatmap Institucional</strong><span>market microstructure</span></div>
+              <div class="institutional-heatmap" id="institutionalHeatmap"></div>
             </div>
 
-            <div class="stat-card">
-              <span>Wins</span>
-              <strong id="statWins">0</strong>
-            </div>
-
-            <div class="stat-card">
-              <span>Losses</span>
-              <strong id="statLosses">0</strong>
-            </div>
-
-            <div class="stat-card">
-              <span>Winrate</span>
-              <strong id="statWinrate">0%</strong>
+            <div class="institutional-subpanel ai-insights-panel">
+              <div class="subpanel-title"><strong>IA Insights</strong><span>decision layer</span></div>
+              <div class="ai-insights-list" id="aiInsightsList">
+                <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional premium.</p></article>
+              </div>
             </div>
           </div>
+        </section>
+
+        <section class="analytics-grid">
+          <section class="panel stats-panel premium-card">
+            <div class="panel-header"><h3>Performance Desk</h3><span id="statsUpdated">---</span></div>
+            <div class="stats-grid">
+              <div class="stat-card"><span>Total</span><strong id="statTotal">0</strong></div>
+              <div class="stat-card"><span>Wins</span><strong id="statWins">0</strong></div>
+              <div class="stat-card"><span>Losses</span><strong id="statLosses">0</strong></div>
+              <div class="stat-card"><span>Winrate</span><strong id="statWinrate">0%</strong></div>
+            </div>
+          </section>
+
+          <section class="panel equity-panel premium-card" data-premium-only="true">
+            <div class="panel-header"><h3>Equity Curve</h3><span id="equityStatus">simulado</span></div>
+            <div class="equity-chart-wrap"><canvas id="equityCurveCanvas" width="760" height="260"></canvas></div>
+          </section>
         </section>
 
         <section class="panel history-panel">
-          <div class="panel-header">
-            <h3>Execution Journal</h3>
-            <span id="historyCount">0</span>
-          </div>
-
-          <div class="history-list" id="historyList">
-            <div class="history-empty">Nenhum sinal ainda</div>
-          </div>
+          <div class="panel-header"><h3>Execution Journal</h3><span id="historyCount">0</span></div>
+          <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
         </section>
 
-        <section class="panel quick-insights-panel">
-          <div class="panel-header">
-            <h3>Quick insights</h3>
-            <span>UI 2026</span>
-          </div>
-          <div class="insights-grid">
-            <article class="insight-card">
-              <span>Latência visual</span>
-              <strong>Baixa fricção</strong>
-            </article>
-            <article class="insight-card">
-              <span>Foco operacional</span>
-              <strong>Sinal → Ação</strong>
-            </article>
-            <article class="insight-card">
-              <span>Experiência</span>
-              <strong>Responsive-first</strong>
-            </article>
-          </div>
+        <section class="panel pro-audit-panel" data-premium-only="true">
+          <div class="panel-header"><h3>Auditoria de Decisão</h3><span>logs profissionais</span></div>
+          <div class="pro-logs" id="proLogs"></div>
         </section>
       </section>
     </main>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=auth-free-premium-2"></script>
+  <script src="/app.js?v=hedge-fund-institutional-1"></script>
 </body>
 </html>
