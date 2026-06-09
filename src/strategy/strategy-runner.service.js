@@ -84,6 +84,39 @@ function buildMtfContext(snapshot) {
   };
 }
 
+function classifyMarketRegime(snapshot, mtf = buildMtfContext(snapshot)) {
+  const h1 = snapshot?.timeframes?.h1 || {};
+  const m15 = snapshot?.timeframes?.m15 || {};
+  const m5 = snapshot?.timeframes?.m5 || {};
+
+  const volatility = Number(m5.volatilityPercent || 0);
+  const h1Strength = Number(h1.strengthPercent || 0);
+  const m15Strength = Number(m15.strengthPercent || 0);
+  const dataQuality = snapshot?.dataQuality || {};
+
+  if (snapshot?.isFallback || dataQuality.isFallback) return "FALLBACK_DATA";
+  if (volatility > 0 && volatility < 0.12) return "LOW_VOLATILITY";
+  if (volatility >= 0.6) return "HIGH_VOLATILITY";
+  if (mtf.isAligned && (h1Strength >= 0.4 || m15Strength >= 0.25)) return "STRONG_TREND";
+  if (mtf.alignment < 2) return "CHOPPY_MARKET";
+
+  return "NORMAL";
+}
+
+function getDynamicMinScore(modeRules, marketRegime, mode = "balanced") {
+  let dynamicMinScore = Number(modeRules?.minScore || 72);
+
+  const normalizedMode = normalizeMode(mode);
+
+  if (marketRegime === "STRONG_TREND") dynamicMinScore -= normalizedMode === "aggressive" ? 4 : 2;
+  if (marketRegime === "HIGH_VOLATILITY") dynamicMinScore += normalizedMode === "conservative" ? 6 : 3;
+  if (marketRegime === "LOW_VOLATILITY") dynamicMinScore += normalizedMode === "aggressive" ? 4 : 6;
+  if (marketRegime === "CHOPPY_MARKET") dynamicMinScore += normalizedMode === "aggressive" ? 3 : 5;
+  if (marketRegime === "FALLBACK_DATA") dynamicMinScore += 12;
+
+  return Math.max(60, Math.min(92, Number(dynamicMinScore.toFixed(2))));
+}
+
 function applyWeight(result, weight = 1) {
   const raw = Number(result?.score || 0);
   const weighted = Math.min(100, Number((raw * weight).toFixed(2)));
@@ -157,6 +190,8 @@ function validateMarketConditions(snapshot, mtf) {
 function runStrategies({ snapshot, mode = "balanced" }) {
   const rules = getModeRules(mode);
   const mtf = buildMtfContext(snapshot);
+  const marketRegime = classifyMarketRegime(snapshot, mtf);
+  const dynamicMinScore = getDynamicMinScore(rules, marketRegime, mode);
 
   const payload = {
     m5: snapshot?.timeframes?.m5?.candles || [],
@@ -184,13 +219,14 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     .sort((a, b) => b.weightedScore - a.weightedScore);
 
   const best = validStrategies[0] || null;
+  const isBelowDynamicMinScore = Boolean(best) && best.weightedScore < dynamicMinScore;
 
   const marketValidation = validateMarketConditions(snapshot, mtf);
 
   // 🔥 BLOQUEIO INTELIGENTE
   if (
     !best ||
-    best.weightedScore < rules.minScore ||
+    isBelowDynamicMinScore ||
     marketValidation.shouldBlock
   ) {
     return {
@@ -212,10 +248,15 @@ function runStrategies({ snapshot, mode = "balanced" }) {
           : null,
         marketValidation.hasInsufficientCandles
           ? "Histórico insuficiente de candles para validação institucional."
+          : null,
+        isBelowDynamicMinScore
+          ? `Score ${best.weightedScore} abaixo do mínimo dinâmico ${dynamicMinScore}.`
           : null
       ].filter(Boolean),
       strategies: evaluated,
-      mtf
+      mtf,
+      marketRegime,
+      dynamicMinScore
     };
   }
 
@@ -240,14 +281,20 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     reasons: unique([
       `MTF alinhado: ${mtf.alignment}/3`,
       `Direção dominante: ${mtf.dominantDirection}`,
+      `Regime de mercado: ${marketRegime}`,
+      `Score mínimo dinâmico: ${dynamicMinScore}`,
       `Confirmação: ${sameDirection.length} estratégias`
     ]),
     blocks: [],
     strategies: evaluated,
-    mtf
+    mtf,
+    marketRegime,
+    dynamicMinScore
   };
 }
 
 module.exports = {
-  runStrategies
+  runStrategies,
+  buildMtfContext,
+  classifyMarketRegime
 };
