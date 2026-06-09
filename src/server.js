@@ -5,6 +5,7 @@ const marketDataService = require("./services/market-data.service");
 const authMiddleware = require("./middlewares/auth.middleware");
 const { requirePremium } = require("./middlewares/plan.middleware");
 const billingController = require("./controllers/billing.controller");
+const signalRepository = require("./repositories/signal.repository");
 const createApp = require("./app/create-app");
 
 const { server } = createApp({
@@ -13,6 +14,7 @@ const { server } = createApp({
   authMiddleware,
   requirePremium,
   billingController,
+  signalRepository,
   corsOrigin: process.env.CORS_ORIGIN
 });
 
