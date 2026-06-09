@@ -48,8 +48,11 @@ class BillingController {
       return res.json({
         ok: true,
         data: {
-          premium: String(status?.plan || "").toUpperCase() === "PREMIUM",
-          plan: status?.plan || "FREE",
+          premium: true,
+          fullAccess: true,
+          access: "complete",
+          message: "Acesso completo liberado.",
+          plan: status?.plan || user.plan || "FREE",
           subscriptionStatus: status?.subscription_status || "inactive",
           premiumUntil: status?.premium_until || null
         }
@@ -59,7 +62,7 @@ class BillingController {
 
       return res.status(500).json({
         ok: false,
-        message: "Erro ao buscar status do plano."
+        message: "Erro ao buscar status de acesso."
       });
     }
   }

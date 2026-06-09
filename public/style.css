@@ -507,7 +507,7 @@ canvas { max-width: 100%; }
 
 .sidebar-backdrop { display: none; }
 .locked { position: relative; filter: saturate(0.6); opacity: 0.74; }
-.locked::after { content: "PREMIUM"; position: absolute; top: 12px; right: 12px; padding: 5px 9px; border-radius: 999px; color: #171106; background: linear-gradient(135deg, var(--gold-strong), var(--gold)); font-size: 0.64rem; font-weight: 950; letter-spacing: 0.12em; z-index: 5; box-shadow: 0 10px 24px rgba(0,0,0,0.26); }
+.locked::after { content: "LIBERADO"; position: absolute; top: 12px; right: 12px; padding: 5px 9px; border-radius: 999px; color: #171106; background: linear-gradient(135deg, var(--gold-strong), var(--gold)); font-size: 0.64rem; font-weight: 950; letter-spacing: 0.12em; z-index: 5; box-shadow: 0 10px 24px rgba(0,0,0,0.26); }
 .history-list::-webkit-scrollbar,
 .operation-timeline::-webkit-scrollbar,
 .pro-logs::-webkit-scrollbar { width: 8px; }

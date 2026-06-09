@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AERIX · Institutional Trading Terminal</title>
-  <meta name="description" content="AERIX · Plataforma institucional premium de trading, sinais, IA operacional e monitoramento em tempo real." />
+  <meta name="description" content="AERIX · Plataforma institucional de trading, sinais, IA operacional e monitoramento em tempo real." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css?v=institutional-refine-ux-performance-4" />
 </head>
 
-<body class="mode-equilibrado plan-free sidebar-open design-system-institutional">
+<body class="mode-equilibrado plan-premium sidebar-open design-system-institutional">
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box glass-card">
       <div class="login-brand">
@@ -85,35 +85,34 @@
             </div>
           </div>
           <div class="plan-row">
-            <span>Plano atual</span>
-            <strong class="plan-badge free" id="planBadge">FREE</strong>
+            <span>Status</span>
+            <strong class="plan-badge premium" id="planBadge">ACESSO COMPLETO</strong>
           </div>
           <button class="logout-btn" id="logoutBtn" type="button">Sair</button>
         </section>
 
         <section class="panel premium-panel">
           <div class="panel-header"><h3>Prime Access</h3></div>
-          <div class="premium-status" id="premiumStatus">Infra institucional bloqueada até ativação PREMIUM.</div>
+          <div class="premium-status" id="premiumStatus">Acesso completo liberado para usuários autenticados.</div>
           <ul class="premium-list">
             <li>Cockpit multi-estratégia institucional</li>
             <li>Engine quantitativa em tempo real</li>
             <li>Gestão de risco e tracking de execução</li>
             <li>Camada de IA tática com contexto macro</li>
           </ul>
-          <button class="upgrade-btn" id="upgradeBtn" type="button" data-free-only="true">Fazer upgrade</button>
         </section>
 
-        <section class="panel mode-panel" data-premium-only="true">
+        <section class="panel mode-panel">
           <div class="panel-header"><h3>Mandato Operacional</h3></div>
           <div class="mode-switcher">
             <button class="mode-btn" data-mode="conservador" type="button">Conservador <span class="mode-risk">baixo risco</span></button>
             <button class="mode-btn active" data-mode="equilibrado" type="button">Equilibrado <span class="mode-risk">padrão</span></button>
             <button class="mode-btn" data-mode="agressivo" type="button">Agressivo <span class="mode-risk">mais sinais</span></button>
           </div>
-          <p class="mode-description" id="modeDescription">Modo equilibrado ativo. Ajuste fino disponível para usuários PREMIUM.</p>
+          <p class="mode-description" id="modeDescription">Modo equilibrado ativo. Ajuste fino disponível para usuários autenticados.</p>
         </section>
 
-        <section class="panel timeline-panel" data-premium-only="true">
+        <section class="panel timeline-panel">
           <div class="panel-header"><h3>Timeline Operacional</h3><span id="timelineCount">live</span></div>
           <div class="operation-timeline" id="operationTimeline">
             <div class="timeline-event"><time>--:--</time><span>Terminal aguardando sincronização da engine.</span></div>
@@ -125,11 +124,11 @@
         <section class="headline-wrap command-hero">
           <div class="headline-kicker">AERIX PRIME DESK</div>
           <div class="headline" id="headlineText">Desk institucional AERIX: fluxo, risco e direção em leitura unificada.</div>
-          <div class="headline-sub">Centro premium para sinais, IA, heatmap, curva de equity e auditoria operacional em tempo real.</div>
+          <div class="headline-sub">Centro completo para sinais, IA, heatmap, curva de equity e auditoria operacional em tempo real.</div>
         </section>
 
         <section class="hero-grid refined-hero-grid">
-          <div class="panel best-opportunity-panel primary-opportunity-card premium-card" data-premium-only="true">
+          <div class="panel best-opportunity-panel primary-opportunity-card premium-card">
             <div class="panel-header"><h3>Melhor oportunidade</h3><span>Alpha Spotlight</span></div>
             <div class="best-opportunity-box">
               <div class="best-opportunity-main">
@@ -141,9 +140,9 @@
             </div>
           </div>
 
-          <div class="signal-card panel premium-card" data-premium-only="true">
+          <div class="signal-card panel premium-card">
             <div class="signal-top">
-              <div class="signal-mode" id="signalMode">PREMIUM SIGNAL</div>
+              <div class="signal-mode" id="signalMode">SINAL OPERACIONAL</div>
               <div class="signal-time" id="signalTime">Aguardando dados</div>
             </div>
             <div class="signal-main">
@@ -163,13 +162,13 @@
               <summary>Ver detalhes técnicos da IA</summary>
               <div class="ai-content">
                 <span class="micro-label">IA operacional</span>
-                <p class="ai-text" id="aiExplanation">Recurso premium. A IA operacional será exibida após ativação.</p>
+                <p class="ai-text" id="aiExplanation">IA operacional será exibida conforme a engine sincronizar dados.</p>
               </div>
             </details>
           </div>
         </section>
 
-        <section class="panel institutional-center-panel" id="institutionalCenter" data-premium-only="true">
+        <section class="panel institutional-center-panel" id="institutionalCenter">
           <div class="institutional-center-header">
             <div>
               <span class="section-kicker">Centro de Operações IA</span>
@@ -182,7 +181,7 @@
             <article class="institutional-metric-card premium-card"><span>Módulos Engine</span><strong id="engineModules">12/14</strong><small>Confluência, risco, timing e histórico ativos</small></article>
             <article class="institutional-metric-card premium-card"><span>Adaptive Rank</span><strong id="adaptiveRank">A-</strong><small>Score recalibrado por assertividade recente</small></article>
             <article class="institutional-metric-card premium-card"><span>Anti-loss Level</span><strong id="antiLossLevel">Nível 3</strong><small>Filtro defensivo contra falso positivo</small></article>
-            <article class="institutional-metric-card premium-card"><span>Status SaaS</span><strong id="saasStatusCard">Online</strong><small>API, Socket.IO, login, premium e engine preservados</small></article>
+            <article class="institutional-metric-card premium-card"><span>Status SaaS</span><strong id="saasStatusCard">Online</strong><small>API, Socket.IO, login e engine preservados</small></article>
           </div>
 
           <div class="realtime-metrics-grid" aria-label="Indicadores institucionais em tempo real">
@@ -203,7 +202,7 @@
               <div class="institutional-subpanel ai-insights-panel">
                 <div class="subpanel-title"><strong>IA Insights</strong><span>decision layer</span></div>
                 <div class="ai-insights-list" id="aiInsightsList">
-                  <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional premium.</p></article>
+                  <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional.</p></article>
                 </div>
               </div>
             </div>
@@ -221,13 +220,13 @@
             </div>
           </section>
 
-          <section class="panel equity-panel premium-card" data-premium-only="true">
+          <section class="panel equity-panel premium-card">
             <div class="panel-header"><h3>Equity Curve</h3><span id="equityStatus">simulado</span></div>
             <div class="equity-chart-wrap"><canvas id="equityCurveCanvas" width="760" height="260"></canvas></div>
           </section>
         </section>
 
-        <section class="panel filter-analytics-panel premium-card" data-premium-only="true">
+        <section class="panel filter-analytics-panel premium-card">
           <div class="panel-header"><h3>FILTER ANALYTICS</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
           <div class="filter-summary-grid">
             <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
@@ -260,7 +259,7 @@
           <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
         </section>
 
-        <section class="panel pro-audit-panel" data-premium-only="true">
+        <section class="panel pro-audit-panel">
           <div class="panel-header"><h3>Auditoria de Decisão</h3><span>logs profissionais</span></div>
           <div class="pro-logs" id="proLogs"></div>
         </section>

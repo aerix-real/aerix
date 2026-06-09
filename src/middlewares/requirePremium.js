@@ -1,3 +1,3 @@
-const { requirePlan } = require("./plan.middleware");
+const { requirePremium } = require("./plan.middleware");
 
-module.exports = requirePlan("PREMIUM");
+module.exports = requirePremium;
