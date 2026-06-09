@@ -112,7 +112,11 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     strategyName: strategyResult.strategyName || null,
     marketRegime: strategyResult.marketRegime || "NORMAL",
     market_regime: strategyResult.marketRegime || "NORMAL",
-    dynamicMinScore: strategyResult.dynamicMinScore || null,
+    dynamicMinScore: strategyResult.dynamicMinScore || strategyResult.dynamicThresholds?.minimumScore || null,
+    dynamicThresholds: strategyResult.dynamicThresholds || null,
+    thresholdHistory: strategyResult.thresholdHistory || null,
+    thresholdChanges: strategyResult.thresholdChanges || [],
+    thresholdPerformance: strategyResult.thresholdPerformance || null,
     entryQuality: strategyResult.entryQuality || "weak",
     adaptiveAdjustment: Number(strategyResult.adaptiveAdjustment || 0),
     adaptive_adjustment: Number(strategyResult.adaptiveAdjustment || 0),
@@ -140,7 +144,11 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       entryQuality: strategyResult.entryQuality,
       strategyName: strategyResult.strategyName,
       marketRegime: strategyResult.marketRegime || "NORMAL",
-      dynamicMinScore: strategyResult.dynamicMinScore || null,
+      dynamicMinScore: strategyResult.dynamicMinScore || strategyResult.dynamicThresholds?.minimumScore || null,
+      dynamicThresholds: strategyResult.dynamicThresholds || null,
+      thresholdHistory: strategyResult.thresholdHistory || null,
+      thresholdChanges: strategyResult.thresholdChanges || [],
+      thresholdPerformance: strategyResult.thresholdPerformance || null,
       reasons: strategyResult.reasons,
       blocks: strategyResult.blocks,
       explanation: strategyResult.explanation,
@@ -368,7 +376,9 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const adaptiveContext = {
     symbol,
     signal: strategyResult.signal,
-    strategyName: strategyResult.strategyName || "unknown"
+    strategyName: strategyResult.strategyName || "unknown",
+    marketRegime: strategyResult.marketRegime || marketContext.marketRegime || "NORMAL",
+    mode: strategyMode
   };
 
   const adaptive = await adaptiveService.applyAdaptiveScore(
@@ -376,6 +386,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     adaptiveContext
   );
   const hardBlock = await adaptiveService.shouldHardBlock(adaptiveContext);
+  const dynamicThresholds = adaptive.dynamicThresholds || null;
+  const dynamicMinimumScore = Number(dynamicThresholds?.minimumScore || strategyResult.dynamicMinScore || 0);
+  const dynamicThresholdBlocked = Boolean(
+    dynamicMinimumScore && Number(adaptive.finalScore || 0) < dynamicMinimumScore
+  );
 
   const antiLoss = {
     blocked: Boolean(hardBlock?.blocked),
@@ -385,14 +400,17 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
   const criticalLossDetected = hasCriticalLossPattern(preCheckMetrics, antiLoss);
   const preCheckBlocked = Boolean(preCheckMetrics.blocked);
-  const forceWait = preCheckBlocked || criticalLossDetected;
+  const forceWait = preCheckBlocked || criticalLossDetected || dynamicThresholdBlocked;
 
   const finalSignal = forceWait ? "WAIT" : strategyResult.signal;
   const finalBlocks = uniqueMessages([
     ...strategyResult.blocks,
     ...(preCheckBlocked ? preCheckMetrics.risks : []),
     ...(antiLoss.blocked ? [antiLoss.reason] : []),
-    ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão crítico de perda."] : [])
+    ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão crítico de perda."] : []),
+    ...(dynamicThresholdBlocked
+      ? [`Score abaixo do mínimo aprendido (${Number(adaptive.finalScore || 0).toFixed(1)} < ${dynamicMinimumScore}).`]
+      : [])
   ]);
 
   const filterBlocks = [
@@ -409,6 +427,15 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       ? [{
           filterName: "adaptive_block",
           reason: antiLoss.reason || "Anti-loss forçou WAIT por padrão crítico de perda.",
+          score: strategyResult.confidence,
+          finalScore: adaptive.finalScore,
+          strategyName: strategyResult.strategyName
+        }]
+      : []),
+    ...(dynamicThresholdBlocked
+      ? [{
+          filterName: "dynamic_threshold_block",
+          reason: `Score abaixo do mínimo aprendido (${Number(adaptive.finalScore || 0).toFixed(1)} < ${dynamicMinimumScore}).`,
           score: strategyResult.confidence,
           finalScore: adaptive.finalScore,
           strategyName: strategyResult.strategyName
@@ -437,7 +464,9 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     ...strategyResult,
     signal: finalSignal,
     direction: finalSignal,
-    finalScore: forceWait ? Math.min(Number(adaptive.finalScore || 0), preCheckMetrics.preScore) : adaptive.finalScore,
+    finalScore: forceWait && preCheckBlocked
+      ? Math.min(Number(adaptive.finalScore || 0), preCheckMetrics.preScore)
+      : adaptive.finalScore,
     blocks: finalBlocks,
     filterBlocks,
     blocked: forceWait,
@@ -445,6 +474,10 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     adaptiveAdjustment: Number(adaptive.adaptiveAdjustment || 0),
     adaptive_adjustment: Number(adaptive.adaptiveAdjustment || 0),
     adaptiveReasons: adaptive.adaptiveReasons || [],
+    dynamicThresholds,
+    thresholdHistory: dynamicThresholds?.thresholdHistory || null,
+    thresholdChanges: dynamicThresholds?.thresholdChanges || [],
+    thresholdPerformance: dynamicThresholds?.thresholdPerformance || null,
     adaptiveAdjustments: {
       adjustment: adaptive.adaptiveAdjustment,
       reasons: adaptive.adaptiveReasons,
@@ -492,7 +525,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategyName: finalResult.strategyName,
     marketRegime: finalResult.marketRegime || "NORMAL",
     market_regime: finalResult.marketRegime || "NORMAL",
-    dynamicMinScore: finalResult.dynamicMinScore || null,
+    dynamicMinScore: finalResult.dynamicMinScore || finalResult.dynamicThresholds?.minimumScore || null,
+    dynamicThresholds: finalResult.dynamicThresholds || null,
+    thresholdHistory: finalResult.thresholdHistory || null,
+    thresholdChanges: finalResult.thresholdChanges || [],
+    thresholdPerformance: finalResult.thresholdPerformance || null,
     reasons: finalResult.reasons,
     blocks: finalResult.blocks,
     explanation: finalResult.explanation,
@@ -515,7 +552,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       finalScore: finalResult.finalScore,
       blocks: finalResult.blocks,
       marketRegime: finalResult.marketRegime || "NORMAL",
-      dynamicMinScore: finalResult.dynamicMinScore || null,
+      dynamicMinScore: finalResult.dynamicMinScore || finalResult.dynamicThresholds?.minimumScore || null,
+      dynamicThresholds: finalResult.dynamicThresholds || null,
+      thresholdHistory: finalResult.thresholdHistory || null,
+      thresholdChanges: finalResult.thresholdChanges || [],
+      thresholdPerformance: finalResult.thresholdPerformance || null,
       adaptiveAdjustment: finalResult.adaptiveAdjustment,
       adaptiveReasons: finalResult.adaptiveReasons,
       adaptiveAdjustments: finalResult.adaptiveAdjustments,
@@ -583,7 +624,11 @@ function buildRanking(results = []) {
     entryQuality: item.entryQuality,
     strategyName: item.strategyName,
     marketRegime: item.marketRegime || "NORMAL",
-    dynamicMinScore: item.dynamicMinScore || null,
+    dynamicMinScore: item.dynamicMinScore || item.dynamicThresholds?.minimumScore || null,
+    dynamicThresholds: item.dynamicThresholds || null,
+    thresholdHistory: item.thresholdHistory || null,
+    thresholdChanges: item.thresholdChanges || [],
+    thresholdPerformance: item.thresholdPerformance || null,
     adaptiveAdjustment: Number(item.adaptiveAdjustment || 0),
     adaptiveReasons: item.adaptiveReasons || [],
     adaptiveAdjustments: item.adaptiveAdjustments || {},
@@ -609,7 +654,11 @@ function buildHistory(results = []) {
     mode: item.strategyMode || "balanced",
     strategyName: item.strategyName || null,
     marketRegime: item.marketRegime || "NORMAL",
-    dynamicMinScore: item.dynamicMinScore || null,
+    dynamicMinScore: item.dynamicMinScore || item.dynamicThresholds?.minimumScore || null,
+    dynamicThresholds: item.dynamicThresholds || null,
+    thresholdHistory: item.thresholdHistory || null,
+    thresholdChanges: item.thresholdChanges || [],
+    thresholdPerformance: item.thresholdPerformance || null,
     adaptiveAdjustment: Number(item.adaptiveAdjustment || 0),
     adaptiveReasons: item.adaptiveReasons || [],
     adaptiveAdjustments: item.adaptiveAdjustments || {},
@@ -651,6 +700,10 @@ async function analyzePreferredSymbols(userId) {
         marketContext: {},
         marketRegime: "ERROR",
         dynamicMinScore: null,
+        dynamicThresholds: null,
+        thresholdHistory: null,
+        thresholdChanges: [],
+        thresholdPerformance: null,
         adaptiveAdjustment: 0,
         adaptiveReasons: [],
         adaptiveAdjustments: {},
