@@ -75,6 +75,8 @@ function requirePlan(minimumPlan = "PREMIUM") {
   };
 }
 
+const requirePremium = requirePlan("PREMIUM");
+
 function requireFeature(featureKey) {
   return (req, res, next) => {
     if (!req.user) {
@@ -108,5 +110,6 @@ module.exports = {
   normalizePlan,
   resolveUserPlan,
   requirePlan,
+  requirePremium,
   requireFeature
 };
