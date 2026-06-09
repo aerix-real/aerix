@@ -5,6 +5,7 @@ const { explainSignal } = require("./signal-ai.service");
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { runStrategies } = require("../strategy/strategy-runner.service");
 const adaptiveService = require("./adaptive.service");
+const predictiveAiService = require("./predictive-ai.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -110,6 +111,13 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     strategyName: strategyResult.strategyName || null,
     entryQuality: strategyResult.entryQuality || "weak",
     adaptiveAdjustments: strategyResult.adaptiveAdjustments || {},
+    learningProfile: strategyResult.learningProfile || null,
+    antiLoss: strategyResult.antiLoss || {},
+    preCheck: strategyResult.preCheck || {},
+    predictiveAi: strategyResult.predictiveAi || null,
+    preSignalScore: strategyResult.preSignalScore || 0,
+    blocked: strategyResult.blocked || false,
+    blockReason: strategyResult.blockReason || null,
     timestamp: snapshot?.timestamp || new Date().toISOString()
   };
 }
@@ -130,6 +138,11 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       strategies: strategyResult.strategies,
       mtf: strategyResult.mtf,
       adaptiveAdjustments: strategyResult.adaptiveAdjustments || {},
+      learningProfile: strategyResult.learningProfile || null,
+      antiLoss: strategyResult.antiLoss || {},
+      preCheck: strategyResult.preCheck || {},
+      predictiveAi: strategyResult.predictiveAi || null,
+      preSignalScore: strategyResult.preSignalScore || 0,
       market: {
         h1: snapshot.timeframes.h1,
         m15: snapshot.timeframes.m15,
@@ -264,6 +277,45 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
   };
 }
 
+function buildPreCheckMetrics(predictiveDecision = {}) {
+  return {
+    blocked: Boolean(predictiveDecision.blocked),
+    decision: predictiveDecision.decision || null,
+    preScore: Number(predictiveDecision.preScore || 0),
+    minimum: Number(predictiveDecision.minimum || 0),
+    probableDirection: predictiveDecision.probableDirection || "WAIT",
+    hour: predictiveDecision.hour ?? null,
+    reasons: Array.isArray(predictiveDecision.reasons)
+      ? predictiveDecision.reasons
+      : [],
+    risks: Array.isArray(predictiveDecision.risks)
+      ? predictiveDecision.risks
+      : [],
+    explanation: predictiveDecision.explanation || null
+  };
+}
+
+function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
+  const riskText = [
+    ...(preCheckMetrics.risks || []),
+    antiLoss.reason || ""
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    Boolean(antiLoss.blocked) ||
+    riskText.includes("padrão crítico") ||
+    riskText.includes("critico") ||
+    riskText.includes("alto índice de loss") ||
+    riskText.includes("loss detectado")
+  );
+}
+
+function uniqueMessages(messages = []) {
+  return [...new Set(messages.filter(Boolean))];
+}
+
 async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const { preferences, modeConfig } = await getUserModeConfig(userId);
   const snapshot = providedSnapshot || (await getMarketSnapshot(symbol));
@@ -272,6 +324,13 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
   const h1Indicators = analyzeIndicators(snapshot.timeframes.h1.candles, strategyMode);
   const m15Indicators = analyzeIndicators(snapshot.timeframes.m15.candles, strategyMode);
   const m5Indicators = analyzeIndicators(snapshot.timeframes.m5.candles, strategyMode);
+
+  const predictiveDecision = await predictiveAiService.evaluatePreSignal({
+    symbol,
+    snapshot,
+    mode: strategyMode
+  });
+  const preCheckMetrics = buildPreCheckMetrics(predictiveDecision);
 
   const rawStrategyResult = runStrategies({
     snapshot,
@@ -290,35 +349,75 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategyMode
   );
 
+  const adaptiveContext = {
+    symbol,
+    signal: strategyResult.signal,
+    strategyName: strategyResult.strategyName || "unknown"
+  };
+
   const adaptive = await adaptiveService.applyAdaptiveScore(
     strategyResult.finalScore,
-    {
-      symbol,
-      signal: strategyResult.signal,
-      strategyName: strategyResult.strategyName || "unknown"
-    }
+    adaptiveContext
   );
+  const hardBlock = await adaptiveService.shouldHardBlock(adaptiveContext);
+
+  const antiLoss = {
+    blocked: Boolean(hardBlock?.blocked),
+    reason: hardBlock?.reason || null,
+    forcedWait: false
+  };
+
+  const criticalLossDetected = hasCriticalLossPattern(preCheckMetrics, antiLoss);
+  const preCheckBlocked = Boolean(preCheckMetrics.blocked);
+  const forceWait = preCheckBlocked || criticalLossDetected;
+
+  const finalSignal = forceWait ? "WAIT" : strategyResult.signal;
+  const finalBlocks = uniqueMessages([
+    ...strategyResult.blocks,
+    ...(preCheckBlocked ? preCheckMetrics.risks : []),
+    ...(antiLoss.blocked ? [antiLoss.reason] : []),
+    ...(criticalLossDetected ? ["Anti-loss forçou WAIT por padrão crítico de perda."] : [])
+  ]);
+
+  antiLoss.forcedWait = forceWait && criticalLossDetected;
 
   const explanation =
     preferences.ai_explanations_enabled !== false
       ? explainSignal({
           symbol,
-          signal: strategyResult.signal,
+          signal: finalSignal,
           confidence: strategyResult.confidence,
-          reasons: strategyResult.reasons,
+          reasons: uniqueMessages([
+            ...strategyResult.reasons,
+            ...preCheckMetrics.reasons,
+            ...(forceWait ? finalBlocks : [])
+          ]),
           modeConfig
         })
       : strategyResult.explanation;
 
   const finalResult = {
     ...strategyResult,
-    finalScore: adaptive.finalScore,
+    signal: finalSignal,
+    direction: finalSignal,
+    finalScore: forceWait ? Math.min(Number(adaptive.finalScore || 0), preCheckMetrics.preScore) : adaptive.finalScore,
+    blocks: finalBlocks,
+    blocked: forceWait,
+    blockReason: forceWait ? finalBlocks.join(" ") : null,
     adaptiveAdjustments: {
       adjustment: adaptive.adaptiveAdjustment,
       reasons: adaptive.adaptiveReasons,
       profile: adaptive.learningProfile
     },
-    explanation
+    learningProfile: adaptive.learningProfile,
+    antiLoss,
+    preCheck: preCheckMetrics,
+    predictiveAi: predictiveDecision,
+    preSignalScore: preCheckMetrics.preScore,
+    preSignalMinimum: preCheckMetrics.minimum,
+    explanation: forceWait
+      ? `${explanation} ${preCheckMetrics.explanation || ""} ${antiLoss.reason || ""}`.trim()
+      : explanation
   };
 
   const legacySignal = buildLegacySignalShape(
@@ -341,6 +440,26 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategies: finalResult.strategies,
     mtf: finalResult.mtf,
     adaptiveAdjustments: finalResult.adaptiveAdjustments,
+    learningProfile: finalResult.learningProfile,
+    antiLoss: finalResult.antiLoss,
+    preCheck: finalResult.preCheck,
+    predictiveAi: finalResult.predictiveAi,
+    preSignalScore: finalResult.preSignalScore,
+    preSignalMinimum: finalResult.preSignalMinimum,
+    blocked: finalResult.blocked,
+    blockReason: finalResult.blockReason,
+    finalResult: {
+      signal: finalResult.signal,
+      finalScore: finalResult.finalScore,
+      blocks: finalResult.blocks,
+      adaptiveAdjustments: finalResult.adaptiveAdjustments,
+      learningProfile: finalResult.learningProfile,
+      antiLoss: finalResult.antiLoss,
+      preCheck: finalResult.preCheck,
+      predictiveAi: finalResult.predictiveAi,
+      preSignalScore: finalResult.preSignalScore,
+      preSignalMinimum: finalResult.preSignalMinimum
+    },
     mode: modeConfig,
     strategyMode,
     currentSignal: legacySignal,
@@ -397,7 +516,13 @@ function buildRanking(results = []) {
     direction: item.signal,
     entryQuality: item.entryQuality,
     strategyName: item.strategyName,
-    adaptiveAdjustments: item.adaptiveAdjustments || {}
+    adaptiveAdjustments: item.adaptiveAdjustments || {},
+    learningProfile: item.learningProfile || null,
+    antiLoss: item.antiLoss || {},
+    preCheck: item.preCheck || {},
+    preSignalScore: item.preSignalScore || 0,
+    blocked: item.blocked || false,
+    blockReason: item.blockReason || null
   }));
 }
 
@@ -414,6 +539,12 @@ function buildHistory(results = []) {
     mode: item.strategyMode || "balanced",
     strategyName: item.strategyName || null,
     adaptiveAdjustments: item.adaptiveAdjustments || {},
+    learningProfile: item.learningProfile || null,
+    antiLoss: item.antiLoss || {},
+    preCheck: item.preCheck || {},
+    preSignalScore: item.preSignalScore || 0,
+    blocked: item.blocked || false,
+    blockReason: item.blockReason || null,
     timestamp: item.timestamp
   }));
 }
@@ -445,6 +576,12 @@ async function analyzePreferredSymbols(userId) {
         mtf: {},
         marketContext: {},
         adaptiveAdjustments: {},
+        learningProfile: null,
+        antiLoss: {},
+        preCheck: {},
+        preSignalScore: 0,
+        blocked: true,
+        blockReason: error.message || "Erro ao analisar ativo.",
         timestamp: new Date().toISOString()
       });
     }
