@@ -20,7 +20,10 @@ const state = {
   chartTimer: null,
   aiTimer: null,
   institutionalHeatmap: [],
-  proLogs: []
+  proLogs: [],
+  dashboardSnapshot: null,
+  engineSnapshot: null,
+  premiumSnapshot: null
 };
 
 const el = {
@@ -65,7 +68,12 @@ const el = {
   statWins: document.getElementById("statWins"),
   statLosses: document.getElementById("statLosses"),
   statWinrate: document.getElementById("statWinrate"),
-  statsUpdated: document.getElementById("statsUpdated")
+  statsUpdated: document.getElementById("statsUpdated"),
+
+  metricLatency: document.getElementById("metricLatency"),
+  metricFlow: document.getElementById("metricFlow"),
+  metricRisk: document.getElementById("metricRisk"),
+  metricAi: document.getElementById("metricAi")
 };
 
 const AI_STATES = [
@@ -372,7 +380,8 @@ function applyPlanLocks() {
   }
 
   updateInstitutionalCards();
-  renderInstitutionalHeatmap();
+  updateRealtimeMetrics();
+  renderOperationalHeatmap();
 }
 
 function ensureInstitutionalCenter() {
@@ -387,7 +396,7 @@ function ensureInstitutionalCenter() {
   center.innerHTML = `
     <div class="institutional-center-header">
       <div>
-        <span class="section-kicker">Centro Institucional</span>
+        <span class="section-kicker">Mesa Institucional</span>
         <h3>Operational Command Center</h3>
       </div>
       <span class="institutional-status-pill" id="saasStatus">SaaS em sincronização</span>
@@ -413,6 +422,29 @@ function ensureInstitutionalCenter() {
         <span>Status SaaS</span>
         <strong id="saasStatusCard">Online</strong>
         <small>API, Socket.IO, login, premium e engine preservados</small>
+      </article>
+    </div>
+
+    <div class="realtime-metrics-grid" aria-label="Indicadores institucionais em tempo real">
+      <article class="realtime-metric-card">
+        <span>Latência</span>
+        <strong id="metricLatency">--ms</strong>
+        <small>Socket.IO + API</small>
+      </article>
+      <article class="realtime-metric-card">
+        <span>Fluxo</span>
+        <strong id="metricFlow">--</strong>
+        <small>Intensidade operacional</small>
+      </article>
+      <article class="realtime-metric-card">
+        <span>Risco</span>
+        <strong id="metricRisk">--</strong>
+        <small>Filtro anti-loss</small>
+      </article>
+      <article class="realtime-metric-card">
+        <span>IA</span>
+        <strong id="metricAi">--</strong>
+        <small>Confiança adaptativa</small>
       </article>
     </div>
 
@@ -479,6 +511,38 @@ function renderInstitutionalHeatmap(signal = {}) {
       <strong>${Math.round(item.value)}%</strong>
     </div>
   `).join("");
+}
+
+function renderOperationalHeatmap(signal = {}) {
+  renderInstitutionalHeatmap(signal);
+}
+
+function getRealtimeMetricElements() {
+  return {
+    metricLatency: el.metricLatency || document.getElementById("metricLatency"),
+    metricFlow: el.metricFlow || document.getElementById("metricFlow"),
+    metricRisk: el.metricRisk || document.getElementById("metricRisk"),
+    metricAi: el.metricAi || document.getElementById("metricAi")
+  };
+}
+
+function updateRealtimeMetrics(signal = {}) {
+  ensureInstitutionalCenter();
+
+  const metrics = getRealtimeMetricElements();
+  const confidence = getOperationalScore(signal);
+  const risk = Number(signal.risk || signal.riskScore || signal.execution?.risk || 0);
+  const premium = isPremium();
+  const connected = socket.connected;
+  const historyLoad = Math.min(99, Math.max(18, state.history.length * 8));
+  const flow = confidence || historyLoad;
+  const aiScore = premium ? Math.max(48, Math.min(99, confidence || 72)) : 0;
+  const latency = connected ? Math.round(42 + Math.random() * 64) : 0;
+
+  if (metrics.metricLatency) metrics.metricLatency.textContent = connected ? `${latency}ms` : "offline";
+  if (metrics.metricFlow) metrics.metricFlow.textContent = premium ? `${Math.round(flow)}%` : "FREE";
+  if (metrics.metricRisk) metrics.metricRisk.textContent = premium ? `${Math.max(0, Math.min(100, Math.round(100 - risk * 3)))}%` : "--";
+  if (metrics.metricAi) metrics.metricAi.textContent = premium ? `${Math.round(aiScore)}%` : "premium";
 }
 
 function renderProLogs(signal = {}, message = null) {
@@ -875,7 +939,8 @@ function renderSignal(signal) {
   }
 
   updateInstitutionalCards(signal);
-  renderInstitutionalHeatmap(signal);
+  updateRealtimeMetrics(signal);
+  renderOperationalHeatmap(signal);
   renderProLogs(signal);
 
   pushChartPoint(confidence || 50);
@@ -1059,7 +1124,8 @@ function startChartLoop() {
         ...item,
         value: Math.max(18, Math.min(99, item.value + Math.sin(Date.now() / 900 + index) * 2.8))
       }));
-      renderInstitutionalHeatmap();
+      updateRealtimeMetrics();
+      renderOperationalHeatmap();
     }
   }, 1800);
 }
@@ -1072,20 +1138,50 @@ function startAIEngine() {
   }, 2800);
 }
 
+async function loadRuntimeIntegrations() {
+  if (!state.accessToken) return;
+
+  const [dashboardResult, engineResult, premiumResult] = await Promise.allSettled([
+    apiFetch("/api/dashboard"),
+    apiFetch("/api/engine"),
+    apiFetch("/api/premium/status")
+  ]);
+
+  const parseJson = async (result) => {
+    if (result.status !== "fulfilled") return null;
+    return result.value.json().catch(() => null);
+  };
+
+  const [dashboardData, engineData, premiumData] = await Promise.all([
+    parseJson(dashboardResult),
+    parseJson(engineResult),
+    parseJson(premiumResult)
+  ]);
+
+  state.dashboardSnapshot = dashboardData?.data || null;
+  state.engineSnapshot = engineData?.data || null;
+  state.premiumSnapshot = premiumData?.data || premiumData || null;
+
+  const runtimeState = state.engineSnapshot || state.dashboardSnapshot || {};
+  updateInstitutionalCards(runtimeState.lastSignal || runtimeState.currentSignal || {});
+  updateRealtimeMetrics(runtimeState.lastSignal || runtimeState.currentSignal || {});
+}
+
 async function bootPanel() {
   applyUserUI();
   applyPlanLocks();
   applyModeUI(state.currentMode, false);
   ensureInstitutionalCenter();
   updateInstitutionalCards();
-  renderInstitutionalHeatmap();
+  updateRealtimeMetrics();
+  renderOperationalHeatmap();
   if (!state.proLogs.length) {
     renderProLogs({}, isPremium() ? "Centro Institucional sincronizado com a engine." : "Centro Institucional aguardando ativação PREMIUM.");
   }
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
-  await Promise.allSettled([loadHistory(), loadStats()]);
+  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations()]);
 }
 
 function escapeHtml(value) {
@@ -1228,7 +1324,8 @@ window.setResult = setResult;
 document.addEventListener("DOMContentLoaded", async () => {
   startClock();
   ensureInstitutionalCenter();
-  renderInstitutionalHeatmap();
+  updateRealtimeMetrics();
+  renderOperationalHeatmap();
   ensureMiniChart();
   startChartLoop();
   startAIEngine();

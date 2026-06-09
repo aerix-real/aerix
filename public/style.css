@@ -232,6 +232,7 @@ button{border:0;cursor:pointer}
 
 .institutional-center-header,
 .institutional-metrics-grid,
+.realtime-metrics-grid,
 .institutional-ops-grid {
   position: relative;
   z-index: 1;
@@ -276,14 +277,16 @@ button{border:0;cursor:pointer}
   text-transform: uppercase;
 }
 
-.institutional-metrics-grid {
+.institutional-metrics-grid,
+.realtime-metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
 
-.institutional-metric-card {
+.institutional-metric-card,
+.realtime-metric-card {
   min-height: 126px;
   padding: 14px;
   border-radius: 16px;
@@ -295,6 +298,7 @@ button{border:0;cursor:pointer}
 }
 
 .institutional-metric-card span,
+.realtime-metric-card span,
 .subpanel-title span {
   color: var(--muted);
   font-size: 0.71rem;
@@ -303,7 +307,8 @@ button{border:0;cursor:pointer}
   text-transform: uppercase;
 }
 
-.institutional-metric-card strong {
+.institutional-metric-card strong,
+.realtime-metric-card strong {
   display: block;
   margin: 10px 0 8px;
   color: #f9e4aa;
@@ -311,9 +316,29 @@ button{border:0;cursor:pointer}
   letter-spacing: 0.02em;
 }
 
-.institutional-metric-card small {
+.institutional-metric-card small,
+.realtime-metric-card small {
   color: var(--text-soft);
   line-height: 1.45;
+}
+
+
+.realtime-metrics-grid {
+  margin-bottom: 14px;
+}
+
+.realtime-metric-card {
+  min-height: 104px;
+  border-color: rgba(230, 198, 127, 0.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(230, 198, 127, 0.1), transparent 45%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    rgba(6, 14, 27, 0.66);
+}
+
+.realtime-metric-card strong {
+  color: var(--gold);
+  font-size: clamp(1.28rem, 2.4vw, 1.82rem);
 }
 
 .institutional-ops-grid {
@@ -416,6 +441,7 @@ button{border:0;cursor:pointer}
 
 @media (max-width: 1180px) {
   .institutional-metrics-grid,
+  .realtime-metrics-grid,
   .institutional-ops-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -429,6 +455,7 @@ button{border:0;cursor:pointer}
   }
 
   .institutional-metrics-grid,
+  .realtime-metrics-grid,
   .institutional-ops-grid,
   .institutional-heatmap {
     grid-template-columns: 1fr;
