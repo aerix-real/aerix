@@ -755,9 +755,12 @@ function renderHistory() {
     const score = getOperationalScore(signal);
     const result = String(signal.result || "PENDING").toUpperCase();
 
+    const directionClass = direction === "CALL" ? "history-call" : direction === "PUT" ? "history-put" : "history-wait";
+    const directionBadgeClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
+
     item.className = [
       "history-item",
-      direction === "CALL" ? "history-call" : "history-put",
+      directionClass,
       result === "WIN" ? "result-win" : result === "LOSS" ? "result-loss" : "result-pending"
     ].join(" ");
 
@@ -767,7 +770,7 @@ function renderHistory() {
         <div class="history-meta">${formatTime(signal.created_at || signal.createdAt || signal.time)}</div>
       </div>
 
-      <span class="badge ${direction === "CALL" ? "call" : "put"}">
+      <span class="badge ${directionBadgeClass}">
         ${escapeHtml(direction || "---")}
       </span>
 

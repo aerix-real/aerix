@@ -376,3 +376,190 @@ strong, .signal-asset, .stat-card strong, .signal-meta-card strong, .best-opport
 .result-badge.win { color: var(--win); background: rgba(72, 246, 178, .1); border-color: rgba(72, 246, 178, .3); }
 .result-badge.loss { color: var(--loss); background: rgba(255, 97, 116, .1); border-color: rgba(255, 97, 116, .3); }
 .result-badge.pending { color: var(--warning); background: rgba(242, 199, 107, .1); border-color: rgba(242, 199, 107, .26); }
+
+/* --- main-compatibility merge layer: preserve current frontend modules while keeping PR visual system --- */
+.signal-mode,
+.signal-time,
+.history-panel,
+.stats-panel,
+.quick-insights-panel,
+.premium-topbar {
+  min-width: 0;
+}
+
+.badge.neutral,
+.rank-wait .rank-right,
+.history-wait .history-top span {
+  color: var(--gold-strong);
+  background: rgba(216, 183, 109, .1);
+  border-color: rgba(216, 183, 109, .26);
+}
+
+.history-item.history-wait {
+  border-left: 3px solid rgba(216, 183, 109, 0.62);
+}
+
+.history-top,
+.history-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-top span,
+.history-bottom span {
+  color: var(--text-soft);
+  font-size: .76rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-bottom {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.reason-item,
+.rank-item {
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line-cool);
+  background: linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.012));
+  color: var(--text-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+}
+
+.reason-item + .reason-item,
+.rank-item + .rank-item {
+  margin-top: 8px;
+}
+
+.rank-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.rank-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rank-left strong,
+.rank-left span,
+.rank-right {
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-left > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rank-left > div span {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 850;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.rank-position {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--gold-strong);
+  background: rgba(216, 183, 109, .1);
+  border: 1px solid rgba(216, 183, 109, .22);
+  font-size: .72rem;
+  font-weight: 950;
+}
+
+.rank-right {
+  color: var(--gold-strong);
+  font-weight: 950;
+}
+
+.rank-call {
+  border-left: 3px solid rgba(47, 240, 166, .72);
+}
+
+.rank-put {
+  border-left: 3px solid rgba(255, 95, 125, .72);
+}
+
+#heroCard,
+.hero-card {
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease), opacity .2s var(--ease);
+}
+
+#heroCard[data-signal="CALL"],
+.hero-card[data-signal="CALL"] {
+  border-color: rgba(47, 240, 166, .34);
+  box-shadow: var(--shadow), 0 22px 70px rgba(47, 240, 166, .08);
+}
+
+#heroCard[data-signal="PUT"],
+.hero-card[data-signal="PUT"] {
+  border-color: rgba(255, 95, 125, .34);
+  box-shadow: var(--shadow), 0 22px 70px rgba(255, 95, 125, .08);
+}
+
+#heroCard[data-signal="WAIT"],
+.hero-card[data-signal="WAIT"] {
+  border-color: rgba(216, 183, 109, .25);
+}
+
+.hero-paused {
+  opacity: .78;
+  filter: saturate(.72);
+}
+
+.preferences-feedback {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  color: var(--text-soft);
+  background: rgba(255,255,255,.035);
+  border: 1px solid var(--line);
+}
+
+.preferences-feedback.success {
+  color: #c6ffe9;
+  border-color: rgba(47, 240, 166, .28);
+  background: rgba(47, 240, 166, .09);
+}
+
+.preferences-feedback.error {
+  color: #ffd5dc;
+  border-color: rgba(255, 95, 125, .28);
+  background: rgba(255, 95, 125, .1);
+}
+
+body.sidebar-collapsed .side-panel {
+  will-change: transform;
+}
+
+@media (max-width: 760px) {
+  .rank-item,
+  .history-top,
+  .history-bottom {
+    align-items: flex-start;
+  }
+
+  .rank-item,
+  .history-top,
+  .history-bottom {
+    flex-direction: column;
+  }
+}
