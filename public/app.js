@@ -83,11 +83,13 @@ const el = {
   equityStatus: document.getElementById("equityStatus"),
 
   filterAnalyticsUpdated: document.getElementById("filterAnalyticsUpdated"),
-  filterTotalBlocks: document.getElementById("filterTotalBlocks"),
-  filterTotalFilters: document.getElementById("filterTotalFilters"),
-  filterTotalAssets: document.getElementById("filterTotalAssets"),
-  filterAvgScore: document.getElementById("filterAvgScore"),
+  filterApprovalRate: document.getElementById("filterApprovalRate"),
+  filterTotalSignals: document.getElementById("filterTotalSignals"),
+  filterApprovedSignals: document.getElementById("filterApprovedSignals"),
+  filterBlockedSignals: document.getElementById("filterBlockedSignals"),
   filterRankingList: document.getElementById("filterRankingList"),
+  filterAssetList: document.getElementById("filterAssetList"),
+  filterHourList: document.getElementById("filterHourList"),
   filterBlockList: document.getElementById("filterBlockList")
 };
 
@@ -878,30 +880,77 @@ function resetStats() {
 
 function renderFilterAnalytics(data = {}) {
   const summary = data.summary || {};
-  const ranking = Array.isArray(data.ranking) ? data.ranking : [];
+  const blocksByFilter = Array.isArray(data.blocksByFilter)
+    ? data.blocksByFilter
+    : Array.isArray(data.ranking)
+      ? data.ranking.map((item) => ({
+          filterName: item.filter_name,
+          filterLabel: item.filter_label,
+          total: item.total_blocks,
+          affectedAssets: item.affected_assets,
+          avgFinalScore: item.avg_score,
+          lastBlockAt: item.last_block_at
+        }))
+      : [];
+  const blocksByAsset = Array.isArray(data.blocksByAsset) ? data.blocksByAsset : [];
+  const blocksByHour = Array.isArray(data.blocksByHour) ? data.blocksByHour : [];
   const recentBlocks = Array.isArray(data.recentBlocks) ? data.recentBlocks : [];
 
-  if (el.filterTotalBlocks) el.filterTotalBlocks.textContent = summary.total_blocks ?? 0;
-  if (el.filterTotalFilters) el.filterTotalFilters.textContent = summary.total_filters ?? 0;
-  if (el.filterTotalAssets) el.filterTotalAssets.textContent = summary.total_assets ?? 0;
-  if (el.filterAvgScore) el.filterAvgScore.textContent = Number(summary.avg_score || 0).toFixed(1);
+  if (el.filterApprovalRate) el.filterApprovalRate.textContent = `${Number(data.approvalRate || 0).toFixed(1)}%`;
+  if (el.filterTotalSignals) el.filterTotalSignals.textContent = data.totalSignals ?? 0;
+  if (el.filterApprovedSignals) el.filterApprovedSignals.textContent = data.approvedSignals ?? 0;
+  if (el.filterBlockedSignals) el.filterBlockedSignals.textContent = data.blockedSignals ?? summary.total_blocks ?? 0;
   if (el.filterAnalyticsUpdated) el.filterAnalyticsUpdated.textContent = summary.last_block_at ? formatTime(summary.last_block_at) : "sem bloqueios";
 
   if (el.filterRankingList) {
-    el.filterRankingList.innerHTML = ranking.length
-      ? ranking.map((item, index) => `
+    el.filterRankingList.innerHTML = blocksByFilter.length
+      ? blocksByFilter.map((item, index) => `
         <div class="filter-rank-item">
           <div class="rank-left">
             <span class="rank-position">#${index + 1}</span>
             <div>
-              <strong>${escapeHtml(item.filter_label || item.filter_name || "Filtro")}</strong>
-              <span>${escapeHtml(item.affected_assets || 0)} ativos impactados · score médio ${Number(item.avg_score || 0).toFixed(1)}</span>
+              <strong>${escapeHtml(item.filterLabel || item.filterName || "Filtro")}</strong>
+              <span>${escapeHtml(item.affectedAssets || 0)} ativos impactados · score final médio ${Number(item.avgFinalScore || 0).toFixed(1)}</span>
             </div>
           </div>
-          <div class="rank-right">${escapeHtml(item.total_blocks || 0)}</div>
+          <div class="rank-right">${escapeHtml(item.total || 0)}</div>
         </div>
       `).join("")
       : `<div class="history-empty">Nenhum bloqueio registrado</div>`;
+  }
+
+  if (el.filterAssetList) {
+    el.filterAssetList.innerHTML = blocksByAsset.length
+      ? blocksByAsset.map((item, index) => `
+        <div class="filter-rank-item">
+          <div class="rank-left">
+            <span class="rank-position">#${index + 1}</span>
+            <div>
+              <strong>${escapeHtml(item.symbol || "UNKNOWN")}</strong>
+              <span>${escapeHtml(item.filtersTriggered || 0)} filtros · score final médio ${Number(item.avgFinalScore || 0).toFixed(1)}</span>
+            </div>
+          </div>
+          <div class="rank-right">${escapeHtml(item.total || 0)}</div>
+        </div>
+      `).join("")
+      : `<div class="history-empty">Nenhum ativo bloqueado</div>`;
+  }
+
+  if (el.filterHourList) {
+    el.filterHourList.innerHTML = blocksByHour.length
+      ? blocksByHour.map((item, index) => `
+        <div class="filter-rank-item">
+          <div class="rank-left">
+            <span class="rank-position">#${index + 1}</span>
+            <div>
+              <strong>${String(item.hour).padStart(2, "0")}:00</strong>
+              <span>${escapeHtml(item.affectedAssets || 0)} ativos impactados</span>
+            </div>
+          </div>
+          <div class="rank-right">${escapeHtml(item.total || 0)}</div>
+        </div>
+      `).join("")
+      : `<div class="history-empty">Nenhum horário mapeado</div>`;
   }
 
   if (el.filterBlockList) {
@@ -910,10 +959,10 @@ function renderFilterAnalytics(data = {}) {
         <div class="filter-block-item">
           <div>
             <strong>${escapeHtml(item.symbol || "UNKNOWN")}</strong>
-            <span>${escapeHtml(item.filter_label || item.filter_name || "Filtro institucional")}</span>
+            <span>${escapeHtml(item.filterLabel || item.filterName || "Filtro institucional")}</span>
           </div>
           <p>${escapeHtml(item.reason || "Bloqueio institucional sem motivo detalhado.")}</p>
-          <small>${formatTime(item.created_at)} · score ${Number(item.score || 0).toFixed(1)}</small>
+          <small>${formatTime(item.timestamp || item.createdAt)} · score ${Number(item.score || 0).toFixed(1)} · final ${Number(item.finalScore || 0).toFixed(1)}</small>
         </div>
       `).join("")
       : `<div class="history-empty">Aguardando bloqueios da engine</div>`;
@@ -925,9 +974,11 @@ async function loadFilterAnalytics() {
     const response = await apiFetch("/api/filter-analytics?limit=30&rankingLimit=8");
     const data = await response.json().catch(() => null);
 
-    if (data?.ok) {
-      state.filterAnalytics = data.data;
-      renderFilterAnalytics(data.data);
+    const analytics = data?.ok ? data.data : data;
+
+    if (analytics && typeof analytics === "object") {
+      state.filterAnalytics = analytics;
+      renderFilterAnalytics(analytics);
       return;
     }
 

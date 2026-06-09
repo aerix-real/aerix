@@ -7,11 +7,7 @@ async function getFilterAnalytics(req, res) {
       rankingLimit: req.query.rankingLimit
     });
 
-    return res.status(200).json({
-      ok: true,
-      data,
-      timestamp: new Date().toISOString()
-    });
+    return res.status(200).json(data);
   } catch (error) {
     return res.status(error.statusCode || 500).json({
       ok: false,

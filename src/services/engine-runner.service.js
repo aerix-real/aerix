@@ -137,7 +137,7 @@ class EngineRunnerService {
     }
 
     if (!this.isSniperMoment()) {
-      return {
+      const blockedSignal = {
         ...signal,
         blocked: true,
         signal: "WAIT",
@@ -152,6 +152,12 @@ class EngineRunnerService {
           "Fora da janela sniper de entrada"
         ]
       };
+
+      return this.appendFilterBlock(
+        blockedSignal,
+        "sniper_block",
+        "Fora da janela sniper de entrada"
+      );
     }
 
     return {
@@ -160,6 +166,27 @@ class EngineRunnerService {
       timing_mode: "SNIPER_OK",
       timing_confidence: 95
     };
+  }
+
+  appendFilterBlock(signal, filterName, reason, extra = {}) {
+    const blockReason = reason || signal.blockReason || signal.block_reason || "Bloqueio institucional sem motivo detalhado.";
+    const event = {
+      filterName,
+      reason: blockReason,
+      symbol: signal.symbol || signal.asset,
+      score: Number(extra.score ?? signal.score ?? signal.confidence ?? 0),
+      finalScore: Number(extra.finalScore ?? signal.finalScore ?? signal.final_score ?? signal.adjustedScore ?? 0),
+      strategyName: signal.strategyName || signal.strategy_name || signal.strategy,
+      timestamp: new Date().toISOString()
+    };
+
+    signal.filterBlocks = [...(signal.filterBlocks || []), event];
+
+    if (!signal.blocks?.includes(blockReason)) {
+      signal.blocks = [...(signal.blocks || []), blockReason];
+    }
+
+    return signal;
   }
 
   buildPredictiveBlockedSignal({ symbol, mode, predictiveDecision }) {
@@ -189,7 +216,18 @@ class EngineRunnerService {
       timing_confidence: predictiveDecision.preScore || 0,
       market_regime: "PREDICTIVE_AI_BLOCK",
       reasons: predictiveDecision.reasons || [],
-      blocks: predictiveDecision.risks || [],
+      blocks: predictiveDecision.risks?.length
+        ? predictiveDecision.risks
+        : [predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal."],
+      filterBlocks: [
+        {
+          filterName: "predictive_ai_block",
+          reason: predictiveDecision.explanation || "IA preditiva bloqueou antes do sinal.",
+          score: predictiveDecision.preScore || 0,
+          finalScore: predictiveDecision.preScore || 0,
+          strategyName: "predictive_ai_gate"
+        }
+      ],
       predictiveAi: predictiveDecision,
       predictive_ai: predictiveDecision,
       preSignalScore: predictiveDecision.preScore || 0,
@@ -464,6 +502,7 @@ class EngineRunnerService {
       signal.blocked = true;
       signal.blockReason = hardBlock.reason || "Bloqueado pela IA adaptativa";
       signal.block_reason = signal.blockReason;
+      this.appendFilterBlock(signal, "adaptive_block", signal.blockReason);
     }
 
     const tuning = await autoTuningService.applyAutoTuning(signal);
@@ -491,6 +530,15 @@ class EngineRunnerService {
       signal.block_reason = signal.blockReason;
       signal.signal = "WAIT";
       signal.direction = "WAIT";
+      this.appendFilterBlock(
+        signal,
+        "low_score_block",
+        `Score abaixo do mínimo institucional após auto tuning (${signal.finalScore.toFixed(1)} < ${minimumScore})`,
+        {
+          score: signal.confidence,
+          finalScore: signal.finalScore
+        }
+      );
     }
 
     return signal;
@@ -510,6 +558,9 @@ class EngineRunnerService {
       signal.blockReason =
         validation.reason || signal.blockReason || "Bloqueado pela validação operacional";
       signal.block_reason = signal.blockReason;
+      this.appendFilterBlock(signal, "execution_block", signal.blockReason, {
+        finalScore: validation.adjustedScore ?? signal.finalScore
+      });
     }
 
     return signal;

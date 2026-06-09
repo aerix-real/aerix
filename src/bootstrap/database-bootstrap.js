@@ -210,12 +210,14 @@ async function ensureFilterBlockEventsTable() {
       filter_label TEXT NOT NULL,
       symbol TEXT NOT NULL,
       score NUMERIC DEFAULT 0,
+      final_score NUMERIC DEFAULT 0,
       reason TEXT NOT NULL,
       signal TEXT DEFAULT 'WAIT',
       mode TEXT,
       market_regime TEXT,
       strategy_name TEXT,
       source TEXT NOT NULL DEFAULT 'engine',
+      event_timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
@@ -225,12 +227,14 @@ async function ensureFilterBlockEventsTable() {
   await ensureColumn("filter_block_events", "filter_label", "TEXT NOT NULL DEFAULT 'Filtro de qualidade institucional'");
   await ensureColumn("filter_block_events", "symbol", "TEXT NOT NULL DEFAULT 'UNKNOWN'");
   await ensureColumn("filter_block_events", "score", "NUMERIC DEFAULT 0");
+  await ensureColumn("filter_block_events", "final_score", "NUMERIC DEFAULT 0");
   await ensureColumn("filter_block_events", "reason", "TEXT NOT NULL DEFAULT 'Bloqueio institucional sem motivo detalhado.'");
   await ensureColumn("filter_block_events", "signal", "TEXT DEFAULT 'WAIT'");
   await ensureColumn("filter_block_events", "mode", "TEXT");
   await ensureColumn("filter_block_events", "market_regime", "TEXT");
   await ensureColumn("filter_block_events", "strategy_name", "TEXT");
   await ensureColumn("filter_block_events", "source", "TEXT NOT NULL DEFAULT 'engine'");
+  await ensureColumn("filter_block_events", "event_timestamp", "TIMESTAMP NOT NULL DEFAULT NOW()");
   await ensureColumn("filter_block_events", "created_at", "TIMESTAMP NOT NULL DEFAULT NOW()");
 
   await db.query(`
@@ -246,6 +250,11 @@ async function ensureFilterBlockEventsTable() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_filter_block_events_created_at
       ON public.filter_block_events(created_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_event_timestamp
+      ON public.filter_block_events(event_timestamp DESC);
   `);
 }
 
