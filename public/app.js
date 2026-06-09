@@ -24,7 +24,15 @@ const state = {
   dashboardSnapshot: null,
   engineSnapshot: null,
   premiumSnapshot: null,
-  filterAnalytics: null
+  filterAnalytics: null,
+  filterPerformance: null,
+  shadowMode: {
+    signals: [],
+    blocked: [],
+    executions: [],
+    lastUpdated: null
+  },
+  filterAnalyticsTimer: null
 };
 
 const el = {
@@ -90,7 +98,16 @@ const el = {
   filterRankingList: document.getElementById("filterRankingList"),
   filterAssetList: document.getElementById("filterAssetList"),
   filterHourList: document.getElementById("filterHourList"),
-  filterBlockList: document.getElementById("filterBlockList")
+  filterBlockList: document.getElementById("filterBlockList"),
+
+  shadowModePanel: document.getElementById("shadowModePanel"),
+  shadowModeStatus: document.getElementById("shadowModeStatus"),
+  shadowModeList: document.getElementById("shadowModeList"),
+  shadowModeUpdated: document.getElementById("shadowModeUpdated"),
+
+  filterPerformancePanel: document.getElementById("filterPerformancePanel"),
+  filterPerformanceCards: document.getElementById("filterPerformanceCards"),
+  filterPerformanceUpdated: document.getElementById("filterPerformanceUpdated")
 };
 
 const AI_STATES = [
@@ -878,6 +895,256 @@ function resetStats() {
   if (el.statsUpdated) el.statsUpdated.textContent = "Sem dados";
 }
 
+
+function normalizeDashboardData(payload = {}) {
+  return payload?.data && typeof payload.data === "object" ? payload.data : payload || {};
+}
+
+function normalizeSignalCollection(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (Array.isArray(value?.data)) return value.data.filter(Boolean);
+  if (Array.isArray(value?.signals)) return value.signals.filter(Boolean);
+  if (Array.isArray(value?.history)) return value.history.filter(Boolean);
+  return [];
+}
+
+function extractRuntimeSignals(runtimeData = {}) {
+  const data = normalizeDashboardData(runtimeData);
+  const bestOpportunity = data.signalCenter?.bestOpportunity || data.bestOpportunity || data.lastSignal || data.currentSignal || null;
+  const ranking = normalizeSignalCollection(data.ranking || data.latestResults);
+  const history = normalizeSignalCollection(data.history || data.recentHistory);
+
+  return {
+    bestOpportunity,
+    ranking,
+    history,
+    connection: data.connection || {},
+    analytics: data.analytics || {}
+  };
+}
+
+function upsertBySignature(collection, item, limit = 12) {
+  if (!item || typeof item !== "object") return collection;
+
+  const signature = item.id || [
+    item.symbol || item.asset || "UNKNOWN",
+    item.signal || item.direction || "WAIT",
+    item.blockReason || item.block_reason || item.reason || "",
+    item.created_at || item.createdAt || item.timestamp || item.time || ""
+  ].join("|");
+
+  const next = collection.filter((entry) => {
+    const entrySignature = entry.id || [
+      entry.symbol || entry.asset || "UNKNOWN",
+      entry.signal || entry.direction || "WAIT",
+      entry.blockReason || entry.block_reason || entry.reason || "",
+      entry.created_at || entry.createdAt || entry.timestamp || entry.time || ""
+    ].join("|");
+
+    return entrySignature !== signature;
+  });
+
+  next.unshift(item);
+  return next.slice(0, limit);
+}
+
+function ensureShadowModePanel() {
+  if (el.shadowModePanel || document.getElementById("shadowModePanel")) {
+    el.shadowModePanel = el.shadowModePanel || document.getElementById("shadowModePanel");
+    el.shadowModeStatus = el.shadowModeStatus || document.getElementById("shadowModeStatus");
+    el.shadowModeList = el.shadowModeList || document.getElementById("shadowModeList");
+    el.shadowModeUpdated = el.shadowModeUpdated || document.getElementById("shadowModeUpdated");
+    return;
+  }
+
+  const contentPanel = document.querySelector(".content-panel");
+  if (!contentPanel) return;
+
+  const panel = document.createElement("section");
+  panel.className = "panel shadow-mode-panel premium-card";
+  panel.id = "shadowModePanel";
+  panel.setAttribute("data-premium-only", "true");
+  panel.innerHTML = `
+    <div class="panel-header"><h3>SHADOW MODE</h3><span id="shadowModeUpdated">standby</span></div>
+    <div class="filter-summary-grid shadow-mode-summary">
+      <div class="stat-card"><span>Status</span><strong id="shadowModeStatus">Monitorando</strong></div>
+      <div class="stat-card"><span>Sinais sombra</span><strong id="shadowSignalsCount">0</strong></div>
+      <div class="stat-card"><span>Bloqueios IA</span><strong id="shadowBlockedCount">0</strong></div>
+      <div class="stat-card"><span>Execuções</span><strong id="shadowExecutionCount">0</strong></div>
+    </div>
+    <div class="filter-block-list" id="shadowModeList"><div class="history-empty">Aguardando eventos da engine</div></div>
+  `;
+
+  const filterPanel = document.querySelector(".filter-analytics-panel");
+  const historyPanel = document.querySelector(".history-panel");
+  contentPanel.insertBefore(panel, filterPanel || historyPanel || null);
+
+  el.shadowModePanel = panel;
+  el.shadowModeStatus = panel.querySelector("#shadowModeStatus");
+  el.shadowModeList = panel.querySelector("#shadowModeList");
+  el.shadowModeUpdated = panel.querySelector("#shadowModeUpdated");
+}
+
+function ensureFilterPerformancePanel() {
+  if (el.filterPerformancePanel || document.getElementById("filterPerformancePanel")) {
+    el.filterPerformancePanel = el.filterPerformancePanel || document.getElementById("filterPerformancePanel");
+    el.filterPerformanceCards = el.filterPerformanceCards || document.getElementById("filterPerformanceCards");
+    el.filterPerformanceUpdated = el.filterPerformanceUpdated || document.getElementById("filterPerformanceUpdated");
+    return;
+  }
+
+  const filterPanel = document.querySelector(".filter-analytics-panel");
+  const contentPanel = document.querySelector(".content-panel");
+  if (!contentPanel) return;
+
+  const panel = document.createElement("section");
+  panel.className = "panel filter-performance-panel premium-card";
+  panel.id = "filterPerformancePanel";
+  panel.setAttribute("data-premium-only", "true");
+  panel.innerHTML = `
+    <div class="panel-header"><h3>FILTER PERFORMANCE</h3><span id="filterPerformanceUpdated">sem dados</span></div>
+    <div class="filter-summary-grid" id="filterPerformanceCards">
+      <div class="stat-card"><span>Eficiência dos filtros</span><strong>0%</strong></div>
+      <div class="stat-card"><span>Filtro líder</span><strong>--</strong></div>
+      <div class="stat-card"><span>Ativo crítico</span><strong>--</strong></div>
+      <div class="stat-card"><span>Score médio bloqueado</span><strong>0.0</strong></div>
+    </div>
+  `;
+
+  if (filterPanel) {
+    contentPanel.insertBefore(panel, filterPanel);
+  } else {
+    contentPanel.appendChild(panel);
+  }
+
+  el.filterPerformancePanel = panel;
+  el.filterPerformanceCards = panel.querySelector("#filterPerformanceCards");
+  el.filterPerformanceUpdated = panel.querySelector("#filterPerformanceUpdated");
+}
+
+function renderShadowMode(signal = null, eventType = "sync") {
+  ensureShadowModePanel();
+
+  if (signal && typeof signal === "object") {
+    state.shadowMode.signals = upsertBySignature(state.shadowMode.signals, signal, 20);
+
+    if (signal.blocked || signal.signal === "WAIT" || signal.direction === "WAIT" || eventType === "execution") {
+      state.shadowMode.blocked = upsertBySignature(state.shadowMode.blocked, signal, 20);
+    }
+
+    if (eventType === "execution") {
+      state.shadowMode.executions = upsertBySignature(state.shadowMode.executions, signal, 12);
+    }
+
+    state.shadowMode.lastUpdated = new Date().toISOString();
+  }
+
+  const allEvents = [
+    ...state.shadowMode.blocked.map((item) => ({ ...item, __shadowType: "BLOQUEIO" })),
+    ...state.shadowMode.signals.map((item) => ({ ...item, __shadowType: "OBSERVADO" }))
+  ].slice(0, 12);
+
+  const signalsCount = document.getElementById("shadowSignalsCount");
+  const blockedCount = document.getElementById("shadowBlockedCount");
+  const executionCount = document.getElementById("shadowExecutionCount");
+
+  if (el.shadowModeStatus) el.shadowModeStatus.textContent = socket.connected ? "Live" : "Protegido";
+  if (signalsCount) signalsCount.textContent = state.shadowMode.signals.length;
+  if (blockedCount) blockedCount.textContent = state.shadowMode.blocked.length;
+  if (executionCount) executionCount.textContent = state.shadowMode.executions.length;
+  if (el.shadowModeUpdated) el.shadowModeUpdated.textContent = state.shadowMode.lastUpdated ? formatTime(state.shadowMode.lastUpdated) : "standby";
+
+  if (!el.shadowModeList) return;
+
+  el.shadowModeList.innerHTML = allEvents.length
+    ? allEvents.map((item) => {
+        const direction = item.signal || item.direction || "WAIT";
+        const reason = item.blockReason || item.block_reason || item.reason || item.explanation || "Observação sombra preservada para auditoria.";
+        return `
+          <div class="filter-block-item shadow-mode-item">
+            <div>
+              <strong>${escapeHtml(item.symbol || item.asset || "UNKNOWN")}</strong>
+              <span>${escapeHtml(item.__shadowType)} · ${escapeHtml(direction)}</span>
+            </div>
+            <p>${escapeHtml(reason)}</p>
+            <small>${formatTime(item.timestamp || item.created_at || item.createdAt || new Date())} · score ${Number(item.finalScore || item.final_score || item.score || item.confidence || 0).toFixed(1)}</small>
+          </div>
+        `;
+      }).join("")
+    : `<div class="history-empty">Aguardando eventos da engine</div>`;
+}
+
+function renderFilterPerformance(data = {}) {
+  ensureFilterPerformancePanel();
+
+  const blocksByFilter = Array.isArray(data.blocksByFilter) ? data.blocksByFilter : [];
+  const blocksByAsset = Array.isArray(data.blocksByAsset) ? data.blocksByAsset : [];
+  const summary = data.summary || {};
+  const totalSignals = Number(data.totalSignals || 0);
+  const blockedSignals = Number(data.blockedSignals || summary.total_blocks || 0);
+  const approvedSignals = Number(data.approvedSignals || 0);
+  const approvalRate = Number(data.approvalRate || 0);
+  const filterEfficiency = totalSignals ? Number(((blockedSignals / totalSignals) * 100).toFixed(1)) : 0;
+  const topFilter = blocksByFilter[0];
+  const topAsset = blocksByAsset[0];
+  const avgScore = Number(summary.avg_score || topFilter?.avgFinalScore || 0);
+
+  state.filterPerformance = {
+    filterEfficiency,
+    approvalRate,
+    topFilter,
+    topAsset,
+    avgScore,
+    approvedSignals,
+    blockedSignals
+  };
+
+  if (el.filterPerformanceUpdated) {
+    el.filterPerformanceUpdated.textContent = summary.last_block_at ? formatTime(summary.last_block_at) : "tempo real";
+  }
+
+  if (!el.filterPerformanceCards) return;
+
+  el.filterPerformanceCards.innerHTML = `
+    <div class="stat-card"><span>Eficiência dos filtros</span><strong>${filterEfficiency.toFixed(1)}%</strong></div>
+    <div class="stat-card"><span>Filtro líder</span><strong>${escapeHtml(topFilter?.filterLabel || topFilter?.filterName || "--")}</strong></div>
+    <div class="stat-card"><span>Ativo crítico</span><strong>${escapeHtml(topAsset?.symbol || "--")}</strong></div>
+    <div class="stat-card"><span>Score médio bloqueado</span><strong>${avgScore.toFixed(1)}</strong></div>
+  `;
+}
+
+function syncRuntimeDashboard(runtimePayload = {}) {
+  const runtime = extractRuntimeSignals(runtimePayload);
+  const latestSignal = runtime.bestOpportunity || runtime.ranking[0] || runtime.history[0] || null;
+
+  if (runtime.bestOpportunity) {
+    renderSignal(runtime.bestOpportunity);
+  }
+
+  if (runtime.history.length) {
+    state.history = filterConfirmedOperationalSignals(runtime.history).slice(0, 50);
+    renderHistory();
+    drawEquityCurve();
+  }
+
+  if (latestSignal) {
+    updateInstitutionalCards(latestSignal);
+    updateRealtimeMetrics(latestSignal);
+    renderOperationalHeatmap(latestSignal);
+    renderAIInsights(latestSignal);
+    renderShadowMode(latestSignal, "engine");
+  }
+
+  const stats = runtime.analytics?.historyStats || {};
+  if (Object.keys(stats).length) {
+    if (el.statTotal) el.statTotal.textContent = stats.total ?? stats.totalSignals ?? el.statTotal.textContent;
+    if (el.statWins) el.statWins.textContent = stats.wins ?? el.statWins.textContent;
+    if (el.statLosses) el.statLosses.textContent = stats.losses ?? el.statLosses.textContent;
+    if (el.statWinrate) el.statWinrate.textContent = `${stats.winRate ?? stats.winrate ?? 0}%`;
+    if (el.statsUpdated) el.statsUpdated.textContent = "Engine live";
+  }
+}
+
 function renderFilterAnalytics(data = {}) {
   const summary = data.summary || {};
   const blocksByFilter = Array.isArray(data.blocksByFilter)
@@ -967,6 +1234,14 @@ function renderFilterAnalytics(data = {}) {
       `).join("")
       : `<div class="history-empty">Aguardando bloqueios da engine</div>`;
   }
+
+  renderFilterPerformance({
+    ...data,
+    blocksByFilter,
+    blocksByAsset,
+    blocksByHour,
+    recentBlocks
+  });
 }
 
 async function loadFilterAnalytics() {
@@ -1394,9 +1669,9 @@ function startAIEngine() {
 async function loadRuntimeIntegrations() {
   if (!state.accessToken) return;
 
-  const [dashboardResult, engineResult, premiumResult] = await Promise.allSettled([
+  const [dashboardResult, runtimeResult, premiumResult] = await Promise.allSettled([
     apiFetch("/api/dashboard"),
-    apiFetch("/api/engine"),
+    apiFetch("/api/runtime/state"),
     apiFetch("/api/premium/status")
   ]);
 
@@ -1405,19 +1680,28 @@ async function loadRuntimeIntegrations() {
     return result.value.json().catch(() => null);
   };
 
-  const [dashboardData, engineData, premiumData] = await Promise.all([
+  const [dashboardData, runtimeData, premiumData] = await Promise.all([
     parseJson(dashboardResult),
-    parseJson(engineResult),
+    parseJson(runtimeResult),
     parseJson(premiumResult)
   ]);
 
   state.dashboardSnapshot = dashboardData?.data || null;
-  state.engineSnapshot = engineData?.data || null;
+  state.engineSnapshot = runtimeData?.data || null;
   state.premiumSnapshot = premiumData?.data || premiumData || null;
 
+  syncRuntimeDashboard(dashboardData);
+
   const runtimeState = state.engineSnapshot || state.dashboardSnapshot || {};
-  updateInstitutionalCards(runtimeState.lastSignal || runtimeState.currentSignal || {});
-  updateRealtimeMetrics(runtimeState.lastSignal || runtimeState.currentSignal || {});
+  const runtimeSignal = runtimeState.lastSignal || runtimeState.currentSignal || runtimeState.bestOpportunity || null;
+  updateInstitutionalCards(runtimeSignal || {});
+  updateRealtimeMetrics(runtimeSignal || {});
+
+  if (runtimeSignal) {
+    renderShadowMode(runtimeSignal, "runtime");
+  } else {
+    renderShadowMode(null, "runtime");
+  }
 }
 
 async function bootPanel() {
@@ -1425,6 +1709,8 @@ async function bootPanel() {
   applyPlanLocks();
   applyModeUI(state.currentMode, false);
   ensureInstitutionalCenter();
+  ensureShadowModePanel();
+  ensureFilterPerformancePanel();
   updateInstitutionalCards();
   updateRealtimeMetrics();
   renderOperationalHeatmap();
@@ -1437,6 +1723,12 @@ async function bootPanel() {
   ensureMiniChart();
   startChartLoop();
   startAIEngine();
+
+  if (state.filterAnalyticsTimer) clearInterval(state.filterAnalyticsTimer);
+  state.filterAnalyticsTimer = setInterval(() => {
+    if (state.accessToken) loadFilterAnalytics();
+  }, 30000);
+
   await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics()]);
 }
 
@@ -1529,6 +1821,7 @@ if (el.upgradeBtn) {
 socket.on("connect", () => {
   setConnection("Online");
   updateInstitutionalCards();
+  renderShadowMode(null, "connect");
   renderProLogs({}, "Socket.IO conectado ao barramento em tempo real.");
   pushTimelineEvent("Socket.IO conectado ao barramento em tempo real.");
 
@@ -1543,6 +1836,7 @@ socket.on("disconnect", () => {
   const saasStatusCard = document.getElementById("saasStatusCard");
   if (saasStatus) saasStatus.textContent = "SaaS reconectando";
   if (saasStatusCard) saasStatusCard.textContent = "Reconectando";
+  renderShadowMode(null, "disconnect");
   renderProLogs({}, "Socket.IO desconectado; camada visual em modo de proteção.");
   pushTimelineEvent("Socket.IO desconectado; modo de proteção visual ativo.");
 });
@@ -1552,6 +1846,8 @@ socket.on("connect_error", () => {
 });
 
 socket.on("signal", (signal) => {
+  renderShadowMode(signal, "signal");
+
   if (isPremium()) {
     renderSignal(signal);
   }
@@ -1565,6 +1861,8 @@ socket.on("signal", (signal) => {
 });
 
 socket.on("signal-result-updated", (signal) => {
+  renderShadowMode(signal, "result");
+
   const index = state.history.findIndex((item) => item.id === signal.id);
 
   if (index !== -1) {
@@ -1580,11 +1878,63 @@ socket.on("signal-result-updated", (signal) => {
   }
 });
 
+socket.on("bestOpportunity", (signal) => {
+  if (!signal) return;
+  renderShadowMode(signal, "bestOpportunity");
+  renderSignal(signal);
+  updateInstitutionalCards(signal);
+  updateRealtimeMetrics(signal);
+});
+
+socket.on("engine:update", (payload) => {
+  syncRuntimeDashboard(payload);
+});
+
+socket.on("history", (signals) => {
+  const confirmed = filterConfirmedOperationalSignals(normalizeSignalCollection(signals));
+  if (!confirmed.length) return;
+
+  state.history = confirmed.slice(0, 50);
+  renderHistory();
+  drawEquityCurve();
+  loadStats();
+});
+
+socket.on("execution", (payload) => {
+  if (!payload) return;
+  renderShadowMode({
+    ...payload,
+    symbol: payload.symbol || payload.asset || "ENGINE",
+    signal: payload.allowed === false ? "WAIT" : payload.signal,
+    direction: payload.allowed === false ? "WAIT" : payload.direction,
+    blocked: payload.allowed === false,
+    blockReason: payload.reason,
+    finalScore: payload.adjustedScore || payload.finalScore || payload.score || 0,
+    timestamp: new Date().toISOString()
+  }, "execution");
+
+  if (payload.allowed === false) {
+    loadFilterAnalytics();
+  }
+});
+
+socket.on("filter-analytics:update", (payload) => {
+  const analytics = payload?.data || payload;
+  if (analytics && typeof analytics === "object") {
+    state.filterAnalytics = analytics;
+    renderFilterAnalytics(analytics);
+  } else {
+    loadFilterAnalytics();
+  }
+});
+
 window.setResult = setResult;
 
 document.addEventListener("DOMContentLoaded", async () => {
   startClock();
   ensureInstitutionalCenter();
+  ensureShadowModePanel();
+  ensureFilterPerformancePanel();
   updateRealtimeMetrics();
   renderOperationalHeatmap();
   renderAIInsights();
