@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
   <title>AERIX | Login</title>
   <style>
     :root {
@@ -50,6 +51,7 @@
       background: rgba(255, 255, 255, 0.02);
       box-shadow: var(--shadow);
       backdrop-filter: blur(18px);
+      isolation: isolate;
     }
 
     .login-brand {
@@ -192,6 +194,13 @@
       font-weight: 700;
       cursor: pointer;
       box-shadow: 0 12px 30px rgba(79, 140, 255, 0.24);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    }
+
+    .login-button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 36px rgba(79, 140, 255, 0.28);
+      filter: saturate(1.08);
     }
 
     .login-button:disabled {
@@ -232,6 +241,13 @@
 
       .brand-metrics {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
       }
     }
   </style>
