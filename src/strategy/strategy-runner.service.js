@@ -263,6 +263,12 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   const m15Strength = Number(m15.strengthPercent || 0);
   const avgTrendStrength = (h1Strength + m15Strength) / 2;
   const dataQuality = snapshot?.dataQuality || {};
+  const provider = dataQuality.provider || snapshot?.provider || null;
+  const providerStatus = dataQuality.providerStatus || null;
+  const apiResponse = dataQuality.apiResponse || null;
+  const fallbackReason = dataQuality.fallbackReason || null;
+  const fallbackSource = dataQuality.fallbackSource || null;
+  const marketDataSource = dataQuality.marketDataSource || dataQuality.source || snapshot?.source || null;
 
   const isLowVolatility = volatility > 0 && volatility < 0.12;
   const isVeryLowVolatility = volatility > 0 && volatility < rules.blockers.veryLowVolatility;
@@ -320,6 +326,12 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
     isSevereWeakAlignment,
     isHighVolatility,
     isFallbackData,
+    provider,
+    providerStatus,
+    apiResponse,
+    fallbackReason,
+    fallbackSource,
+    marketDataSource,
     hasInsufficientCandles,
     penaltyScore: penalties.reduce((total, penalty) => total + penalty.value, 0),
     penaltyReasons: penalties.map((penalty) => penalty.reason),
@@ -369,6 +381,14 @@ function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinSco
     },
     volatility: Number(m5.volatilityPercent || 0),
     marketRegime,
+    provider: snapshot?.dataQuality?.provider || null,
+    providerStatus: snapshot?.dataQuality?.providerStatus || null,
+    apiResponse: snapshot?.dataQuality?.apiResponse || null,
+    fallbackReason: snapshot?.dataQuality?.fallbackReason || null,
+    fallbackSource: snapshot?.dataQuality?.fallbackSource || null,
+    marketDataSource: snapshot?.dataQuality?.marketDataSource || snapshot?.dataQuality?.source || snapshot?.source || null,
+    fallbackConditions: snapshot?.dataQuality?.fallbackConditions || null,
+    timeframeAudits: snapshot?.dataQuality?.timeframeAudits || null,
     finalScore: Number(result?.finalScore ?? result?.confidence ?? confidence ?? 0),
     confidence: Number(result?.confidence ?? confidence ?? 0),
     calculatedDirection: result?.signal ?? null,
