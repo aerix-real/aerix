@@ -328,6 +328,61 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   };
 }
 
+
+function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinScore, evaluated, validStrategies, best, marketValidation, confidence, result, absenceReason, mode }) {
+  const h1 = snapshot?.timeframes?.h1 || {};
+  const m15 = snapshot?.timeframes?.m15 || {};
+  const m5 = snapshot?.timeframes?.m5 || {};
+  const strategyDiagnostics = evaluated.map((item) => ({
+    name: item.name,
+    valid: item.valid,
+    direction: item.direction ?? null,
+    rawScore: item.rawScore,
+    weightedScore: item.weightedScore,
+    explanation: item.explanation || null
+  }));
+
+  return {
+    scope: "aerix_direction_audit",
+    event: "strategy_direction_generation",
+    timestamp: new Date().toISOString(),
+    mode: normalizeMode(mode),
+    trendDirection: {
+      h1: h1.direction || "neutral",
+      m15: m15.direction || "neutral",
+      m5: m5.direction || "neutral",
+      dominant: mtf.dominantDirection
+    },
+    trendStrength: {
+      h1: Number(h1.strengthPercent || 0),
+      m15: Number(m15.strengthPercent || 0),
+      m5: Number(m5.strengthPercent || 0),
+      alignment: mtf.alignment,
+      isAligned: mtf.isAligned
+    },
+    momentum: {
+      bestStrategy: best?.name || null,
+      bestStrategyDirection: best?.direction ?? null,
+      sameDirectionConfirmations: best
+        ? validStrategies.filter((item) => item.direction === best.direction).length
+        : 0
+    },
+    volatility: Number(m5.volatilityPercent || 0),
+    marketRegime,
+    finalScore: Number(result?.finalScore ?? result?.confidence ?? confidence ?? 0),
+    confidence: Number(result?.confidence ?? confidence ?? 0),
+    calculatedDirection: result?.signal ?? null,
+    directionAbsenceReason: absenceReason || null,
+    dynamicMinScore,
+    marketValidation,
+    strategyDiagnostics
+  };
+}
+
+function emitDirectionAuditLog(payload) {
+  console.log(JSON.stringify(payload));
+}
+
 function runStrategies({ snapshot, mode = "balanced" }) {
   const rules = getModeRules(mode);
   const mtf = buildMtfContext(snapshot);
@@ -363,7 +418,10 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   const marketValidation = validateMarketConditions(snapshot, mtf, mode);
 
   if (!best || marketValidation.shouldBlock) {
-    return {
+    const absenceReason = !best
+      ? "Nenhuma estratégia válida retornou direção CALL/PUT."
+      : `Market validation bloqueou direção: ${marketValidation.blocks.join(" | ")}`;
+    const result = {
       signal: "WAIT",
       confidence: 0,
       entryQuality: "weak",
@@ -385,6 +443,23 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         hardBlocks: marketValidation.blocks
       }
     };
+
+    emitDirectionAuditLog(buildStrategyAuditSnapshot({
+      snapshot,
+      mtf,
+      marketRegime,
+      dynamicMinScore,
+      evaluated,
+      validStrategies,
+      best,
+      marketValidation,
+      confidence: 0,
+      result,
+      absenceReason,
+      mode
+    }));
+
+    return result;
   }
 
   const sameDirection = validStrategies.filter(
@@ -403,7 +478,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   const isCriticalDynamicGap = dynamicScoreGap > dynamicScoreTolerance;
 
   if (isCriticalDynamicGap) {
-    return {
+    const absenceReason = `Score ${confidence} ficou ${Number(dynamicScoreGap.toFixed(2))} pontos abaixo do mínimo dinâmico ${dynamicMinScore}, excedendo tolerância ${dynamicScoreTolerance}.`;
+    const result = {
       signal: "WAIT",
       confidence,
       entryQuality: buildEntryQuality(confidence),
@@ -427,13 +503,30 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         hardBlocks: []
       }
     };
+
+    emitDirectionAuditLog(buildStrategyAuditSnapshot({
+      snapshot,
+      mtf,
+      marketRegime,
+      dynamicMinScore,
+      evaluated,
+      validStrategies,
+      best,
+      marketValidation,
+      confidence,
+      result,
+      absenceReason,
+      mode
+    }));
+
+    return result;
   }
 
   const dynamicPenaltyReasons = dynamicScoreGap > 0
     ? [`Score ${confidence} abaixo do mínimo dinâmico ${dynamicMinScore}; convertido em WATCHLIST/penalidade no modo ${normalizeMode(mode)}.`]
     : [];
 
-  return {
+  const result = {
     signal: best.direction,
     confidence,
     entryQuality: buildEntryQuality(confidence),
@@ -461,6 +554,23 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       hardBlocks: []
     }
   };
+
+  emitDirectionAuditLog(buildStrategyAuditSnapshot({
+    snapshot,
+    mtf,
+    marketRegime,
+    dynamicMinScore,
+    evaluated,
+    validStrategies,
+    best,
+    marketValidation,
+    confidence,
+    result,
+    absenceReason: null,
+    mode
+  }));
+
+  return result;
 }
 
 module.exports = {

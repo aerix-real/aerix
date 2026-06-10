@@ -32,6 +32,53 @@ function logStructuredEngineError(event, error, context = {}) {
   }));
 }
 
+
+function buildDirectionAbsenceReason(signal = {}) {
+  const direction = signal.signal || signal.direction;
+
+  if (["CALL", "PUT"].includes(direction)) return null;
+  if (signal.blockReason || signal.block_reason) return signal.blockReason || signal.block_reason;
+  if (signal.execution?.reason) return signal.execution.reason;
+  if (Array.isArray(signal.blocks) && signal.blocks.length) return signal.blocks.join(" | ");
+  if (Array.isArray(signal.reasons) && signal.reasons.length) return signal.reasons.join(" | ");
+  if (direction === null) return "direction calculada como null.";
+  if (direction === undefined) return "direction calculada como undefined.";
+  if (direction === "WAIT") return "Sinal permaneceu WAIT sem bloco específico.";
+
+  return "Direção CALL/PUT ausente sem motivo explícito.";
+}
+
+function emitEngineDirectionAudit(stage, signal = {}) {
+  const indicators = signal.indicators || {};
+  console.log(JSON.stringify({
+    scope: "aerix_direction_audit",
+    event: "engine_direction_pipeline",
+    stage,
+    timestamp: new Date().toISOString(),
+    symbol: signal.symbol || signal.asset || "UNKNOWN",
+    trendDirection: signal.trendDirection || signal.trend_direction || signal.mtf?.dominantDirection || "neutral",
+    trendStrength: signal.trendStrength ?? signal.trend_strength ?? null,
+    momentum: {
+      m5MacdState: indicators.m5?.macd?.state || null,
+      m15MacdState: indicators.m15?.macd?.state || null,
+      h1MacdState: indicators.h1?.macd?.state || null
+    },
+    volatility: signal.volatility ?? null,
+    marketRegime: signal.marketRegime || signal.market_regime || "NORMAL",
+    finalScore: Number(signal.finalScore ?? signal.final_score ?? signal.score ?? 0),
+    confidence: Number(signal.confidence ?? 0),
+    calculatedDirection: signal.direction ?? signal.signal ?? null,
+    signal: signal.signal ?? null,
+    executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? signal.execution?.allowed ?? null,
+    blockReason: signal.blockReason || signal.block_reason || signal.execution?.reason || null,
+    directionAbsenceReason: buildDirectionAbsenceReason(signal),
+    strategyName: signal.strategyName || signal.strategy_name || null,
+    adaptiveAdjustment: signal.adaptiveAdjustment ?? signal.adaptive_adjustment ?? null,
+    tuningWeight: signal.tuningWeight ?? signal.tuning_weight ?? null,
+    dynamicThresholds: signal.dynamicThresholds || null
+  }));
+}
+
 class EngineRunnerService {
   constructor() {
     this.running = false;
@@ -402,11 +449,14 @@ class EngineRunnerService {
             mode
           });
 
+          emitEngineDirectionAudit("after_strategy_payload", signal);
+
           signal = this.applyPredictiveDecisionToSignal(signal, predictiveDecision);
           signal = await this.applyAdaptiveLayers(signal);
           signal = applyLossPenalty(signal, this.latestResults);
           signal = this.applySniperTiming(signal);
           signal = this.applyExecutionValidation(signal);
+          emitEngineDirectionAudit("after_execution_validation", signal);
           signal = this.normalizeForDatabase(signal);
 
           cycleResults.push(signal);
