@@ -564,6 +564,8 @@ class EngineRunnerService {
 
     const finalScore = Number(strategyResult.finalScore || strategyResult.confidence || 0);
     const signalDirection = strategyResult.signal || "WAIT";
+    const isFallbackSignal = strategyResult.marketRegime === "FALLBACK_SIGNAL";
+    const fallbackBlocked = Boolean(snapshot?.isFallback) && !isFallbackSignal;
 
     const baseSignal = {
       symbol,
@@ -601,7 +603,8 @@ class EngineRunnerService {
       trendStrength: Number(snapshot?.timeframes?.h1?.strengthPercent || 0),
       trend_strength: Number(snapshot?.timeframes?.h1?.strengthPercent || 0),
       volatility: Number(snapshot?.timeframes?.m5?.volatilityPercent || 0),
-      market_regime: this.detectMarketRegime(snapshot),
+      marketRegime: strategyResult.marketRegime || this.detectMarketRegime(snapshot),
+      market_regime: strategyResult.marketRegime || this.detectMarketRegime(snapshot),
       entry_price: lastM5?.close ?? null,
       price: lastM5?.close ?? null,
       expires_at: expiresAt.toISOString(),
@@ -609,13 +612,13 @@ class EngineRunnerService {
       expiration: expiresAt.toISOString(),
       created_at: now.toISOString(),
       result: "pending",
-      blocked: Boolean(snapshot?.isFallback),
-      blockReason: snapshot?.isFallback
+      blocked: Boolean(strategyResult.blocked || fallbackBlocked),
+      blockReason: strategyResult.blockReason || (fallbackBlocked
         ? "Fonte de dados em fallback; entrada operacional bloqueada."
-        : null,
-      block_reason: snapshot?.isFallback
+        : null),
+      block_reason: strategyResult.blockReason || (fallbackBlocked
         ? "Fonte de dados em fallback; entrada operacional bloqueada."
-        : null
+        : null)
     };
 
     baseSignal.timing = this.buildTiming(baseSignal);
@@ -950,6 +953,9 @@ class EngineRunnerService {
     const mode = signal.mode === "aggressive" ? "aggressive" : signal.mode === "conservative" ? "conservative" : "balanced";
 
     if (!["CALL", "PUT"].includes(direction)) return "WATCHLIST";
+    if (signal.marketRegime === "FALLBACK_SIGNAL" || signal.market_regime === "FALLBACK_SIGNAL") {
+      return "FALLBACK_SIGNAL";
+    }
 
     const high = mode === "conservative" ? 88 : mode === "aggressive" ? 78 : 82;
     const medium = mode === "conservative" ? 80 : mode === "aggressive" ? 62 : 68;
