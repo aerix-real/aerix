@@ -122,7 +122,7 @@ async function insertSignal(data) {
   const signal = data.signal || data.direction || "WAIT";
 
   const values = [
-    data.user_id || 1,
+    data.user_id ?? null,
     data.symbol || "UNKNOWN",
     data.direction || signal,
     signal,

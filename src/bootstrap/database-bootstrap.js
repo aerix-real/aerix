@@ -1,5 +1,17 @@
 const db = require("../config/database");
 
+
+async function ensureNumericColumn(table, column, defaultValue = null) {
+  try {
+    const setDefault = defaultValue === null ? "" : `, ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`;
+    await db.query(
+      `ALTER TABLE public.${table} ALTER COLUMN ${column} TYPE NUMERIC USING ${column}::numeric${setDefault}`
+    );
+  } catch (err) {
+    console.error(`Erro ao normalizar coluna numérica ${column}:`, err.message);
+  }
+}
+
 async function ensureColumn(table, column, definition) {
   try {
     const check = await db.query(
@@ -44,12 +56,15 @@ async function ensureSignalHistoryTable() {
   `);
 
   await ensureColumn("signal_history", "user_id", "INTEGER");
+  await ensureColumn("signal_history", "confidence", "NUMERIC DEFAULT 0");
+  await ensureNumericColumn("signal_history", "confidence", 0);
   await ensureColumn("signal_history", "signal", "TEXT");
   await ensureColumn("signal_history", "mode", "TEXT");
   await ensureColumn("signal_history", "trend_direction", "TEXT");
   await ensureColumn("signal_history", "trend_strength", "NUMERIC DEFAULT 0");
   await ensureColumn("signal_history", "volatility", "NUMERIC DEFAULT 0");
   await ensureColumn("signal_history", "entry_quality", "TEXT");
+  await ensureColumn("signal_history", "strategy_name", "TEXT");
 
   await ensureColumn("signal_history", "blocked", "BOOLEAN DEFAULT FALSE");
   await ensureColumn("signal_history", "block_reason", "TEXT");
@@ -320,6 +335,21 @@ async function ensureDynamicThresholdTables() {
     );
   `);
 
+  await ensureColumn("threshold_history", "scope_type", "TEXT NOT NULL DEFAULT 'composite'");
+  await ensureColumn("threshold_history", "scope_key", "TEXT NOT NULL DEFAULT 'global'");
+  await ensureColumn("threshold_history", "symbol", "TEXT");
+  await ensureColumn("threshold_history", "hour", "INTEGER");
+  await ensureColumn("threshold_history", "strategy_name", "TEXT");
+  await ensureColumn("threshold_history", "market_regime", "TEXT");
+  await ensureColumn("threshold_history", "mode", "TEXT DEFAULT 'balanced'");
+  await ensureColumn("threshold_history", "minimum_score", "NUMERIC DEFAULT 72");
+  await ensureColumn("threshold_history", "confidence", "NUMERIC DEFAULT 72");
+  await ensureColumn("threshold_history", "sniper_timing", "NUMERIC DEFAULT 88");
+  await ensureColumn("threshold_history", "adaptive_adjustment", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_history", "performance_snapshot", "JSONB DEFAULT '{}'::jsonb");
+  await ensureColumn("threshold_history", "reasons", "JSONB DEFAULT '[]'::jsonb");
+  await ensureColumn("threshold_history", "created_at", "TIMESTAMP DEFAULT NOW()");
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.threshold_changes (
       id SERIAL PRIMARY KEY,
@@ -334,6 +364,16 @@ async function ensureDynamicThresholdTables() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  await ensureColumn("threshold_changes", "scope_type", "TEXT NOT NULL DEFAULT 'composite'");
+  await ensureColumn("threshold_changes", "scope_key", "TEXT NOT NULL DEFAULT 'global'");
+  await ensureColumn("threshold_changes", "threshold_name", "TEXT NOT NULL DEFAULT 'unknown'");
+  await ensureColumn("threshold_changes", "previous_value", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_changes", "new_value", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_changes", "delta", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_changes", "reason", "TEXT");
+  await ensureColumn("threshold_changes", "context", "JSONB DEFAULT '{}'::jsonb");
+  await ensureColumn("threshold_changes", "created_at", "TIMESTAMP DEFAULT NOW()");
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.threshold_performance (
@@ -355,9 +395,33 @@ async function ensureDynamicThresholdTables() {
     );
   `);
 
+  await ensureColumn("threshold_performance", "scope_type", "TEXT NOT NULL DEFAULT 'composite'");
+  await ensureColumn("threshold_performance", "scope_key", "TEXT NOT NULL DEFAULT 'global'");
+  await ensureColumn("threshold_performance", "symbol", "TEXT");
+  await ensureColumn("threshold_performance", "hour", "INTEGER");
+  await ensureColumn("threshold_performance", "strategy_name", "TEXT");
+  await ensureColumn("threshold_performance", "market_regime", "TEXT");
+  await ensureColumn("threshold_performance", "total", "INTEGER DEFAULT 0");
+  await ensureColumn("threshold_performance", "wins", "INTEGER DEFAULT 0");
+  await ensureColumn("threshold_performance", "losses", "INTEGER DEFAULT 0");
+  await ensureColumn("threshold_performance", "winrate", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_performance", "lossrate", "NUMERIC DEFAULT 0");
+  await ensureColumn("threshold_performance", "last_thresholds", "JSONB DEFAULT '{}'::jsonb");
+  await ensureColumn("threshold_performance", "updated_at", "TIMESTAMP DEFAULT NOW()");
+
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_threshold_history_scope_created
       ON public.threshold_history (scope_type, scope_key, created_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_threshold_history_symbol_created
+      ON public.threshold_history (symbol, created_at DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_threshold_history_strategy_created
+      ON public.threshold_history (strategy_name, created_at DESC);
   `);
 
   await db.query(`
