@@ -21,6 +21,17 @@ const {
   filterConfirmedOperationalSignals
 } = require("../utils/signal-history-filter");
 
+function logStructuredEngineError(event, error, context = {}) {
+  console.error(JSON.stringify({
+    scope: "aerix_engine_runner",
+    event,
+    timestamp: new Date().toISOString(),
+    errorCode: error?.code || null,
+    errorMessage: error?.message || String(error),
+    ...context
+  }));
+}
+
 class EngineRunnerService {
   constructor() {
     this.running = false;
@@ -416,7 +427,7 @@ class EngineRunnerService {
             continue;
           }
 
-          const saved = await signalRepository.insertSignal(signal);
+          const saved = await this.persistGeneratedSignal(signal);
           signal.id = saved?.id || signal.id;
 
           this.bestOpportunity = signal;
@@ -802,6 +813,30 @@ class EngineRunnerService {
 
       result: signal.result || "pending"
     };
+  }
+
+
+  async persistGeneratedSignal(signal) {
+    try {
+      return await signalRepository.insertSignal(signal);
+    } catch (error) {
+      logStructuredEngineError("signal_persistence_failed", error, {
+        table: "signal_history",
+        symbol: signal.symbol || signal.asset || "UNKNOWN",
+        signal: signal.signal || signal.direction || "WAIT",
+        executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? null,
+        nonBlocking: true
+      });
+
+      await this.auditDecision("signal_persistence_failed", {
+        symbol: signal.symbol || signal.asset || "UNKNOWN",
+        signal: signal.signal || signal.direction || "WAIT",
+        executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? null,
+        error: error.message || String(error)
+      });
+
+      return null;
+    }
   }
 
   async recordFilterAnalytics(signal, source = "engine") {
