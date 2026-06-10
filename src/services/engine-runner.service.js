@@ -926,7 +926,7 @@ class EngineRunnerService {
 
     return {
       ...signal,
-      user_id: signal.user_id || 1,
+      user_id: signal.user_id ?? null,
 
       symbol: signal.symbol || signal.asset || "UNKNOWN",
 
