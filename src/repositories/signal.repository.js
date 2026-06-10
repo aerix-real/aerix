@@ -33,6 +33,34 @@ function createStatsBucket() {
   };
 }
 
+function createEmptyStats() {
+  return {
+    bySymbol: {},
+    byHour: {},
+    byStrategy: {},
+    bySignal: {},
+    bySymbolSignal: {},
+    byMarketRegime: {},
+    lossPatterns: {},
+    global: createStatsBucket()
+  };
+}
+
+function isSchemaMismatchError(error) {
+  return error?.code === "42703" || /column .* does not exist/i.test(String(error?.message || ""));
+}
+
+function logStructuredRepositoryError(event, error, context = {}) {
+  console.error(JSON.stringify({
+    scope: "aerix_signal_repository",
+    event,
+    timestamp: new Date().toISOString(),
+    errorCode: error?.code || null,
+    errorMessage: error?.message || String(error),
+    ...context
+  }));
+}
+
 function updateBucket(bucket, result) {
   bucket.total += 1;
 
@@ -167,7 +195,8 @@ async function getLatestConfirmed(limit = 20) {
 }
 
 async function getStats() {
-  const result = await db.query(`
+  try {
+    const result = await db.query(`
     SELECT
       symbol,
       signal,
@@ -278,7 +307,19 @@ async function getStats() {
   finalizeGroup(stats.lossPatterns);
   finalizeBucket(stats.global);
 
-  return stats;
+    return stats;
+  } catch (error) {
+    if (isSchemaMismatchError(error)) {
+      logStructuredRepositoryError("stats_schema_mismatch", error, {
+        table: "signal_history",
+        fallback: "empty_stats"
+      });
+
+      return createEmptyStats();
+    }
+
+    throw error;
+  }
 }
 
 async function getPerformanceBySymbol(symbol) {
