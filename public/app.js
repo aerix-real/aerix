@@ -25,10 +25,6 @@ const state = {
   refreshToken: localStorage.getItem(STORAGE_KEYS.refreshToken),
   aiStateIndex: 0,
   currentMode: localStorage.getItem("aerix_mode") || "equilibrado",
-  chartData: Array.from(
-    { length: 34 },
-    (_, index) => 48 + Math.sin(index / 2) * 10 + Math.random() * 12
-  ),
   chartTimer: null,
   aiTimer: null,
   institutionalHeatmap: [],
@@ -99,6 +95,8 @@ const el = {
   engineProcessStatus: document.getElementById("engineProcessStatus"),
   lastCycleTime: document.getElementById("lastCycleTime"),
   lastCycleCompact: document.getElementById("lastCycleCompact"),
+  engineTopStatus: document.getElementById("engineTopStatus"),
+  topCurrentMode: document.getElementById("topCurrentMode"),
   rateLimitStatus: document.getElementById("rateLimitStatus"),
   websocketStatus: document.getElementById("websocketStatus"),
 
@@ -743,7 +741,9 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.currentRisk, getRiskLabel(signal));
   setTextContent(el.decisionReason, getDecisionReason(signal));
   setTextContent(el.aiReleaseStatus, release);
-  setTextContent(el.engineOnlineStatus, socket.connected ? "Online" : "Offline");
+  const engineStatus = socket.connected ? "Online" : "Offline";
+  setTextContent(el.engineOnlineStatus, engineStatus);
+  setTextContent(el.engineTopStatus, engineStatus);
   setTextContent(el.engineProcessStatus, source === "engine" || source === "bestOpportunity" ? "Processando" : "Aguardando");
   setTextContent(el.lastCycleTime, cycleTime);
   setTextContent(el.lastCycleCompact, cycleTime);
@@ -959,6 +959,8 @@ function applyModeUI(mode, notify = true) {
   if (modeDescription) {
     modeDescription.textContent = MODE_DESCRIPTIONS[safeMode] || MODE_DESCRIPTIONS.equilibrado;
   }
+
+  setTextContent(el.topCurrentMode, safeMode.charAt(0).toUpperCase() + safeMode.slice(1));
 
   if (notify) {
     showToast(`Modo ${safeMode} ativado.`, "success");
@@ -1457,34 +1459,27 @@ function renderHistory() {
   const visibleHistory = state.history.slice(0, getHistoryRenderLimit());
 
   visibleHistory.forEach((signal) => {
-    const item = document.createElement("div");
-    item.className = "history-item";
+    const item = document.createElement("details");
+    item.className = "history-item compact-history-item";
 
     const direction = getOperationalDirection(signal);
     const score = getOperationalScore(signal);
     const result = String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
+    const signalId = Number(signal.id);
+    const canSetResult = Number.isFinite(signalId) && signalId > 0;
 
     item.innerHTML = `
-      <div>
+      <summary class="history-summary-row">
         <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
-        <div class="history-meta">${formatTime(signal.created_at || signal.createdAt || signal.time)}</div>
-      </div>
-
-      <span class="badge direction-badge ${directionClass}">
-        ${escapeHtml(direction || "---")}
-      </span>
-
-      <span class="score-badge">${score}%</span>
-
-      <span class="badge result-badge ${resultClass}">
-        ${escapeHtml(result)}
-      </span>
-
-      <div class="action-buttons">
-        <button onclick="setResult(${Number(signal.id)}, 'WIN')">WIN</button>
-        <button onclick="setResult(${Number(signal.id)}, 'LOSS')">LOSS</button>
+        <span class="badge direction-badge ${directionClass}">${escapeHtml(direction || "---")}</span>
+        <span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span>
+      </summary>
+      <div class="history-detail-row">
+        <span>${formatTime(signal.created_at || signal.createdAt || signal.time)}</span>
+        <span>Score ${score}%</span>
+        ${canSetResult ? `<div class="action-buttons"><button onclick="setResult(${signalId}, 'WIN')">WIN</button><button onclick="setResult(${signalId}, 'LOSS')">LOSS</button></div>` : ""}
       </div>
     `;
 
@@ -1492,10 +1487,9 @@ function renderHistory() {
   });
 
   if (el.historyCount) {
-    el.historyCount.textContent = `${visibleHistory.length} sinais`;
+    el.historyCount.textContent = `${visibleHistory.length}/${state.history.length}`;
   }
 }
-
 
 function normalizeOperationalDirection(value) {
   const direction = String(value || "").trim().toUpperCase();
@@ -1728,136 +1722,11 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
-function ensureMiniChart() {
-  const bestPanel = document.querySelector(".best-opportunity-panel");
-
-  if (!bestPanel || document.getElementById("miniChartCanvas")) return;
-
-  const metrics = document.createElement("div");
-  metrics.className = "opportunity-metrics";
-  metrics.innerHTML = `
-    <div class="opportunity-metric"><span>Tendência</span><strong id="trendMetric">Neutra</strong></div>
-    <div class="opportunity-metric"><span>Volatilidade</span><strong id="volMetric">Monitorando</strong></div>
-    <div class="opportunity-metric"><span>Timing</span><strong id="timingMetric">Aguardando</strong></div>
-  `;
-
-  const wrap = document.createElement("div");
-  wrap.className = "mini-chart-wrap";
-  wrap.innerHTML = `<canvas id="miniChartCanvas" width="640" height="180"></canvas>`;
-
-  bestPanel.appendChild(metrics);
-  bestPanel.appendChild(wrap);
-}
-
-function pushChartPoint(value) {
-  const safe = Number.isFinite(Number(value)) ? Number(value) : 50;
-  const previous = state.chartData[state.chartData.length - 1] || 50;
-  const next = Math.max(12, Math.min(98, previous * 0.72 + safe * 0.28 + (Math.random() * 8 - 4)));
-
-  state.chartData.push(next);
-
-  if (state.chartData.length > 42) {
-    state.chartData.shift();
-  }
-}
-
-function drawMiniChart() {
-  const canvas = document.getElementById("miniChartCanvas");
-  if (!canvas) return;
-
-  const ctx = canvas.getContext("2d");
-  const width = canvas.width;
-  const height = canvas.height;
-
-  ctx.clearRect(0, 0, width, height);
-
-  const data = state.chartData;
-  const max = Math.max(...data, 100);
-  const min = Math.min(...data, 0);
-  const range = Math.max(1, max - min);
-
-  ctx.globalAlpha = 0.45;
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i < 6; i++) {
-    const y = (height / 5) * i;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    ctx.stroke();
-  }
-
-  ctx.globalAlpha = 1;
-  ctx.beginPath();
-
-  data.forEach((point, index) => {
-    const x = (width / (data.length - 1)) * index;
-    const y = height - ((point - min) / range) * (height - 24) - 12;
-
-    if (index === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  });
-
-  const gradient = ctx.createLinearGradient(0, 0, width, 0);
-  gradient.addColorStop(0, "#20b7ff");
-  gradient.addColorStop(0.5, "#00f0ff");
-  gradient.addColorStop(1, "#20e6a0");
-
-  ctx.strokeStyle = gradient;
-  ctx.lineWidth = 4;
-  ctx.shadowColor = "rgba(0,240,255,0.55)";
-  ctx.shadowBlur = 18;
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
-
-  const last = data[data.length - 1];
-  const x = width - 2;
-  const y = height - ((last - min) / range) * (height - 24) - 12;
-
-  ctx.beginPath();
-  ctx.arc(x - 5, y, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "#20e6a0";
-  ctx.fill();
-}
-
 function startChartLoop() {
-  ensureMiniChart();
-  drawMiniChart();
-
-  if (state.chartTimer) clearInterval(state.chartTimer);
-
-  state.chartTimer = setInterval(() => {
-    if (!state.isDocumentVisible) return;
-
-    pushChartPoint(45 + Math.random() * 35);
-    drawMiniChart();
-    drawEquityCurve();
-
-    const trend = document.getElementById("trendMetric");
-    const vol = document.getElementById("volMetric");
-    const timing = document.getElementById("timingMetric");
-
-    const last = state.chartData[state.chartData.length - 1];
-    const prev = state.chartData[state.chartData.length - 8] || last;
-
-    if (trend) trend.textContent = last > prev ? "Alta" : last < prev ? "Baixa" : "Neutra";
-    if (vol) vol.textContent = Math.abs(last - prev) > 12 ? "Alta" : "Média";
-    if (timing) timing.textContent = "Validando candle";
-
-    if (state.institutionalHeatmap.length) {
-      state.institutionalHeatmap = state.institutionalHeatmap.map((item, index) => ({
-        ...item,
-        value: Math.max(18, Math.min(99, item.value + Math.sin(Date.now() / 900 + index) * 2.8))
-      }));
-      updateRealtimeMetrics();
-      renderOperationalHeatmap();
-    }
-  }, 1800);
+  if (state.chartTimer) {
+    clearInterval(state.chartTimer);
+    state.chartTimer = null;
+  }
 }
 
 function startAIEngine() {
@@ -1924,7 +1793,6 @@ async function bootPanel() {
   if (!state.proLogs.length) {
     renderProLogs({}, "Centro Institucional sincronizado com a engine.");
   }
-  ensureMiniChart();
   startChartLoop();
   startAIEngine();
 
@@ -2169,7 +2037,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderOperationalHeatmap();
   renderAIInsights();
   drawEquityCurve();
-  ensureMiniChart();
   startChartLoop();
   startAIEngine();
   setupModeSwitcher();
