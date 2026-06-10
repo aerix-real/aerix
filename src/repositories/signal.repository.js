@@ -4,9 +4,9 @@ const MINIMUM_SCORE_SQL = `
   COALESCE(
     NULLIF(minimum_score, 0),
     CASE
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
-      ELSE 72
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 86
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 60
+      ELSE 68
     END
   )
 `;

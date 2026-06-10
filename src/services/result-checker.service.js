@@ -1,6 +1,7 @@
 const signalRepository = require("../repositories/signal.repository");
 const { getMarketSnapshot } = require("./market-data.service");
 const executionService = require("./execution.service");
+const filterAnalyticsService = require("./filter-analytics.service");
 
 class ResultCheckerService {
   constructor() {
@@ -76,6 +77,7 @@ class ResultCheckerService {
 
             // 🧠 IA aprende com WIN/LOSS
             executionService.learnFromResult(learningSignal, finalResult);
+            await filterAnalyticsService.updateShadowOutcomes(saved, finalResult).catch(() => 0);
 
             updated.push({
               ...saved,

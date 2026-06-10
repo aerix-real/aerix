@@ -67,10 +67,10 @@ class ExecutionService {
   getMinimumScoreByMode(signal) {
     const mode = this.getMode(signal);
 
-    if (mode === "conservative") return 88;
-    if (mode === "aggressive") return 64;
+    if (mode === "conservative") return 86;
+    if (mode === "aggressive") return 60;
 
-    return 72;
+    return 68;
   }
 
   normalizeResultList(list) {
@@ -561,7 +561,7 @@ class ExecutionService {
       };
     }
 
-    const scoreTolerance = mode === "aggressive" ? 10 : mode === "balanced" ? 6 : 0;
+    const scoreTolerance = mode === "aggressive" ? 14 : mode === "balanced" ? 8 : 0;
 
     if (adjustedScore < minimumScore - scoreTolerance) {
       return {

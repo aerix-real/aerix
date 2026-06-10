@@ -127,6 +127,10 @@ const el = {
   filterTotalSignals: document.getElementById("filterTotalSignals"),
   filterApprovedSignals: document.getElementById("filterApprovedSignals"),
   filterBlockedSignals: document.getElementById("filterBlockedSignals"),
+  filterWatchlistRate: document.getElementById("filterWatchlistRate"),
+  filterHighConfidenceRate: document.getElementById("filterHighConfidenceRate"),
+  filterMediumConfidenceRate: document.getElementById("filterMediumConfidenceRate"),
+  filterPenaltySignals: document.getElementById("filterPenaltySignals"),
   filterRankingList: document.getElementById("filterRankingList"),
   filterAssetList: document.getElementById("filterAssetList"),
   filterHourList: document.getElementById("filterHourList"),
@@ -1267,9 +1271,9 @@ function renderFilterPerformance(data = {}) {
 
   el.filterPerformanceCards.innerHTML = `
     <div class="stat-card"><span>Sinais bloqueados</span><strong>${filterEfficiency.toFixed(1)}%</strong></div>
+    <div class="stat-card"><span>Watchlist</span><strong>${Number(data.watchlistRate || 0).toFixed(1)}%</strong></div>
     <div class="stat-card"><span>Filtro líder</span><strong>${escapeHtml(topFilter?.filterLabel || topFilter?.filterName || "--")}</strong></div>
-    <div class="stat-card"><span>Ativo crítico</span><strong>${escapeHtml(topAsset?.symbol || "--")}</strong></div>
-    <div class="stat-card"><span>Score médio bloqueado</span><strong>${avgScore.toFixed(1)}</strong></div>
+    <div class="stat-card"><span>Penalizações</span><strong>${escapeHtml(data.penalizedSignals || data.penaltySignals || summary.total_penalties || 0)}</strong></div>
   `;
 }
 
@@ -1332,6 +1336,10 @@ function renderFilterAnalytics(data = {}) {
   if (el.filterTotalSignals) el.filterTotalSignals.textContent = data.analyzedSignals ?? data.totalSignals ?? 0;
   if (el.filterApprovedSignals) el.filterApprovedSignals.textContent = data.confirmedSignals ?? data.approvedSignals ?? 0;
   if (el.filterBlockedSignals) el.filterBlockedSignals.textContent = data.blockedAnalyses ?? data.blockedSignals ?? summary.total_blocks ?? 0;
+  if (el.filterWatchlistRate) el.filterWatchlistRate.textContent = `${Number(data.watchlistRate || 0).toFixed(1)}%`;
+  if (el.filterHighConfidenceRate) el.filterHighConfidenceRate.textContent = `${Number(data.highConfidenceRate || 0).toFixed(1)}%`;
+  if (el.filterMediumConfidenceRate) el.filterMediumConfidenceRate.textContent = `${Number(data.mediumConfidenceRate || 0).toFixed(1)}%`;
+  if (el.filterPenaltySignals) el.filterPenaltySignals.textContent = data.penalizedSignals ?? data.penaltySignals ?? summary.total_penalties ?? 0;
   if (el.filterAnalyticsUpdated) el.filterAnalyticsUpdated.textContent = summary.last_block_at ? formatTime(summary.last_block_at) : "sem bloqueios";
 
   if (el.filterRankingList) {
@@ -1342,7 +1350,7 @@ function renderFilterAnalytics(data = {}) {
             <span class="rank-position">#${index + 1}</span>
             <div>
               <strong>${escapeHtml(item.filterLabel || item.filterName || "Filtro")}</strong>
-              <span>${escapeHtml(item.affectedAssets || 0)} ativos impactados · score final médio ${Number(item.avgFinalScore || 0).toFixed(1)}</span>
+              <span>${escapeHtml(item.affectedAssets || 0)} ativos · ${escapeHtml(item.penalties || 0)} penalizações · ${escapeHtml(item.savedLosses || 0)} losses evitados · ${escapeHtml(item.lostWins || 0)} wins perdidos</span>
             </div>
           </div>
           <div class="rank-right">${escapeHtml(item.total || 0)}</div>

@@ -180,11 +180,16 @@ class PredictiveAiService {
       -22,
       8
     );
+    const criticallyLowScore = mode === "aggressive"
+      ? preScore < 24
+      : mode === "balanced"
+        ? preScore < 30
+        : preScore < minimum;
     const blocked = mode === "conservative"
-      ? preScore < minimum || severeRisks.length >= 1
+      ? criticallyLowScore || severeRisks.length >= 1
       : mode === "aggressive"
-        ? preScore < 28 || criticalRisks.length >= 1
-        : preScore < 34 || criticalRisks.length >= 1 || severeRisks.length >= 2;
+        ? criticallyLowScore || criticalRisks.length >= 2
+        : criticallyLowScore || criticalRisks.length >= 1;
     const riskReasons = risks.map((risk) => risk.reason);
 
     return {
@@ -204,7 +209,7 @@ class PredictiveAiService {
       decision: blocked ? "PRE_BLOCKED" : "PRE_APPROVED_WITH_SCORE_ADJUSTMENT",
       explanation: blocked
         ? `IA preditiva bloqueou risco crítico antes do sinal. Pre-score ${preScore}%. ${riskReasons.join(" ")}`
-        : `IA preditiva aplicou ajuste de score (${scoreAdjustment}). Pre-score ${preScore}%. ${reasons.join(" ")}`
+        : `IA preditiva converteu riscos moderados em ajuste de score (${scoreAdjustment}). Pre-score ${preScore}%. ${reasons.join(" ")}`
     };
   }
 }
