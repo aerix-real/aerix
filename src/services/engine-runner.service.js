@@ -142,7 +142,14 @@ class EngineRunnerService {
       trackedSymbols: this.symbols,
       lastCycleAt: this.lastCycleAt,
       lastStatus: this.lastStatus,
-      intervalMs: this.intervalMs
+      intervalMs: this.intervalMs,
+      twelveDataConsumption: typeof marketData.buildTwelveDataConsumptionReport === "function"
+        ? marketData.buildTwelveDataConsumptionReport({
+            symbols: this.symbols,
+            intervalMs: this.intervalMs,
+            maxSymbolsPerCycle: this.maxSymbolsPerCycle
+          })
+        : null
     };
   }
 

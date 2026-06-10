@@ -16,6 +16,29 @@ let LAST_FALLBACK_AT = 0;
 
 const PROVIDER = "twelvedata";
 const FALLBACK_SOURCE = "smart_fake_candles";
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const TIMEFRAME_CACHE_TTL_MS = Object.freeze({
+  "5min": 60 * 1000,
+  "15min": 180 * 1000,
+  "1h": 300 * 1000
+});
+const TIMEFRAME_REPORT_KEYS = Object.freeze({
+  "5min": "m5",
+  "15min": "m15",
+  "1h": "h1"
+});
+const DEFAULT_TIMEFRAME_TTL_MS = 60 * 1000;
+const inFlightTimeSeriesRequests = new Map();
+const twelveDataMetrics = {
+  startedAt: new Date().toISOString(),
+  providerRequests: 0,
+  cacheHits: 0,
+  inFlightHits: 0,
+  fallbackRequests: 0,
+  bySymbol: {},
+  byTimeframe: {},
+  byAssetTimeframe: {}
+};
 
 function sanitizeApiResponse(data) {
   if (!data || typeof data !== "object") return data ?? null;
@@ -83,6 +106,122 @@ function logMarketDataAudit(event, payload = {}) {
     timestamp: new Date().toISOString(),
     ...payload
   }));
+}
+
+
+function getTimeframeReportKey(interval) {
+  return TIMEFRAME_REPORT_KEYS[interval] || interval;
+}
+
+function getTimeframeCacheTtlMs(interval) {
+  return TIMEFRAME_CACHE_TTL_MS[interval] || DEFAULT_TIMEFRAME_TTL_MS;
+}
+
+function incrementCounter(target, key, amount = 1) {
+  target[key] = (target[key] || 0) + amount;
+}
+
+function trackTwelveDataRequest(symbol, interval) {
+  const timeframe = getTimeframeReportKey(interval);
+  twelveDataMetrics.providerRequests += 1;
+  incrementCounter(twelveDataMetrics.bySymbol, symbol);
+  incrementCounter(twelveDataMetrics.byTimeframe, timeframe);
+  incrementCounter(twelveDataMetrics.byAssetTimeframe, `${symbol}:${timeframe}`);
+}
+
+function trackCacheHit() {
+  twelveDataMetrics.cacheHits += 1;
+}
+
+function trackInFlightHit() {
+  twelveDataMetrics.inFlightHits += 1;
+}
+
+function trackFallbackRequest() {
+  twelveDataMetrics.fallbackRequests += 1;
+}
+
+function getConfiguredSymbols() {
+  return String(process.env.SYMBOLS || process.env.DEFAULT_SYMBOLS || "EUR/USD,GBP/USD,USD/JPY,AUD/USD")
+    .split(",")
+    .map((symbol) => symbol.trim())
+    .filter(Boolean)
+    .map(normalizeSymbol);
+}
+
+function estimatePostCacheRequestsPerDay({ symbols, intervalMs, maxSymbolsPerCycle }) {
+  const cyclesPerDay = Math.ceil(MS_PER_DAY / intervalMs);
+  const symbolsPerCycle = Math.min(maxSymbolsPerCycle, symbols.length || maxSymbolsPerCycle);
+  const visitsPerSymbolPerDay = symbols.length
+    ? (cyclesPerDay * symbolsPerCycle) / symbols.length
+    : 0;
+
+  return symbols.reduce((total) => {
+    const timeframeTotal = Object.entries(TIMEFRAME_CACHE_TTL_MS).reduce((sum, [, ttlMs]) => {
+      const maxRequestsByCacheWindow = Math.ceil(MS_PER_DAY / ttlMs);
+      return sum + Math.min(visitsPerSymbolPerDay, maxRequestsByCacheWindow);
+    }, 0);
+
+    return total + timeframeTotal;
+  }, 0);
+}
+
+function buildTwelveDataConsumptionReport(options = {}) {
+  const symbols = options.symbols?.length
+    ? options.symbols.map(normalizeSymbol)
+    : getConfiguredSymbols();
+  const intervalMs = Number(options.intervalMs || process.env.ENGINE_INTERVAL_MS || 15000);
+  const maxSymbolsPerCycle = Number(options.maxSymbolsPerCycle || process.env.MAX_SYMBOLS_PER_CYCLE || 2);
+  const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 15000;
+  const safeMaxSymbolsPerCycle = Number.isFinite(maxSymbolsPerCycle) && maxSymbolsPerCycle > 0 ? maxSymbolsPerCycle : 2;
+  const symbolsPerCycle = Math.min(safeMaxSymbolsPerCycle, symbols.length || safeMaxSymbolsPerCycle);
+  const timeframes = Object.keys(TIMEFRAME_CACHE_TTL_MS);
+  const requestsPerAssetPerCycle = timeframes.length;
+  const currentRequestsPerCycle = symbolsPerCycle * requestsPerAssetPerCycle;
+  const cyclesPerDay = Math.ceil(MS_PER_DAY / safeIntervalMs);
+  const estimatedDailyRequests = currentRequestsPerCycle * cyclesPerDay;
+  const estimatedDailyRequestsAfterCache = Math.ceil(estimatePostCacheRequestsPerDay({
+    symbols,
+    intervalMs: safeIntervalMs,
+    maxSymbolsPerCycle: safeMaxSymbolsPerCycle
+  }));
+  const reductionPercent = estimatedDailyRequests > 0
+    ? Number((((estimatedDailyRequests - estimatedDailyRequestsAfterCache) / estimatedDailyRequests) * 100).toFixed(2))
+    : 0;
+
+  return {
+    provider: PROVIDER,
+    endpoint: `${BASE_URL}/time_series`,
+    audit: {
+      allTwelveDataCalls: ["fetchTimeSeries -> GET /time_series"],
+      snapshotFlow: "getMarketSnapshot reutiliza um snapshot único com m5, m15 e h1 para todas as estratégias avaliadas no ciclo."
+    },
+    cacheTtlSeconds: Object.fromEntries(
+      Object.entries(TIMEFRAME_CACHE_TTL_MS).map(([interval, ttlMs]) => [getTimeframeReportKey(interval), ttlMs / 1000])
+    ),
+    currentRequestsPerCycle,
+    requestsPerAssetPerCycle,
+    requestsPerTimeframePerAsset: Object.fromEntries(
+      timeframes.map((interval) => [getTimeframeReportKey(interval), 1])
+    ),
+    configuredSymbols: symbols,
+    symbolsPerCycle,
+    cycleIntervalMs: safeIntervalMs,
+    cyclesPerDay,
+    estimatedDailyRequests,
+    estimatedDailyRequestsAfterCache,
+    expectedReductionAfterCache: {
+      requestsPerDay: Math.max(0, estimatedDailyRequests - estimatedDailyRequestsAfterCache),
+      percent: reductionPercent
+    },
+    observedRuntime: {
+      ...twelveDataMetrics,
+      bySymbol: { ...twelveDataMetrics.bySymbol },
+      byTimeframe: { ...twelveDataMetrics.byTimeframe },
+      byAssetTimeframe: { ...twelveDataMetrics.byAssetTimeframe },
+      duplicateRequestsAvoided: twelveDataMetrics.cacheHits + twelveDataMetrics.inFlightHits
+    }
+  };
 }
 
 // =========================
@@ -169,28 +308,12 @@ function shouldUseFallback() {
 // 🚀 FETCH PRINCIPAL
 // =========================
 
-async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
-  const normalized = normalizeSymbol(symbol);
-  const cacheKey = `${normalized}:${interval}`;
-
-  const cached = cacheService.get(cacheKey);
-  if (cached) {
-    const audit = getCandlesAudit(cached);
-    logMarketDataAudit("time_series_cache_hit", {
-      symbol: normalized,
-      interval,
-      provider: audit.provider,
-      providerStatus: "cache_hit",
-      apiResponse: audit.apiResponse,
-      fallbackReason: audit.fallbackReason,
-      fallbackSource: audit.fallbackSource,
-      marketDataSource: audit.marketDataSource
-    });
-    return cached;
-  }
+async function resolveTimeSeriesRequest(symbol, normalized, interval = "5min", outputsize = 120, cacheKey) {
+  const cacheTtlMs = getTimeframeCacheTtlMs(interval);
 
   if (shouldUseFallback()) {
     LAST_FALLBACK_AT = Date.now();
+    trackFallbackRequest();
     const fallbackReason = buildFallbackReason(
       process.env.USE_FAKE_DATA === "true" ? "use_fake_data_enabled" : "daily_limit_previously_reached",
       { rateLimit: DAILY_LIMIT_REACHED }
@@ -207,13 +330,16 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
     logMarketDataAudit("time_series_fallback_preflight", {
       symbol: normalized,
       interval,
+      cacheKey,
+      cacheTtlMs,
       ...audit
     });
-    cacheService.set(cacheKey, fake, 5000);
+    cacheService.set(cacheKey, fake, cacheTtlMs);
     return fake;
   }
 
   try {
+    trackTwelveDataRequest(normalized, interval);
     const response = await axios.get(`${BASE_URL}/time_series`, {
       params: {
         symbol: normalized,
@@ -229,6 +355,7 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
 
     if (data?.message?.includes("API credits")) {
       markDailyLimit(apiResponse);
+      trackFallbackRequest();
       const fallbackReason = buildFallbackReason("api_credits_limit", { rateLimit: true });
       const audit = {
         provider: PROVIDER,
@@ -242,8 +369,11 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
       logMarketDataAudit("time_series_fallback", {
         symbol: normalized,
         interval,
+        cacheKey,
+        cacheTtlMs,
         ...audit
       });
+      cacheService.set(cacheKey, fake, cacheTtlMs);
       return fake;
     }
 
@@ -302,6 +432,8 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
     logMarketDataAudit("time_series_success", {
       symbol: normalized,
       interval,
+      cacheKey,
+      cacheTtlMs,
       provider: PROVIDER,
       providerStatus: "success",
       apiResponse,
@@ -310,7 +442,7 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
       marketDataSource: "twelvedata"
     });
 
-    cacheService.set(cacheKey, parsed, 10000);
+    cacheService.set(cacheKey, parsed, cacheTtlMs);
 
     return parsed;
 
@@ -318,6 +450,7 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
     console.log("⚠️ API falhou → usando IA offline");
 
     LAST_FALLBACK_AT = Date.now();
+    trackFallbackRequest();
     const axiosCode = err?.code || null;
     const statusCode = err?.response?.status || null;
     const apiResponse = err?.audit?.apiResponse || sanitizeApiResponse(err?.response?.data);
@@ -342,12 +475,62 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
     logMarketDataAudit("time_series_fallback", {
       symbol: normalized,
       interval,
+      cacheKey,
+      cacheTtlMs,
       ...audit
     });
-    cacheService.set(cacheKey, fake, 5000);
+    cacheService.set(cacheKey, fake, cacheTtlMs);
 
     return fake;
   }
+}
+
+async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
+  const normalized = normalizeSymbol(symbol);
+  const cacheKey = `${PROVIDER}:time_series:${normalized}:${interval}:${outputsize}`;
+  const cacheTtlMs = getTimeframeCacheTtlMs(interval);
+
+  const cached = cacheService.get(cacheKey);
+  if (cached) {
+    trackCacheHit();
+    const audit = getCandlesAudit(cached);
+    logMarketDataAudit("time_series_cache_hit", {
+      symbol: normalized,
+      interval,
+      cacheKey,
+      cacheTtlMs,
+      provider: audit.provider,
+      providerStatus: "cache_hit",
+      apiResponse: audit.apiResponse,
+      fallbackReason: audit.fallbackReason,
+      fallbackSource: audit.fallbackSource,
+      marketDataSource: audit.marketDataSource
+    });
+    return cached;
+  }
+
+  const inFlight = inFlightTimeSeriesRequests.get(cacheKey);
+  if (inFlight) {
+    trackInFlightHit();
+    logMarketDataAudit("time_series_inflight_reuse", {
+      symbol: normalized,
+      interval,
+      cacheKey,
+      cacheTtlMs,
+      provider: PROVIDER,
+      providerStatus: "inflight_reuse",
+      marketDataSource: shouldUseFallback() ? "fallback" : "twelvedata"
+    });
+    return inFlight;
+  }
+
+  const request = resolveTimeSeriesRequest(symbol, normalized, interval, outputsize, cacheKey)
+    .finally(() => {
+      inFlightTimeSeriesRequests.delete(cacheKey);
+    });
+
+  inFlightTimeSeriesRequests.set(cacheKey, request);
+  return request;
 }
 
 // =========================
@@ -440,6 +623,7 @@ async function getMarketSnapshot(symbol) {
     fallbackReason: fallbackAudit?.fallbackReason || null,
     fallbackSource: fallbackAudit?.fallbackSource || null,
     marketDataSource: source,
+    consumptionReport: buildTwelveDataConsumptionReport(),
     fallbackConditions,
     timeframes: {
       m5: { providerStatus: audits.m5.providerStatus, marketDataSource: audits.m5.marketDataSource, fallbackReason: audits.m5.fallbackReason },
@@ -460,6 +644,7 @@ async function getMarketSnapshot(symbol) {
       fallbackReason: fallbackAudit?.fallbackReason || null,
       fallbackSource: fallbackAudit?.fallbackSource || null,
       marketDataSource: source,
+      consumptionReport: buildTwelveDataConsumptionReport(),
       fallbackConditions,
       timeframeAudits: audits,
       isFallback: source === "fallback",
@@ -500,12 +685,26 @@ async function getMarketSnapshot(symbol) {
 // =========================
 
 function normalizeSymbol(symbol) {
-  return symbol.includes("/")
-    ? symbol
-    : `${symbol.slice(0, 3)}/${symbol.slice(3)}`;
+  const safeSymbol = String(symbol || "").trim();
+
+  if (!safeSymbol) return safeSymbol;
+  return safeSymbol.includes("/")
+    ? safeSymbol
+    : `${safeSymbol.slice(0, 3)}/${safeSymbol.slice(3)}`;
+}
+
+async function getMarketStatus() {
+  return {
+    provider: PROVIDER,
+    dailyLimitReached: DAILY_LIMIT_REACHED,
+    useFakeDataEnabled: process.env.USE_FAKE_DATA === "true",
+    consumptionReport: buildTwelveDataConsumptionReport()
+  };
 }
 
 module.exports = {
   fetchTimeSeries,
-  getMarketSnapshot
+  getMarketSnapshot,
+  getMarketStatus,
+  buildTwelveDataConsumptionReport
 };
