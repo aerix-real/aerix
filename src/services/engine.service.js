@@ -10,6 +10,11 @@ const filterAnalyticsService = require("./filter-analytics.service");
 const engineDebugService = require("./engine-debug.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
+const ANALYSIS_CACHE_TTL_MS = Math.max(60 * 1000, Number(process.env.ANALYSIS_CACHE_TTL_MS || 5 * 60 * 1000));
+const MAX_CONCURRENT_ANALYSES = Math.max(1, Number(process.env.MAX_CONCURRENT_ANALYSES || 1));
+const analysisCache = new Map();
+const inFlightAnalyses = new Map();
+let activeAnalyses = 0;
 
 function mapTradingModeToStrategyMode(tradingMode) {
   const map = {
@@ -392,7 +397,7 @@ function uniqueMessages(messages = []) {
   return [...new Set(messages.filter(Boolean))];
 }
 
-async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
+async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
   const { preferences, modeConfig } = await getUserModeConfig(userId);
   const snapshot = providedSnapshot || (await getMarketSnapshot(symbol));
   const strategyMode = mapTradingModeToStrategyMode(preferences.trading_mode);
@@ -725,6 +730,84 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     marketContext,
     timestamp: snapshot.timestamp
   };
+}
+
+
+function getAnalysisCacheKey(userId, symbol) {
+  return `${userId || "anonymous"}:${String(symbol || "").trim().toUpperCase()}`;
+}
+
+function getCachedAnalysis(cacheKey) {
+  const entry = analysisCache.get(cacheKey);
+
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    analysisCache.delete(cacheKey);
+    return null;
+  }
+
+  return {
+    ...entry.value,
+    cachedAnalysis: true,
+    economicMode: {
+      reused: true,
+      reason: "recently_analyzed",
+      analyzedAt: entry.analyzedAt,
+      cacheTtlMs: ANALYSIS_CACHE_TTL_MS,
+      maxConcurrentAnalyses: MAX_CONCURRENT_ANALYSES
+    },
+    timestamp: new Date().toISOString()
+  };
+}
+
+function setCachedAnalysis(cacheKey, value) {
+  analysisCache.set(cacheKey, {
+    value,
+    analyzedAt: new Date().toISOString(),
+    expiresAt: Date.now() + ANALYSIS_CACHE_TTL_MS
+  });
+}
+
+async function runWithAnalysisLimit(factory) {
+  while (activeAnalyses >= MAX_CONCURRENT_ANALYSES) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  activeAnalyses += 1;
+
+  try {
+    return await factory();
+  } finally {
+    activeAnalyses = Math.max(0, activeAnalyses - 1);
+  }
+}
+
+async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
+  const cacheKey = getAnalysisCacheKey(userId, symbol);
+  const cached = !providedSnapshot ? getCachedAnalysis(cacheKey) : null;
+
+  if (cached) return cached;
+
+  const inFlight = inFlightAnalyses.get(cacheKey);
+  if (inFlight && !providedSnapshot) return inFlight;
+
+  const request = runWithAnalysisLimit(async () => {
+    const analysis = await executeSymbolAnalysis(userId, symbol, providedSnapshot);
+
+    if (!providedSnapshot) {
+      setCachedAnalysis(cacheKey, analysis);
+    }
+
+    return analysis;
+  }).finally(() => {
+    inFlightAnalyses.delete(cacheKey);
+  });
+
+  if (!providedSnapshot) {
+    inFlightAnalyses.set(cacheKey, request);
+  }
+
+  return request;
 }
 
 function buildHistoryStats(results = []) {

@@ -18,19 +18,24 @@ const PROVIDER = "twelvedata";
 const FALLBACK_SOURCE = "smart_fake_candles";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const TIMEFRAME_CACHE_TTL_MS = Object.freeze({
-  "5min": 60 * 1000,
-  "15min": 180 * 1000,
-  "1h": 300 * 1000
+  "5min": 5 * 60 * 1000,
+  "15min": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000
 });
 const TIMEFRAME_REPORT_KEYS = Object.freeze({
   "5min": "m5",
   "15min": "m15",
   "1h": "h1"
 });
-const DEFAULT_TIMEFRAME_TTL_MS = 60 * 1000;
+const DEFAULT_TIMEFRAME_TTL_MS = 5 * 60 * 1000;
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_PROVIDER_REQUESTS_PER_DAY = Math.max(1, Number(process.env.MAX_PROVIDER_REQUESTS_PER_DAY || 480));
 const inFlightTimeSeriesRequests = new Map();
+const inFlightSnapshotRequests = new Map();
 const twelveDataMetrics = {
   startedAt: new Date().toISOString(),
+  budgetDay: new Date().toISOString().slice(0, 10),
+  dailyBudget: MAX_PROVIDER_REQUESTS_PER_DAY,
   providerRequests: 0,
   cacheHits: 0,
   inFlightHits: 0,
@@ -39,6 +44,25 @@ const twelveDataMetrics = {
   byTimeframe: {},
   byAssetTimeframe: {}
 };
+
+
+function resetDailyProviderBudgetIfNeeded() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (twelveDataMetrics.budgetDay === today) return;
+
+  twelveDataMetrics.budgetDay = today;
+  twelveDataMetrics.providerRequests = 0;
+  twelveDataMetrics.bySymbol = {};
+  twelveDataMetrics.byTimeframe = {};
+  twelveDataMetrics.byAssetTimeframe = {};
+  DAILY_LIMIT_REACHED = false;
+}
+
+function hasProviderBudget(requestCost = 1) {
+  resetDailyProviderBudgetIfNeeded();
+  return twelveDataMetrics.providerRequests + requestCost <= MAX_PROVIDER_REQUESTS_PER_DAY;
+}
 
 function sanitizeApiResponse(data) {
   if (!data || typeof data !== "object") return data ?? null;
@@ -122,6 +146,7 @@ function incrementCounter(target, key, amount = 1) {
 }
 
 function trackTwelveDataRequest(symbol, interval) {
+  resetDailyProviderBudgetIfNeeded();
   const timeframe = getTimeframeReportKey(interval);
   twelveDataMetrics.providerRequests += 1;
   incrementCounter(twelveDataMetrics.bySymbol, symbol);
@@ -170,21 +195,25 @@ function buildTwelveDataConsumptionReport(options = {}) {
   const symbols = options.symbols?.length
     ? options.symbols.map(normalizeSymbol)
     : getConfiguredSymbols();
-  const intervalMs = Number(options.intervalMs || process.env.ENGINE_INTERVAL_MS || 15000);
-  const maxSymbolsPerCycle = Number(options.maxSymbolsPerCycle || process.env.MAX_SYMBOLS_PER_CYCLE || 2);
-  const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 15000;
-  const safeMaxSymbolsPerCycle = Number.isFinite(maxSymbolsPerCycle) && maxSymbolsPerCycle > 0 ? maxSymbolsPerCycle : 2;
+  const intervalMs = Number(options.intervalMs || process.env.ENGINE_INTERVAL_MS || 5 * 60 * 1000);
+  const maxSymbolsPerCycle = Number(options.maxSymbolsPerCycle || process.env.MAX_SYMBOLS_PER_CYCLE || 1);
+  const safeIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5 * 60 * 1000;
+  const safeMaxSymbolsPerCycle = Number.isFinite(maxSymbolsPerCycle) && maxSymbolsPerCycle > 0 ? maxSymbolsPerCycle : 1;
   const symbolsPerCycle = Math.min(safeMaxSymbolsPerCycle, symbols.length || safeMaxSymbolsPerCycle);
   const timeframes = Object.keys(TIMEFRAME_CACHE_TTL_MS);
   const requestsPerAssetPerCycle = timeframes.length;
   const currentRequestsPerCycle = symbolsPerCycle * requestsPerAssetPerCycle;
   const cyclesPerDay = Math.ceil(MS_PER_DAY / safeIntervalMs);
   const estimatedDailyRequests = currentRequestsPerCycle * cyclesPerDay;
-  const estimatedDailyRequestsAfterCache = Math.ceil(estimatePostCacheRequestsPerDay({
+  const uncappedEstimatedDailyRequestsAfterCache = Math.ceil(estimatePostCacheRequestsPerDay({
     symbols,
     intervalMs: safeIntervalMs,
     maxSymbolsPerCycle: safeMaxSymbolsPerCycle
   }));
+  const estimatedDailyRequestsAfterCache = Math.min(
+    uncappedEstimatedDailyRequestsAfterCache,
+    MAX_PROVIDER_REQUESTS_PER_DAY
+  );
   const reductionPercent = estimatedDailyRequests > 0
     ? Number((((estimatedDailyRequests - estimatedDailyRequestsAfterCache) / estimatedDailyRequests) * 100).toFixed(2))
     : 0;
@@ -210,6 +239,10 @@ function buildTwelveDataConsumptionReport(options = {}) {
     cyclesPerDay,
     estimatedDailyRequests,
     estimatedDailyRequestsAfterCache,
+    uncappedEstimatedDailyRequestsAfterCache,
+    dailyProviderBudget: MAX_PROVIDER_REQUESTS_PER_DAY,
+    targetRequestsPerDay: 500,
+    targetMet: estimatedDailyRequestsAfterCache < 500,
     expectedReductionAfterCache: {
       requestsPerDay: Math.max(0, estimatedDailyRequests - estimatedDailyRequestsAfterCache),
       percent: reductionPercent
@@ -334,6 +367,23 @@ async function resolveTimeSeriesRequest(symbol, normalized, interval = "5min", o
       cacheTtlMs,
       ...audit
     });
+    cacheService.set(cacheKey, fake, cacheTtlMs);
+    return fake;
+  }
+
+  if (!hasProviderBudget(1)) {
+    markDailyLimit(buildFallbackReason("local_daily_budget_exhausted", { rateLimit: true }));
+    trackFallbackRequest();
+    const fallbackReason = buildFallbackReason("local_daily_budget_exhausted", { rateLimit: true });
+    const audit = {
+      provider: PROVIDER,
+      providerStatus: "local_budget_exhausted",
+      apiResponse: null,
+      fallbackReason,
+      fallbackSource: FALLBACK_SOURCE,
+      marketDataSource: "fallback"
+    };
+    const fake = setCandlesAudit(await generateSmartFakeCandles(symbol, outputsize), audit);
     cacheService.set(cacheKey, fake, cacheTtlMs);
     return fake;
   }
@@ -581,7 +631,7 @@ function getVolatilityPercent(candles) {
 // 🚀 SNAPSHOT FINAL
 // =========================
 
-async function getMarketSnapshot(symbol) {
+async function resolveMarketSnapshot(symbol, normalized, cacheKey) {
   const snapshotStartedAt = Date.now();
   const usedFallback = shouldUseFallback();
 
@@ -616,7 +666,7 @@ async function getMarketSnapshot(symbol) {
   const fallbackAudit = Object.values(audits).find((audit) => audit.marketDataSource === "fallback") || null;
 
   logMarketDataAudit("market_snapshot_resolved", {
-    symbol,
+    symbol: normalized,
     provider: PROVIDER,
     providerStatus,
     apiResponse: fallbackAudit?.apiResponse || Object.values(audits).find((audit) => audit.apiResponse)?.apiResponse || null,
@@ -625,6 +675,11 @@ async function getMarketSnapshot(symbol) {
     marketDataSource: source,
     consumptionReport: buildTwelveDataConsumptionReport(),
     fallbackConditions,
+    snapshotCache: {
+      cacheKey,
+      cacheTtlMs: SNAPSHOT_CACHE_TTL_MS,
+      sharedSnapshot: true
+    },
     timeframes: {
       m5: { providerStatus: audits.m5.providerStatus, marketDataSource: audits.m5.marketDataSource, fallbackReason: audits.m5.fallbackReason },
       m15: { providerStatus: audits.m15.providerStatus, marketDataSource: audits.m15.marketDataSource, fallbackReason: audits.m15.fallbackReason },
@@ -632,8 +687,8 @@ async function getMarketSnapshot(symbol) {
     }
   });
 
-  return {
-    symbol,
+  const snapshot = {
+    symbol: normalized,
     source,
     isFallback: source === "fallback",
     dataQuality: {
@@ -654,7 +709,14 @@ async function getMarketSnapshot(symbol) {
         m15: m15.length,
         h1: h1.length
       },
-      minimumCandles: 60
+      minimumCandles: 60,
+      cache: {
+        sharedSnapshot: true,
+        snapshotTtlSeconds: SNAPSHOT_CACHE_TTL_MS / 1000,
+        timeframeTtlSeconds: Object.fromEntries(
+          Object.entries(TIMEFRAME_CACHE_TTL_MS).map(([interval, ttlMs]) => [getTimeframeReportKey(interval), ttlMs / 1000])
+        )
+      }
     },
     timeframes: {
       m5: {
@@ -678,6 +740,51 @@ async function getMarketSnapshot(symbol) {
     },
     timestamp: new Date().toISOString()
   };
+
+  cacheService.set(cacheKey, snapshot, SNAPSHOT_CACHE_TTL_MS);
+  return snapshot;
+}
+
+async function getMarketSnapshot(symbol) {
+  const normalized = normalizeSymbol(symbol);
+  const cacheKey = `${PROVIDER}:market_snapshot:${normalized}`;
+  const cached = cacheService.get(cacheKey);
+
+  if (cached) {
+    trackCacheHit();
+    logMarketDataAudit("market_snapshot_cache_hit", {
+      symbol: normalized,
+      provider: PROVIDER,
+      providerStatus: "snapshot_cache_hit",
+      marketDataSource: cached.source || cached.dataQuality?.marketDataSource || "unknown",
+      cacheKey,
+      cacheTtlMs: SNAPSHOT_CACHE_TTL_MS,
+      sharedSnapshot: true
+    });
+    return cached;
+  }
+
+  const inFlight = inFlightSnapshotRequests.get(cacheKey);
+  if (inFlight) {
+    trackInFlightHit();
+    logMarketDataAudit("market_snapshot_inflight_reuse", {
+      symbol: normalized,
+      provider: PROVIDER,
+      providerStatus: "snapshot_inflight_reuse",
+      marketDataSource: shouldUseFallback() ? "fallback" : "twelvedata",
+      cacheKey,
+      sharedSnapshot: true
+    });
+    return inFlight;
+  }
+
+  const request = resolveMarketSnapshot(symbol, normalized, cacheKey)
+    .finally(() => {
+      inFlightSnapshotRequests.delete(cacheKey);
+    });
+
+  inFlightSnapshotRequests.set(cacheKey, request);
+  return request;
 }
 
 // =========================
@@ -698,7 +805,8 @@ async function getMarketStatus() {
     provider: PROVIDER,
     dailyLimitReached: DAILY_LIMIT_REACHED,
     useFakeDataEnabled: process.env.USE_FAKE_DATA === "true",
-    consumptionReport: buildTwelveDataConsumptionReport()
+    consumptionReport: buildTwelveDataConsumptionReport(),
+    dailyProviderBudget: MAX_PROVIDER_REQUESTS_PER_DAY
   };
 }
 
