@@ -60,6 +60,11 @@ async function getDashboard(req, res) {
             blockedSignals: filterAnalytics.blockedSignals,
             confirmedSignals: filterAnalytics.confirmedSignals,
             approvalRate: filterAnalytics.approvalRate,
+            blockedRate: filterAnalytics.blockedRate,
+            watchlistRate: filterAnalytics.watchlistRate,
+            highConfidenceRate: filterAnalytics.highConfidenceRate,
+            mediumConfidenceRate: filterAnalytics.mediumConfidenceRate,
+            penalizedSignals: filterAnalytics.penalizedSignals,
             topBlockingFilters: filterAnalytics.topBlockingFilters
           }
         },
@@ -103,6 +108,11 @@ async function getHistory(req, res) {
           blockedSignals: filterAnalytics.blockedSignals,
           confirmedSignals: filterAnalytics.confirmedSignals,
           approvalRate: filterAnalytics.approvalRate,
+          blockedRate: filterAnalytics.blockedRate,
+          watchlistRate: filterAnalytics.watchlistRate,
+          highConfidenceRate: filterAnalytics.highConfidenceRate,
+          mediumConfidenceRate: filterAnalytics.mediumConfidenceRate,
+          penalizedSignals: filterAnalytics.penalizedSignals,
           topBlockingFilters: filterAnalytics.topBlockingFilters
         },
         symbolPerformance: analytics.symbolPerformance,

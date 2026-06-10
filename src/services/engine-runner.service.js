@@ -160,6 +160,13 @@ class EngineRunnerService {
         ]
       };
 
+      this.appendFilterPenalty(
+        timingSignal,
+        "sniper_block",
+        `Fora da janela ideal sniper: score/confiança reduzidos em ${penalty} pontos.`,
+        { score, finalScore: adjustedScore, originalScore: score }
+      );
+
       if (adjustedScore < extremeTimingFloor) {
         const blockedSignal = {
           ...timingSignal,
@@ -192,6 +199,25 @@ class EngineRunnerService {
     };
   }
 
+  appendFilterPenalty(signal, filterName, reason, extra = {}) {
+    const event = {
+      filterName,
+      reason: reason || "Penalidade institucional aplicada ao score.",
+      symbol: signal.symbol || signal.asset,
+      score: Number(extra.score ?? signal.score ?? signal.confidence ?? 0),
+      finalScore: Number(extra.finalScore ?? signal.finalScore ?? signal.final_score ?? signal.adjustedScore ?? 0),
+      originalScore: Number(extra.originalScore ?? signal.confidence ?? signal.score ?? 0),
+      signal: extra.signal || signal.originalSignal || signal.directionBeforeBlock || signal.signal || signal.direction,
+      strategyName: signal.strategyName || signal.strategy_name || signal.strategy,
+      timestamp: new Date().toISOString(),
+      eventType: "penalty"
+    };
+
+    signal.filterPenalties = [...(signal.filterPenalties || []), event];
+
+    return signal;
+  }
+
   appendFilterBlock(signal, filterName, reason, extra = {}) {
     const blockReason = reason || signal.blockReason || signal.block_reason || "Bloqueio institucional sem motivo detalhado.";
     const event = {
@@ -200,6 +226,7 @@ class EngineRunnerService {
       symbol: signal.symbol || signal.asset,
       score: Number(extra.score ?? signal.score ?? signal.confidence ?? 0),
       finalScore: Number(extra.finalScore ?? signal.finalScore ?? signal.final_score ?? signal.adjustedScore ?? 0),
+      signal: extra.signal || signal.originalSignal || signal.directionBeforeBlock || signal.signal || signal.direction,
       strategyName: signal.strategyName || signal.strategy_name || signal.strategy,
       timestamp: new Date().toISOString()
     };
@@ -620,6 +647,13 @@ class EngineRunnerService {
         blocked: false,
         penaltyReasons: validation.aiPenaltyReasons
       };
+
+      validation.aiPenaltyReasons.forEach((reason) => {
+        this.appendFilterPenalty(signal, "anti_loss_penalty", reason, {
+          score: signal.confidence,
+          finalScore: signal.adjustedScore
+        });
+      });
     }
 
     if (!validation.allowed) {
@@ -743,7 +777,7 @@ class EngineRunnerService {
 
   async recordFilterAnalytics(signal, source = "engine") {
     try {
-      await filterAnalyticsService.recordBlockedSignal(signal, source);
+      await filterAnalyticsService.recordSignalFilters(signal, source);
     } catch (error) {
       console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
     }
@@ -794,20 +828,46 @@ class EngineRunnerService {
     }, { cacheLatest: true });
   }
 
+  classifyOpportunity(signal = {}) {
+    if (signal.blocked) return "BLOCKED";
+
+    const direction = String(signal.signal || signal.direction || "WAIT").toUpperCase();
+    const score = Number(signal.adjustedScore || signal.finalScore || signal.confidence || 0);
+    const mode = signal.mode === "aggressive" ? "aggressive" : signal.mode === "conservative" ? "conservative" : "balanced";
+
+    if (!["CALL", "PUT"].includes(direction)) return "WATCHLIST";
+
+    const high = mode === "conservative" ? 88 : mode === "aggressive" ? 78 : 82;
+    const medium = mode === "conservative" ? 80 : mode === "aggressive" ? 62 : 68;
+
+    if (score >= high) return "HIGH_CONFIDENCE";
+    if (score >= medium) return "MEDIUM_CONFIDENCE";
+
+    return "WATCHLIST";
+  }
+
   emitRuntimeUpdate(cycleResults = []) {
     const confirmedHistory = filterConfirmedOperationalSignals(this.latestResults);
     const confirmedThisCycle = filterConfirmedOperationalSignals(cycleResults);
     const blockedAnalyses = cycleResults.filter((item) => !isConfirmedOperationalSignal(item));
 
+    const classifiedResults = cycleResults.map((item) => ({
+      ...item,
+      opportunityClass: item.opportunityClass || item.status || this.classifyOpportunity(item),
+      status: item.status || item.opportunityClass || this.classifyOpportunity(item)
+    }));
+    const highConfidence = classifiedResults.filter((item) => item.opportunityClass === "HIGH_CONFIDENCE").length;
+    const mediumConfidence = classifiedResults.filter((item) => item.opportunityClass === "MEDIUM_CONFIDENCE").length;
+    const watchlist = classifiedResults.filter((item) => item.opportunityClass === "WATCHLIST").length;
     const approvalRate = cycleResults.length
-      ? Number(((confirmedThisCycle.length / cycleResults.length) * 100).toFixed(2))
+      ? Number((((highConfidence + mediumConfidence) / cycleResults.length) * 100).toFixed(2))
       : 0;
     const blockedRate = cycleResults.length
       ? Number(((blockedAnalyses.length / cycleResults.length) * 100).toFixed(2))
       : 0;
     const shadowApprovedBlocks = blockedAnalyses.filter((item) => {
       const mode = item.mode === "aggressive" ? "aggressive" : item.mode === "conservative" ? "conservative" : "balanced";
-      const minimum = mode === "conservative" ? 88 : mode === "aggressive" ? 64 : 72;
+      const minimum = mode === "conservative" ? 86 : mode === "aggressive" ? 60 : 68;
       return Number(item.finalScore || item.adjustedScore || item.confidence || 0) >= minimum;
     }).length;
     const filterEfficiency = blockedAnalyses.length
@@ -835,6 +895,9 @@ class EngineRunnerService {
           confirmedSignals: confirmedThisCycle.length,
           approvalRate,
           blockedRate,
+          watchlistRate: cycleResults.length ? Number(((watchlist / cycleResults.length) * 100).toFixed(2)) : 0,
+          highConfidenceRate: cycleResults.length ? Number(((highConfidence / cycleResults.length) * 100).toFixed(2)) : 0,
+          mediumConfidenceRate: cycleResults.length ? Number(((mediumConfidence / cycleResults.length) * 100).toFixed(2)) : 0,
           filterEfficiency,
           shadowMode: {
             wouldApproveBlockedSignals: shadowApprovedBlocks,

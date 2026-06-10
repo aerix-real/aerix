@@ -96,9 +96,9 @@ async function ensureSignalHistoryTable() {
   await db.query(`
     UPDATE public.signal_history
     SET minimum_score = CASE
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 70
-      ELSE 78
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 86
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 60
+      ELSE 68
     END
     WHERE minimum_score IS NULL OR minimum_score = 0;
   `);
@@ -247,6 +247,9 @@ async function ensureFilterBlockEventsTable() {
       market_regime TEXT,
       strategy_name TEXT,
       source TEXT NOT NULL DEFAULT 'engine',
+      event_type TEXT NOT NULL DEFAULT 'block',
+      original_score NUMERIC DEFAULT 0,
+      result_outcome TEXT,
       event_timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -264,6 +267,9 @@ async function ensureFilterBlockEventsTable() {
   await ensureColumn("filter_block_events", "market_regime", "TEXT");
   await ensureColumn("filter_block_events", "strategy_name", "TEXT");
   await ensureColumn("filter_block_events", "source", "TEXT NOT NULL DEFAULT 'engine'");
+  await ensureColumn("filter_block_events", "event_type", "TEXT NOT NULL DEFAULT 'block'");
+  await ensureColumn("filter_block_events", "original_score", "NUMERIC DEFAULT 0");
+  await ensureColumn("filter_block_events", "result_outcome", "TEXT");
   await ensureColumn("filter_block_events", "event_timestamp", "TIMESTAMP NOT NULL DEFAULT NOW()");
   await ensureColumn("filter_block_events", "created_at", "TIMESTAMP NOT NULL DEFAULT NOW()");
 
@@ -285,6 +291,11 @@ async function ensureFilterBlockEventsTable() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_filter_block_events_event_timestamp
       ON public.filter_block_events(event_timestamp DESC);
+  `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_event_type
+      ON public.filter_block_events(event_type);
   `);
 }
 

@@ -4,9 +4,9 @@ const MINIMUM_SCORE_SQL = `
   COALESCE(
     NULLIF(minimum_score, 0),
     CASE
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
-      ELSE 72
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 86
+      WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 60
+      ELSE 68
     END
   )
 `;
@@ -30,6 +30,22 @@ const INSTITUTIONAL_FILTERS = {
   sniper_block: {
     label: "Sniper Block",
     patterns: ["sniper", "virada da vela", "janela sniper"]
+  },
+  predictive_ai_penalty: {
+    label: "Predictive AI Penalty",
+    patterns: ["ia preditiva", "risco moderado", "pre-score"]
+  },
+  dynamic_threshold_penalty: {
+    label: "Dynamic Threshold Penalty",
+    patterns: ["penalidade", "mínimo aprendido", "minimo aprendido"]
+  },
+  market_quality_penalty: {
+    label: "Market Quality Penalty",
+    patterns: ["volatilidade", "trend strength", "alinhamento"]
+  },
+  anti_loss_penalty: {
+    label: "Anti Loss Penalty",
+    patterns: ["anti-loss moderado", "perda moderada", "horário com perda"]
   },
   execution_block: {
     label: "Execution Block",
@@ -124,7 +140,40 @@ function buildExplicitBlockEvents(signal = {}, source = "engine") {
         marketRegime: block.marketRegime || block.market_regime || signal.market_regime || signal.marketRegime || null,
         strategyName: block.strategyName || block.strategy_name || signal.strategy_name || signal.strategyName || signal.strategy || null,
         eventTimestamp: getEventTimestamp(signal, block),
-        source
+        source,
+        eventType: block.eventType || block.event_type || "block",
+        originalScore: normalizeScore(block.originalScore ?? block.original_score ?? signal.confidence ?? finalScore),
+        resultOutcome: block.resultOutcome || block.result_outcome || signal.result || null
+      };
+    });
+}
+
+function buildExplicitPenaltyEvents(signal = {}, source = "engine") {
+  const penalties = Array.isArray(signal.filterPenalties) ? signal.filterPenalties : [];
+
+  return penalties
+    .filter(Boolean)
+    .map((penalty) => {
+      const filterName = normalizeFilterName(penalty.filterName || penalty.filter_name);
+      const finalScore = normalizeScore(penalty.finalScore ?? penalty.final_score ?? signal.finalScore ?? signal.final_score);
+
+      return {
+        userId: signal.user_id || signal.userId || null,
+        filterName,
+        filterLabel: penalty.filterLabel || penalty.filter_label || getFilterLabel(filterName),
+        symbol: penalty.symbol || signal.symbol || signal.asset || "UNKNOWN",
+        score: normalizeScore(penalty.score ?? signal.score ?? signal.confidence ?? finalScore),
+        finalScore,
+        reason: String(penalty.reason || "Penalidade institucional aplicada ao score."),
+        signal: penalty.signal || signal.signal || signal.direction || "WAIT",
+        mode: penalty.mode || signal.mode || "balanced",
+        marketRegime: penalty.marketRegime || penalty.market_regime || signal.market_regime || signal.marketRegime || null,
+        strategyName: penalty.strategyName || penalty.strategy_name || signal.strategy_name || signal.strategyName || signal.strategy || null,
+        eventTimestamp: getEventTimestamp(signal, penalty),
+        source,
+        eventType: "penalty",
+        originalScore: normalizeScore(penalty.originalScore ?? penalty.original_score ?? signal.confidence ?? finalScore),
+        resultOutcome: penalty.resultOutcome || penalty.result_outcome || signal.result || null
       };
     });
 }
@@ -154,7 +203,10 @@ function buildDerivedBlockEvents(signal = {}, source = "engine") {
         marketRegime: signal.market_regime || signal.marketRegime || null,
         strategyName: signal.strategy_name || signal.strategyName || signal.strategy || null,
         eventTimestamp: getEventTimestamp(signal),
-        source
+        source,
+        eventType: "block",
+        originalScore: normalizeScore(signal.confidence ?? signal.score ?? finalScore),
+        resultOutcome: signal.result || null
       };
     });
 }
@@ -177,6 +229,15 @@ function buildBlockEvents(signal = {}, source = "engine") {
   return dedupeEvents(buildDerivedBlockEvents(signal, source));
 }
 
+function buildFilterEvents(signal = {}, source = "engine") {
+  const blocked = Boolean(signal.blocked || signal.signal === "WAIT" || signal.direction === "WAIT");
+
+  return dedupeEvents([
+    ...(blocked ? buildBlockEvents(signal, source) : []),
+    ...buildExplicitPenaltyEvents(signal, source)
+  ]);
+}
+
 async function insertBlockEvent(event) {
   const result = await db.query(
     `
@@ -194,9 +255,12 @@ async function insertBlockEvent(event) {
       market_regime,
       strategy_name,
       source,
-      event_timestamp
+      event_timestamp,
+      event_type,
+      original_score,
+      result_outcome
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
     RETURNING *;
     `,
     [
@@ -212,7 +276,10 @@ async function insertBlockEvent(event) {
       event.marketRegime,
       event.strategyName,
       event.source || "engine",
-      event.eventTimestamp
+      event.eventTimestamp,
+      event.eventType || "block",
+      event.originalScore ?? event.score,
+      event.resultOutcome || null
     ]
   );
 
@@ -233,6 +300,41 @@ async function recordBlockedSignal(signal = {}, source = "engine") {
   return saved;
 }
 
+async function recordSignalFilters(signal = {}, source = "engine") {
+  const events = buildFilterEvents(signal, source);
+  const saved = [];
+
+  for (const event of events) {
+    saved.push(await insertBlockEvent(event));
+  }
+
+  return saved;
+}
+
+async function updateShadowOutcomes(signal = {}, resultOutcome = null) {
+  const normalizedResult = String(resultOutcome || signal.result || "").toLowerCase();
+  if (!["win", "loss"].includes(normalizedResult)) return 0;
+
+  const result = await db.query(
+    `
+    UPDATE public.filter_block_events
+    SET result_outcome = $1
+    WHERE result_outcome IS NULL
+      AND symbol = $2
+      AND signal = $3
+      AND event_timestamp <= COALESCE($4::timestamp, NOW())
+    `,
+    [
+      normalizedResult,
+      signal.symbol || signal.asset || "UNKNOWN",
+      signal.signal || signal.direction || "WAIT",
+      signal.created_at || signal.createdAt || new Date()
+    ]
+  );
+
+  return result.rowCount || 0;
+}
+
 async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
   const recentLimit = normalizeLimit(limit, 50, 500);
   const topLimit = normalizeLimit(rankingLimit, 10, 100);
@@ -246,7 +348,8 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
     `),
     db.query(`
       SELECT
-        COUNT(*)::int AS blocked_signals,
+        COUNT(*) FILTER (WHERE COALESCE(event_type, 'block') = 'block')::int AS blocked_signals,
+        COUNT(*) FILTER (WHERE COALESCE(event_type, 'block') = 'penalty')::int AS penalized_signals,
         COUNT(DISTINCT filter_name)::int AS total_filters,
         COUNT(DISTINCT symbol)::int AS total_assets,
         COALESCE(AVG(final_score), 0)::numeric(10,2) AS avg_final_score,
@@ -254,9 +357,9 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
         COUNT(*) FILTER (
           WHERE COALESCE(final_score, 0) >=
             CASE
-              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 88
-              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 64
-              ELSE 72
+              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('conservador', 'conservative') THEN 86
+              WHEN LOWER(COALESCE(mode, 'balanced')) IN ('agressivo', 'aggressive') THEN 60
+              ELSE 68
             END
         )::int AS shadow_approved_blocks
       FROM public.filter_block_events
@@ -266,7 +369,10 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
       SELECT
         filter_name AS "filterName",
         filter_label AS "filterLabel",
-        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE COALESCE(event_type, 'block') = 'block')::int AS total,
+        COUNT(*) FILTER (WHERE COALESCE(event_type, 'block') = 'penalty')::int AS "penalties",
+        COUNT(*) FILTER (WHERE result_outcome = 'win')::int AS "lostWins",
+        COUNT(*) FILTER (WHERE result_outcome = 'loss')::int AS "savedLosses",
         COUNT(DISTINCT symbol)::int AS "affectedAssets",
         COALESCE(AVG(score), 0)::numeric(10,2) AS "avgScore",
         COALESCE(AVG(final_score), 0)::numeric(10,2) AS "avgFinalScore",
@@ -317,6 +423,9 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
         market_regime AS "marketRegime",
         strategy_name AS "strategyName",
         source,
+        COALESCE(event_type, 'block') AS "eventType",
+        original_score AS "originalScore",
+        result_outcome AS "resultOutcome",
         event_timestamp AS timestamp,
         created_at AS "createdAt"
       FROM public.filter_block_events
@@ -329,7 +438,8 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
 
   const approvedSignals = Number(signalsResult.rows[0]?.approved_signals || 0);
   const blockedSignals = Number(blockSummaryResult.rows[0]?.blocked_signals || 0);
-  const totalSignals = approvedSignals + blockedSignals;
+  const penalizedSignals = Number(blockSummaryResult.rows[0]?.penalized_signals || 0);
+  const totalSignals = approvedSignals + blockedSignals + penalizedSignals;
   const approvalRate = totalSignals
     ? Number(((approvedSignals / totalSignals) * 100).toFixed(2))
     : 0;
@@ -337,6 +447,9 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
     ? Number(((blockedSignals / totalSignals) * 100).toFixed(2))
     : 0;
   const shadowApprovedBlocks = Number(blockSummaryResult.rows[0]?.shadow_approved_blocks || 0);
+  const highConfidenceSignals = Number(filterResult.rows.reduce((total, row) => total + (Number(row.avgFinalScore || 0) >= 82 ? Number(row.penalties || 0) : 0), 0));
+  const mediumConfidenceSignals = Math.max(0, approvedSignals - highConfidenceSignals);
+  const watchlistSignals = penalizedSignals;
   const filterEfficiency = blockedSignals
     ? Number((((blockedSignals - shadowApprovedBlocks) / blockedSignals) * 100).toFixed(2))
     : 0;
@@ -348,12 +461,23 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
     confirmedSignals: approvedSignals,
     blockedSignals,
     blockedAnalyses: blockedSignals,
+    penalizedSignals,
+    penaltySignals: penalizedSignals,
+    watchlistSignals,
+    highConfidenceSignals,
+    mediumConfidenceSignals,
     approvalRate,
     blockedRate,
+    watchlistRate: totalSignals ? Number(((watchlistSignals / totalSignals) * 100).toFixed(2)) : 0,
+    highConfidenceRate: totalSignals ? Number(((highConfidenceSignals / totalSignals) * 100).toFixed(2)) : 0,
+    mediumConfidenceRate: totalSignals ? Number(((mediumConfidenceSignals / totalSignals) * 100).toFixed(2)) : 0,
     filterEfficiency,
     shadowMode: {
       wouldApproveBlockedSignals: shadowApprovedBlocks,
       blockedSignals,
+      savedLosses: filterResult.rows.reduce((total, row) => total + Number(row.savedLosses || 0), 0),
+      lostWins: filterResult.rows.reduce((total, row) => total + Number(row.lostWins || 0), 0),
+      filterAccuracy: filterEfficiency,
       filterEfficiency,
       description: "Valida quantos bloqueios ainda ficariam aprovados por score no Shadow Mode."
     },
@@ -369,12 +493,19 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
       last_block_at: blockSummaryResult.rows[0]?.last_block_at || null,
       blocked_rate: blockedRate,
       filter_efficiency: filterEfficiency,
-      shadow_approved_blocks: shadowApprovedBlocks
+      shadow_approved_blocks: shadowApprovedBlocks,
+      total_penalties: penalizedSignals
     },
     ranking: filterResult.rows.map((row) => ({
       filter_name: row.filterName,
       filter_label: row.filterLabel,
       total_blocks: row.total,
+      total_penalties: row.penalties || 0,
+      saved_losses: row.savedLosses || 0,
+      lost_wins: row.lostWins || 0,
+      filter_accuracy: Number(row.total || 0) + Number(row.penalties || 0)
+        ? Number(((Number(row.savedLosses || 0) / (Number(row.total || 0) + Number(row.penalties || 0))) * 100).toFixed(2))
+        : 0,
       affected_assets: row.affectedAssets,
       avg_score: row.avgFinalScore,
       last_block_at: row.lastBlockAt
@@ -385,6 +516,9 @@ async function getSummary({ limit = 50, rankingLimit = 10 } = {}) {
 
 module.exports = {
   recordBlockedSignal,
+  recordSignalFilters,
+  updateShadowOutcomes,
   getSummary,
-  buildBlockEvents
+  buildBlockEvents,
+  buildFilterEvents
 };

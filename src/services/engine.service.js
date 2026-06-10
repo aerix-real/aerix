@@ -129,6 +129,8 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     preSignalScore: strategyResult.preSignalScore || 0,
     blocked: strategyResult.blocked || false,
     blockReason: strategyResult.blockReason || null,
+    opportunityClass: strategyResult.opportunityClass || strategyResult.status || null,
+    risk: strategyResult.risk || null,
     timestamp: snapshot?.timestamp || new Date().toISOString()
   };
 }
@@ -151,6 +153,9 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       thresholdPerformance: strategyResult.thresholdPerformance || null,
       reasons: strategyResult.reasons,
       blocks: strategyResult.blocks,
+      status: strategyResult.opportunityClass || strategyResult.status || null,
+      risk: strategyResult.risk || null,
+      userSummary: strategyResult.userSummary || null,
       explanation: strategyResult.explanation,
       strategies: strategyResult.strategies,
       mtf: strategyResult.mtf,
@@ -286,6 +291,7 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     explanation: strategyResult.explanation || "",
     strategies: Array.isArray(strategyResult.strategies) ? strategyResult.strategies : [],
     mtf: strategyResult.mtf || {},
+    operationalTuning: strategyResult.operationalTuning || {},
     marketRegime: strategyResult.marketRegime || "NORMAL",
     dynamicMinScore: strategyResult.dynamicMinScore || null
   };
@@ -344,9 +350,38 @@ function hasCriticalLossPattern(preCheckMetrics = {}, antiLoss = {}) {
 }
 
 function getDynamicThresholdTolerance(mode) {
-  if (mode === "aggressive") return 8;
-  if (mode === "balanced") return 4;
+  if (mode === "aggressive") return 14;
+  if (mode === "balanced") return 8;
   return 0;
+}
+
+function classifyOpportunity(result = {}, mode = "balanced") {
+  if (result.blocked) return "BLOCKED";
+
+  const signal = String(result.signal || result.direction || "WAIT").toUpperCase();
+  const score = Number(result.finalScore || result.confidence || 0);
+
+  if (!["CALL", "PUT"].includes(signal)) return "WATCHLIST";
+
+  const highThreshold = mode === "conservative" ? 88 : mode === "aggressive" ? 78 : 82;
+  const mediumThreshold = mode === "conservative" ? 80 : mode === "aggressive" ? 62 : 68;
+
+  if (score >= highThreshold) return "HIGH_CONFIDENCE";
+  if (score >= mediumThreshold) return "MEDIUM_CONFIDENCE";
+
+  return "WATCHLIST";
+}
+
+function classifyRisk(result = {}) {
+  if (result.blocked) return "CRITICAL";
+
+  const score = Number(result.finalScore || result.confidence || 0);
+  const penalties = Array.isArray(result.filterPenalties) ? result.filterPenalties.length : 0;
+
+  if (score >= 82 && penalties === 0) return "LOW";
+  if (score >= 68) return penalties >= 2 ? "MODERATE" : "CONTROLLED";
+
+  return "ELEVATED";
 }
 
 function uniqueMessages(messages = []) {
@@ -433,6 +468,47 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       : [])
   ]);
 
+  const filterPenalties = [
+    ...((preCheckMetrics.moderateRisks || []).map((reason) => ({
+      filterName: "predictive_ai_penalty",
+      filterLabel: "Predictive AI Penalty",
+      reason,
+      score: preCheckMetrics.preScore,
+      finalScore: adaptive.finalScore,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName || "predictive_ai_gate"
+    }))),
+    ...(!preCheckBlocked && (preCheckMetrics.severeRisks || []).map((reason) => ({
+      filterName: "predictive_ai_penalty",
+      filterLabel: "Predictive AI Penalty",
+      reason,
+      score: preCheckMetrics.preScore,
+      finalScore: adaptive.finalScore,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName || "predictive_ai_gate"
+    }))),
+    ...(dynamicThresholdPenalty
+      ? [{
+          filterName: "dynamic_threshold_penalty",
+          filterLabel: "Dynamic Threshold Penalty",
+          reason: `Score levemente abaixo do mínimo aprendido (${Number(adaptive.finalScore || 0).toFixed(1)} < ${dynamicMinimumScore}); convertido em penalidade.`,
+          score: strategyResult.confidence,
+          finalScore: adaptive.finalScore,
+          signal: strategyResult.signal,
+          strategyName: strategyResult.strategyName
+        }]
+      : []),
+    ...((strategyResult.operationalTuning?.penaltyReasons || []).map((reason) => ({
+      filterName: "market_quality_penalty",
+      filterLabel: "Market Quality Penalty",
+      reason,
+      score: strategyResult.confidence,
+      finalScore: adaptive.finalScore,
+      signal: strategyResult.signal,
+      strategyName: strategyResult.strategyName
+    })))
+  ];
+
   const filterBlocks = [
     ...(preCheckBlocked
       ? [{
@@ -440,6 +516,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
           reason: preCheckMetrics.explanation || preCheckMetrics.risks[0] || "IA preditiva bloqueou antes do sinal.",
           score: preCheckMetrics.preScore,
           finalScore: preCheckMetrics.preScore,
+          signal: strategyResult.signal,
           strategyName: strategyResult.strategyName || "predictive_ai_gate"
         }]
       : []),
@@ -449,6 +526,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
           reason: antiLoss.reason || "Anti-loss forçou WAIT por padrão crítico de perda.",
           score: strategyResult.confidence,
           finalScore: adaptive.finalScore,
+          signal: strategyResult.signal,
           strategyName: strategyResult.strategyName
         }]
       : []),
@@ -458,6 +536,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
           reason: `Score abaixo do mínimo aprendido (${Number(adaptive.finalScore || 0).toFixed(1)} < ${dynamicMinimumScore}).`,
           score: strategyResult.confidence,
           finalScore: adaptive.finalScore,
+          signal: strategyResult.signal,
           strategyName: strategyResult.strategyName
         }]
       : [])
@@ -489,6 +568,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       : adaptive.finalScore,
     blocks: finalBlocks,
     filterBlocks,
+    filterPenalties,
     blocked: forceWait,
     blockReason: forceWait ? finalBlocks.join(" ") : null,
     adaptiveAdjustment: Number(adaptive.adaptiveAdjustment || 0),
@@ -516,6 +596,17 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       : explanation
   };
 
+  finalResult.opportunityClass = classifyOpportunity(finalResult, strategyMode);
+  finalResult.status = finalResult.opportunityClass;
+  finalResult.risk = classifyRisk(finalResult);
+  finalResult.userSummary = finalResult.blocked
+    ? "Operação rejeitada por risco crítico."
+    : finalResult.opportunityClass === "HIGH_CONFIDENCE"
+      ? "Entrada forte com confluência institucional."
+      : finalResult.opportunityClass === "MEDIUM_CONFIDENCE"
+        ? "Entrada válida com risco controlado."
+        : "Oportunidade monitorada; aguardar melhora de score/timing.";
+
   const legacySignal = buildLegacySignalShape(
     symbol,
     finalResult,
@@ -523,9 +614,9 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     strategyMode
   );
 
-  if (finalResult.blocked) {
+  if (finalResult.blocked || finalResult.filterPenalties?.length) {
     try {
-      await filterAnalyticsService.recordBlockedSignal({
+      await filterAnalyticsService.recordSignalFilters({
         ...finalResult,
         symbol,
         asset: symbol,
@@ -534,7 +625,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
         timestamp: snapshot?.timestamp || new Date().toISOString()
       }, "engine_api");
     } catch (error) {
-      console.error("Erro ao registrar analytics de bloqueio:", error.message || error);
+      console.error("Erro ao registrar analytics de filtros:", error.message || error);
     }
   }
 
@@ -569,6 +660,11 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     preSignalMinimum: finalResult.preSignalMinimum,
     blocked: finalResult.blocked,
     blockReason: finalResult.blockReason,
+    opportunityClass: finalResult.opportunityClass,
+    status: finalResult.status,
+    risk: finalResult.risk,
+    userSummary: finalResult.userSummary,
+    filterPenalties: finalResult.filterPenalties,
     finalResult: {
       signal: finalResult.signal,
       finalScore: finalResult.finalScore,
@@ -587,7 +683,12 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       preCheck: finalResult.preCheck,
       predictiveAi: finalResult.predictiveAi,
       preSignalScore: finalResult.preSignalScore,
-      preSignalMinimum: finalResult.preSignalMinimum
+      preSignalMinimum: finalResult.preSignalMinimum,
+      opportunityClass: finalResult.opportunityClass,
+      status: finalResult.status,
+      risk: finalResult.risk,
+      userSummary: finalResult.userSummary,
+      filterPenalties: finalResult.filterPenalties
     },
     mode: modeConfig,
     strategyMode,
@@ -610,7 +711,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
 
 function buildHistoryStats(results = []) {
   const actionable = results.filter(
-    (item) => item && item.signal && item.signal !== "WAIT"
+    (item) => item && ["CALL", "PUT"].includes(String(item.signal || item.direction || "").toUpperCase())
   );
 
   const total = actionable.length;
@@ -624,9 +725,20 @@ function buildHistoryStats(results = []) {
 
   const callCount = actionable.filter((item) => item.signal === "CALL").length;
   const putCount = actionable.filter((item) => item.signal === "PUT").length;
+  const analyzed = results.length;
+  const blocked = results.filter((item) => item?.opportunityClass === "BLOCKED" || item?.blocked).length;
+  const watchlist = results.filter((item) => item?.opportunityClass === "WATCHLIST").length;
+  const highConfidence = results.filter((item) => item?.opportunityClass === "HIGH_CONFIDENCE").length;
+  const mediumConfidence = results.filter((item) => item?.opportunityClass === "MEDIUM_CONFIDENCE").length;
 
   return {
     total,
+    analyzed,
+    approvalRate: analyzed ? Number(((total / analyzed) * 100).toFixed(2)) : 0,
+    blockedRate: analyzed ? Number(((blocked / analyzed) * 100).toFixed(2)) : 0,
+    watchlistRate: analyzed ? Number(((watchlist / analyzed) * 100).toFixed(2)) : 0,
+    highConfidenceRate: analyzed ? Number(((highConfidence / analyzed) * 100).toFixed(2)) : 0,
+    mediumConfidenceRate: analyzed ? Number(((mediumConfidence / analyzed) * 100).toFixed(2)) : 0,
     avgConfidence: Number(avgConfidence.toFixed(2)),
     avgFinalScore: Number(avgFinalScore.toFixed(2)),
     callCount,
@@ -659,7 +771,11 @@ function buildRanking(results = []) {
     preCheck: item.preCheck || {},
     preSignalScore: item.preSignalScore || 0,
     blocked: item.blocked || false,
-    blockReason: item.blockReason || null
+    blockReason: item.blockReason || null,
+    opportunityClass: item.opportunityClass || item.status || null,
+    status: item.status || item.opportunityClass || null,
+    risk: item.risk || null,
+    userSummary: item.userSummary || null
   }));
 }
 
@@ -690,6 +806,10 @@ function buildHistory(results = []) {
     preSignalScore: item.preSignalScore || 0,
     blocked: item.blocked || false,
     blockReason: item.blockReason || null,
+    opportunityClass: item.opportunityClass || item.status || null,
+    status: item.status || item.opportunityClass || null,
+    risk: item.risk || null,
+    userSummary: item.userSummary || null,
     timestamp: item.timestamp
   }));
 }

@@ -193,7 +193,16 @@ function getRegimeThresholdOffset(marketRegime, mode = "balanced") {
 function getDynamicMinScore(modeRules, marketRegime, mode = "balanced") {
   const dynamicMinScore = Number(modeRules?.minScore || 68) + getRegimeThresholdOffset(marketRegime, mode);
 
-  return Math.max(58, Math.min(92, Number(dynamicMinScore.toFixed(2))));
+  return Math.max(52, Math.min(92, Number(dynamicMinScore.toFixed(2))));
+}
+
+function getDynamicScoreTolerance(mode = "balanced") {
+  const normalizedMode = normalizeMode(mode);
+
+  if (normalizedMode === "aggressive") return 16;
+  if (normalizedMode === "balanced") return 10;
+
+  return 0;
 }
 
 function applyWeight(result, weight = 1) {
@@ -389,21 +398,23 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   confidence -= marketValidation.penaltyScore;
 
   confidence = Math.min(99, Math.max(0, Number(confidence.toFixed(2))));
-  const isBelowDynamicMinScore = confidence < dynamicMinScore;
+  const dynamicScoreGap = dynamicMinScore - confidence;
+  const dynamicScoreTolerance = getDynamicScoreTolerance(mode);
+  const isCriticalDynamicGap = dynamicScoreGap > dynamicScoreTolerance;
 
-  if (isBelowDynamicMinScore) {
+  if (isCriticalDynamicGap) {
     return {
       signal: "WAIT",
       confidence,
       entryQuality: buildEntryQuality(confidence),
       strategyName: best.name,
-      explanation: "Score consistente insuficiente para liberar sinal.",
+      explanation: "Score criticamente insuficiente para liberar sinal.",
       reasons: unique([
         ...marketValidation.penaltyReasons,
         `Regime de mercado: ${marketRegime}`,
         `Score mínimo dinâmico: ${dynamicMinScore}`
       ]),
-      blocks: [`Score ${confidence} abaixo do mínimo dinâmico ${dynamicMinScore}.`],
+      blocks: [`Score ${confidence} abaixo do mínimo dinâmico crítico ${dynamicMinScore}.`],
       strategies: evaluated,
       mtf,
       marketRegime,
@@ -418,6 +429,10 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     };
   }
 
+  const dynamicPenaltyReasons = dynamicScoreGap > 0
+    ? [`Score ${confidence} abaixo do mínimo dinâmico ${dynamicMinScore}; convertido em WATCHLIST/penalidade no modo ${normalizeMode(mode)}.`]
+    : [];
+
   return {
     signal: best.direction,
     confidence,
@@ -430,7 +445,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       `Regime de mercado: ${marketRegime}`,
       `Score mínimo dinâmico: ${dynamicMinScore}`,
       `Confirmação: ${sameDirection.length} estratégias`,
-      ...marketValidation.penaltyReasons
+      ...marketValidation.penaltyReasons,
+      ...dynamicPenaltyReasons
     ]),
     blocks: [],
     strategies: evaluated,
@@ -440,8 +456,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     operationalTuning: {
       mode: normalizeMode(mode),
       targetApprovalRate: rules.targetApprovalRate,
-      penaltyScore: marketValidation.penaltyScore,
-      penaltyReasons: marketValidation.penaltyReasons,
+      penaltyScore: marketValidation.penaltyScore + (dynamicScoreGap > 0 ? Number(dynamicScoreGap.toFixed(2)) : 0),
+      penaltyReasons: [...marketValidation.penaltyReasons, ...dynamicPenaltyReasons],
       hardBlocks: []
     }
   };
