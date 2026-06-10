@@ -24,6 +24,7 @@ function getModeRules(mode = "balanced") {
         lowVolatility: 10,
         weakAlignment: 9,
         highVolatility: 6,
+        fallbackData: 18,
         regime: 0
       },
       blockers: {
@@ -50,6 +51,7 @@ function getModeRules(mode = "balanced") {
         lowVolatility: 7,
         weakAlignment: 6,
         highVolatility: 4,
+        fallbackData: 12,
         regime: 0
       },
       blockers: {
@@ -76,6 +78,7 @@ function getModeRules(mode = "balanced") {
         lowVolatility: 5,
         weakAlignment: 4,
         highVolatility: 3,
+        fallbackData: 9,
         regime: 0
       },
       blockers: {
@@ -165,7 +168,8 @@ function getRegimeThresholdOffset(marketRegime, mode = "balanced") {
       REVERSAL: 7,
       HIGH_VOLATILITY: 6,
       LOW_VOLATILITY: 6,
-      FALLBACK_DATA: 12
+      FALLBACK_DATA: 12,
+      FALLBACK_SIGNAL: 12
     },
     balanced: {
       TRENDING: -3,
@@ -174,7 +178,8 @@ function getRegimeThresholdOffset(marketRegime, mode = "balanced") {
       REVERSAL: 3,
       HIGH_VOLATILITY: 3,
       LOW_VOLATILITY: 4,
-      FALLBACK_DATA: 12
+      FALLBACK_DATA: 12,
+      FALLBACK_SIGNAL: 12
     },
     aggressive: {
       TRENDING: -5,
@@ -183,7 +188,8 @@ function getRegimeThresholdOffset(marketRegime, mode = "balanced") {
       REVERSAL: -1,
       HIGH_VOLATILITY: 1,
       LOW_VOLATILITY: 2,
-      FALLBACK_DATA: 12
+      FALLBACK_DATA: 12,
+      FALLBACK_SIGNAL: 12
     }
   };
 
@@ -226,6 +232,36 @@ function buildEntryQuality(confidence) {
   if (confidence >= 75) return "good";
   if (confidence >= 65) return "moderate";
   return "weak";
+}
+
+
+function getExpectedDirectionForTrend(mtf = {}) {
+  if (mtf.dominantDirection === "up") return "CALL";
+  if (mtf.dominantDirection === "down") return "PUT";
+  return null;
+}
+
+function getFallbackSignalEligibility({ best, mtf, mode = "balanced" }) {
+  const normalizedMode = normalizeMode(mode);
+  const expectedDirection = getExpectedDirectionForTrend(mtf);
+  const directionConsistent = Boolean(
+    expectedDirection && best?.direction === expectedDirection
+  );
+  const allowedMode = normalizedMode === "balanced" || normalizedMode === "aggressive";
+
+  return {
+    allowedMode,
+    trendAlignment: Number(mtf?.alignment || 0),
+    strategyScore: Number(best?.rawScore || best?.score || 0),
+    expectedDirection,
+    directionConsistent,
+    eligible: Boolean(
+      allowedMode &&
+      Number(mtf?.alignment || 0) >= 3 &&
+      Number(best?.rawScore || best?.score || 0) >= 90 &&
+      directionConsistent
+    )
+  };
 }
 
 function safeEvaluateStrategy(strategy, payload) {
@@ -294,7 +330,7 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
     : [];
 
   const blocks = [
-    isFallbackData ? "Fonte de dados em fallback; entrada operacional bloqueada." : null,
+    isFallbackData && normalizedMode === "conservative" ? "Fonte de dados em fallback; modo conservador mantém bloqueio operacional." : null,
     hasInsufficientCandles ? "Histórico insuficiente de candles para validação institucional." : null,
     isVeryLowVolatility ? "Baixa liquidez severa / volatilidade extremamente baixa." : null,
     isVeryWeakTrend ? "Tendência muito fraca para entrada institucional." : null,
@@ -314,6 +350,9 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
       : null,
     isHighVolatility && normalizedMode !== "conservative"
       ? { reason: "Alta volatilidade aplicada como ajuste conservador de score.", value: rules.penalties.highVolatility }
+      : null,
+    isFallbackData && normalizedMode !== "conservative"
+      ? { reason: "Fonte de dados em fallback convertida em penalidade operacional.", value: rules.penalties.fallbackData }
       : null
   ].filter(Boolean);
 
@@ -436,11 +475,25 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 
   const best = validStrategies[0] || null;
   const marketValidation = validateMarketConditions(snapshot, mtf, mode);
+  const fallbackSignal = marketValidation.isFallbackData
+    ? getFallbackSignalEligibility({ best, mtf, mode })
+    : null;
+  const fallbackGraceBlocked = Boolean(
+    marketValidation.isFallbackData &&
+    !marketValidation.shouldBlock &&
+    !fallbackSignal?.eligible
+  );
+  const effectiveMarketRegime = fallbackSignal?.eligible ? "FALLBACK_SIGNAL" : marketRegime;
+  const effectiveDynamicMinScore = effectiveMarketRegime === marketRegime
+    ? dynamicMinScore
+    : getDynamicMinScore(rules, effectiveMarketRegime, mode);
 
-  if (!best || marketValidation.shouldBlock) {
+  if (!best || marketValidation.shouldBlock || fallbackGraceBlocked) {
     const absenceReason = !best
       ? "Nenhuma estratégia válida retornou direção CALL/PUT."
-      : `Market validation bloqueou direção: ${marketValidation.blocks.join(" | ")}`;
+      : fallbackGraceBlocked
+        ? `Fallback sem elegibilidade operacional: alinhamento ${fallbackSignal.trendAlignment}/3, score ${fallbackSignal.strategyScore}, direção esperada ${fallbackSignal.expectedDirection || "indefinida"}.`
+        : `Market validation bloqueou direção: ${marketValidation.blocks.join(" | ")}`;
     const result = {
       signal: "WAIT",
       confidence: 0,
@@ -448,27 +501,32 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       strategyName: null,
       explanation: "Mercado sem qualidade suficiente para entrada.",
       reasons: marketValidation.penaltyReasons,
-      blocks: marketValidation.blocks.length
-        ? marketValidation.blocks
-        : ["Nenhuma estratégia válida encontrada."],
+      blocks: fallbackGraceBlocked
+        ? ["Fallback permitido apenas com alinhamento >= 3, score estratégico >= 90 e direção consistente."]
+        : marketValidation.blocks.length
+          ? marketValidation.blocks
+          : ["Nenhuma estratégia válida encontrada."],
       strategies: evaluated,
       mtf,
-      marketRegime,
-      dynamicMinScore,
+      marketRegime: effectiveMarketRegime,
+      dynamicMinScore: effectiveDynamicMinScore,
       operationalTuning: {
         mode: normalizeMode(mode),
         targetApprovalRate: rules.targetApprovalRate,
         penaltyScore: marketValidation.penaltyScore,
         penaltyReasons: marketValidation.penaltyReasons,
-        hardBlocks: marketValidation.blocks
+        hardBlocks: fallbackGraceBlocked
+          ? ["Fallback sem confluência mínima para FALLBACK_SIGNAL."]
+          : marketValidation.blocks,
+        fallbackSignal
       }
     };
 
     emitDirectionAuditLog(buildStrategyAuditSnapshot({
       snapshot,
       mtf,
-      marketRegime,
-      dynamicMinScore,
+      marketRegime: effectiveMarketRegime,
+      dynamicMinScore: effectiveDynamicMinScore,
       evaluated,
       validStrategies,
       best,
@@ -492,13 +550,16 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   confidence += Math.min(10, (sameDirection.length - 1) * 3);
   confidence -= marketValidation.penaltyScore;
 
-  confidence = Math.min(99, Math.max(0, Number(confidence.toFixed(2))));
-  const dynamicScoreGap = dynamicMinScore - confidence;
+  const fallbackConfidenceCap = fallbackSignal?.eligible
+    ? (normalizeMode(mode) === "aggressive" ? 94 : 92)
+    : 99;
+  confidence = Math.min(fallbackConfidenceCap, Math.max(0, Number(confidence.toFixed(2))));
+  const dynamicScoreGap = effectiveDynamicMinScore - confidence;
   const dynamicScoreTolerance = getDynamicScoreTolerance(mode);
   const isCriticalDynamicGap = dynamicScoreGap > dynamicScoreTolerance;
 
   if (isCriticalDynamicGap) {
-    const absenceReason = `Score ${confidence} ficou ${Number(dynamicScoreGap.toFixed(2))} pontos abaixo do mínimo dinâmico ${dynamicMinScore}, excedendo tolerância ${dynamicScoreTolerance}.`;
+    const absenceReason = `Score ${confidence} ficou ${Number(dynamicScoreGap.toFixed(2))} pontos abaixo do mínimo dinâmico ${effectiveDynamicMinScore}, excedendo tolerância ${dynamicScoreTolerance}.`;
     const result = {
       signal: "WAIT",
       confidence,
@@ -507,14 +568,14 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       explanation: "Score criticamente insuficiente para liberar sinal.",
       reasons: unique([
         ...marketValidation.penaltyReasons,
-        `Regime de mercado: ${marketRegime}`,
-        `Score mínimo dinâmico: ${dynamicMinScore}`
+        `Regime de mercado: ${effectiveMarketRegime}`,
+        `Score mínimo dinâmico: ${effectiveDynamicMinScore}`
       ]),
-      blocks: [`Score ${confidence} abaixo do mínimo dinâmico crítico ${dynamicMinScore}.`],
+      blocks: [`Score ${confidence} abaixo do mínimo dinâmico crítico ${effectiveDynamicMinScore}.`],
       strategies: evaluated,
       mtf,
-      marketRegime,
-      dynamicMinScore,
+      marketRegime: effectiveMarketRegime,
+      dynamicMinScore: effectiveDynamicMinScore,
       operationalTuning: {
         mode: normalizeMode(mode),
         targetApprovalRate: rules.targetApprovalRate,
@@ -527,8 +588,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     emitDirectionAuditLog(buildStrategyAuditSnapshot({
       snapshot,
       mtf,
-      marketRegime,
-      dynamicMinScore,
+      marketRegime: effectiveMarketRegime,
+      dynamicMinScore: effectiveDynamicMinScore,
       evaluated,
       validStrategies,
       best,
@@ -543,7 +604,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   }
 
   const dynamicPenaltyReasons = dynamicScoreGap > 0
-    ? [`Score ${confidence} abaixo do mínimo dinâmico ${dynamicMinScore}; convertido em WATCHLIST/penalidade no modo ${normalizeMode(mode)}.`]
+    ? [`Score ${confidence} abaixo do mínimo dinâmico ${effectiveDynamicMinScore}; convertido em WATCHLIST/penalidade no modo ${normalizeMode(mode)}.`]
     : [];
 
   const result = {
@@ -555,31 +616,33 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     reasons: unique([
       `MTF alinhado: ${mtf.alignment}/3`,
       `Direção dominante: ${mtf.dominantDirection}`,
-      `Regime de mercado: ${marketRegime}`,
-      `Score mínimo dinâmico: ${dynamicMinScore}`,
+      `Regime de mercado: ${effectiveMarketRegime}`,
+      `Score mínimo dinâmico: ${effectiveDynamicMinScore}`,
       `Confirmação: ${sameDirection.length} estratégias`,
       ...marketValidation.penaltyReasons,
+      ...(fallbackSignal?.eligible ? ["Classificação FALLBACK_SIGNAL liberada por confluência forte."] : []),
       ...dynamicPenaltyReasons
     ]),
     blocks: [],
     strategies: evaluated,
     mtf,
-    marketRegime,
-    dynamicMinScore,
+    marketRegime: effectiveMarketRegime,
+    dynamicMinScore: effectiveDynamicMinScore,
     operationalTuning: {
       mode: normalizeMode(mode),
       targetApprovalRate: rules.targetApprovalRate,
       penaltyScore: marketValidation.penaltyScore + (dynamicScoreGap > 0 ? Number(dynamicScoreGap.toFixed(2)) : 0),
       penaltyReasons: [...marketValidation.penaltyReasons, ...dynamicPenaltyReasons],
-      hardBlocks: []
+      hardBlocks: [],
+      fallbackSignal
     }
   };
 
   emitDirectionAuditLog(buildStrategyAuditSnapshot({
     snapshot,
     mtf,
-    marketRegime,
-    dynamicMinScore,
+    marketRegime: effectiveMarketRegime,
+    dynamicMinScore: effectiveDynamicMinScore,
     evaluated,
     validStrategies,
     best,

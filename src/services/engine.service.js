@@ -363,6 +363,9 @@ function classifyOpportunity(result = {}, mode = "balanced") {
   const score = Number(result.finalScore || result.confidence || 0);
 
   if (!["CALL", "PUT"].includes(signal)) return "WATCHLIST";
+  if (result.marketRegime === "FALLBACK_SIGNAL" || result.market_regime === "FALLBACK_SIGNAL") {
+    return "FALLBACK_SIGNAL";
+  }
 
   const highThreshold = mode === "conservative" ? 88 : mode === "aggressive" ? 78 : 82;
   const mediumThreshold = mode === "conservative" ? 80 : mode === "aggressive" ? 62 : 68;
