@@ -7,6 +7,7 @@ const { runStrategies } = require("../strategy/strategy-runner.service");
 const adaptiveService = require("./adaptive.service");
 const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
+const engineDebugService = require("./engine-debug.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 
@@ -629,6 +630,18 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     }
   }
 
+  engineDebugService.recordFinalDecision({
+    ...finalResult,
+    symbol,
+    asset: symbol,
+    mode: strategyMode,
+    marketContext,
+    timestamp: snapshot?.timestamp || new Date().toISOString()
+  }, {
+    source: "engine_api",
+    stage: "analyze_symbol"
+  });
+
   return {
     symbol,
     signal: finalResult.signal,
@@ -664,6 +677,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
     status: finalResult.status,
     risk: finalResult.risk,
     userSummary: finalResult.userSummary,
+    filterBlocks: finalResult.filterBlocks,
     filterPenalties: finalResult.filterPenalties,
     finalResult: {
       signal: finalResult.signal,
@@ -688,6 +702,7 @@ async function analyzeSymbolForUser(userId, symbol, providedSnapshot = null) {
       status: finalResult.status,
       risk: finalResult.risk,
       userSummary: finalResult.userSummary,
+      filterBlocks: finalResult.filterBlocks,
       filterPenalties: finalResult.filterPenalties
     },
     mode: modeConfig,
@@ -857,6 +872,21 @@ async function analyzePreferredSymbols(userId) {
         blockReason: error.message || "Erro ao analisar ativo.",
         timestamp: new Date().toISOString()
       });
+
+      engineDebugService.recordFinalDecision({
+        symbol,
+        signal: "WAIT",
+        confidence: 0,
+        finalScore: 0,
+        blocked: true,
+        blockReason: error.message || "Erro ao analisar ativo.",
+        marketRegime: "ERROR"
+      }, {
+        source: "engine_api",
+        stage: "analyze_preferred_error",
+        filterName: "engine_error",
+        blockReason: error.message || "Erro ao analisar ativo."
+      });
     }
   }
 
@@ -887,5 +917,6 @@ async function analyzePreferredSymbols(userId) {
 module.exports = {
   analyzeSymbolForUser,
   analyzePreferredSymbols,
-  getUserModeConfig
+  getUserModeConfig,
+  getDebugSummary: engineDebugService.getDebugSummary
 };
