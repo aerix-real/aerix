@@ -7,6 +7,7 @@ const executionService = require("./execution.service");
 const resultCheckerService = require("./result-checker.service");
 const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
+const engineDebugService = require("./engine-debug.service");
 
 const { analyzeIndicators } = require("./indicator-engine.service");
 const { explainSignal, applyLossPenalty } = require("./signal-ai.service");
@@ -360,6 +361,16 @@ class EngineRunnerService {
             });
 
             cycleResults.push(blockedSignal);
+            engineDebugService.recordAnalyzed(blockedSignal, {
+              source: "engine_runner",
+              stage: "predictive_ai_pre_check"
+            });
+            engineDebugService.recordBlocked(blockedSignal, {
+              source: "engine_runner",
+              stage: "predictive_ai_pre_check",
+              filterName: "predictive_ai_block",
+              blockReason: blockedSignal.blockReason || blockedSignal.block_reason
+            });
             this.emitBlocked(blockedSignal);
             await this.recordFilterAnalytics(blockedSignal, "predictive_ai");
 
@@ -388,6 +399,10 @@ class EngineRunnerService {
           signal = this.normalizeForDatabase(signal);
 
           cycleResults.push(signal);
+          engineDebugService.recordFinalDecision(signal, {
+            source: "engine_runner",
+            stage: "post_execution_validation"
+          });
 
           if (signal.blocked || signal.signal === "WAIT") {
             this.emitBlocked(signal);
@@ -413,6 +428,20 @@ class EngineRunnerService {
           await this.auditDecision("signal_generated", signal);
         } catch (symbolError) {
           console.error(`Erro ao processar ${symbol}:`, symbolError.message || symbolError);
+          engineDebugService.recordFinalDecision({
+            symbol,
+            signal: "WAIT",
+            confidence: 0,
+            finalScore: 0,
+            blocked: true,
+            blockReason: symbolError.message || "Erro ao processar símbolo.",
+            marketRegime: "ERROR"
+          }, {
+            source: "engine_runner",
+            stage: "symbol_cycle_error",
+            filterName: "engine_error",
+            blockReason: symbolError.message || "Erro ao processar símbolo."
+          });
 
           await this.auditDecision("symbol_cycle_error", {
             symbol,

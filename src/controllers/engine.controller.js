@@ -34,7 +34,27 @@ async function analyzePreferredSymbols(req, res) {
   }
 }
 
+async function getDebugSummary(req, res) {
+  try {
+    const summary = engineService.getDebugSummary();
+
+    return res.status(200).json({
+      analyzed: summary.analyzed,
+      approved: summary.approved,
+      blocked: summary.blocked,
+      approvalRate: summary.approvalRate,
+      topBlockReasons: summary.topBlockReasons
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      message: error.message || "Erro ao consultar debug da engine."
+    });
+  }
+}
+
 module.exports = {
   analyzeSymbol,
-  analyzePreferredSymbols
+  analyzePreferredSymbols,
+  getDebugSummary
 };
