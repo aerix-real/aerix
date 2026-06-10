@@ -21,6 +21,11 @@ const {
   filterConfirmedOperationalSignals
 } = require("../utils/signal-history-filter");
 
+const ECONOMIC_ENGINE_INTERVAL_MS = 5 * 60 * 1000;
+const MIN_ANALYSIS_REVISIT_MS = Math.max(60 * 1000, Number(process.env.MIN_ANALYSIS_REVISIT_MS || ECONOMIC_ENGINE_INTERVAL_MS));
+const RELEVANT_PRICE_CHANGE_PERCENT = Math.max(0, Number(process.env.RELEVANT_PRICE_CHANGE_PERCENT || 0.03));
+const SNAPSHOT_REQUEST_COST = 3;
+
 function logStructuredEngineError(event, error, context = {}) {
   console.error(JSON.stringify({
     scope: "aerix_engine_runner",
@@ -84,7 +89,7 @@ class EngineRunnerService {
     this.running = false;
     this.isProcessing = false;
     this.interval = null;
-    this.intervalMs = Number(process.env.ENGINE_INTERVAL_MS || 15000);
+    this.intervalMs = Number(process.env.ENGINE_INTERVAL_MS || ECONOMIC_ENGINE_INTERVAL_MS);
 
     this.symbols = String(process.env.SYMBOLS || process.env.DEFAULT_SYMBOLS || "EUR/USD,GBP/USD,USD/JPY,AUD/USD")
       .split(",")
@@ -92,7 +97,9 @@ class EngineRunnerService {
       .filter(Boolean);
 
     this.symbolCursor = 0;
-    this.maxSymbolsPerCycle = Number(process.env.MAX_SYMBOLS_PER_CYCLE || 2);
+    this.maxSymbolsPerCycle = Math.max(1, Number(process.env.MAX_SYMBOLS_PER_CYCLE || 1));
+    this.maxConcurrentAnalyses = Math.max(1, Number(process.env.MAX_CONCURRENT_ANALYSES || 1));
+    this.lastAnalysisBySymbol = new Map();
 
     this.bestOpportunity = null;
     this.latestResults = [];
@@ -101,7 +108,7 @@ class EngineRunnerService {
     this.lastStatus = "standby";
 
     this.rateLimiter = new RateLimiterService({
-      maxPerMinute: Number(process.env.MAX_REQUESTS_PER_MINUTE || 8)
+      maxPerMinute: Number(process.env.MAX_REQUESTS_PER_MINUTE || 3)
     }, { cacheLatest: true });
 
     this.rateLimit = this.rateLimiter.getStats();
@@ -143,6 +150,13 @@ class EngineRunnerService {
       lastCycleAt: this.lastCycleAt,
       lastStatus: this.lastStatus,
       intervalMs: this.intervalMs,
+      economicMode: {
+        enabled: true,
+        minAnalysisRevisitMs: MIN_ANALYSIS_REVISIT_MS,
+        maxSymbolsPerCycle: this.maxSymbolsPerCycle,
+        maxConcurrentAnalyses: this.maxConcurrentAnalyses,
+        relevantPriceChangePercent: RELEVANT_PRICE_CHANGE_PERCENT
+      },
       twelveDataConsumption: typeof marketData.buildTwelveDataConsumptionReport === "function"
         ? marketData.buildTwelveDataConsumptionReport({
             symbols: this.symbols,
@@ -169,7 +183,9 @@ class EngineRunnerService {
       return selected;
     }
 
-    for (let i = 0; i < this.maxSymbolsPerCycle; i += 1) {
+    const cycleLimit = Math.min(this.maxSymbolsPerCycle, this.maxConcurrentAnalyses);
+
+    for (let i = 0; i < cycleLimit; i += 1) {
       const symbol = this.symbols[this.symbolCursor % this.symbols.length];
       selected.push(symbol);
       this.symbolCursor += 1;
@@ -353,6 +369,73 @@ class EngineRunnerService {
     });
   }
 
+  getSnapshotSignature(snapshot = {}) {
+    const lastM5 = this.getLastM5Candle(snapshot);
+    const h1 = snapshot?.timeframes?.h1 || {};
+    const m15 = snapshot?.timeframes?.m15 || {};
+
+    if (!lastM5) return null;
+
+    return {
+      candleTime: lastM5.datetime || lastM5.time || null,
+      close: Number(lastM5.close || 0),
+      h1Direction: h1.direction || "neutral",
+      m15Direction: m15.direction || "neutral",
+      h1Strength: Number(h1.strengthPercent || 0),
+      m15Strength: Number(m15.strengthPercent || 0)
+    };
+  }
+
+  hasRelevantSnapshotChange(previousSignature, nextSignature) {
+    if (!previousSignature || !nextSignature) return true;
+
+    if (previousSignature.candleTime !== nextSignature.candleTime) return true;
+    if (previousSignature.h1Direction !== nextSignature.h1Direction) return true;
+    if (previousSignature.m15Direction !== nextSignature.m15Direction) return true;
+
+    const previousClose = Number(previousSignature.close || 0);
+    const nextClose = Number(nextSignature.close || 0);
+    const priceChangePercent = previousClose
+      ? Math.abs(((nextClose - previousClose) / previousClose) * 100)
+      : 0;
+
+    return priceChangePercent >= RELEVANT_PRICE_CHANGE_PERCENT;
+  }
+
+  shouldSkipRecentlyAnalyzed(symbol) {
+    const previous = this.lastAnalysisBySymbol.get(symbol);
+    if (!previous?.analyzedAt) return false;
+
+    return Date.now() - previous.analyzedAt < MIN_ANALYSIS_REVISIT_MS;
+  }
+
+  buildCachedAnalysisResult(symbol, previous, reason) {
+    if (!previous?.result) return null;
+
+    return {
+      ...previous.result,
+      symbol,
+      asset: previous.result.asset || symbol,
+      cachedAnalysis: true,
+      economicMode: {
+        reused: true,
+        reason,
+        analyzedAt: new Date(previous.analyzedAt).toISOString(),
+        minAnalysisRevisitMs: MIN_ANALYSIS_REVISIT_MS,
+        relevantPriceChangePercent: RELEVANT_PRICE_CHANGE_PERCENT
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  rememberAnalysis(symbol, snapshot, result) {
+    this.lastAnalysisBySymbol.set(symbol, {
+      analyzedAt: Date.now(),
+      signature: this.getSnapshotSignature(snapshot),
+      result
+    });
+  }
+
   applyPredictiveDecisionToSignal(signal, predictiveDecision) {
     const scoreAdjustment = Number(predictiveDecision.scoreAdjustment || 0);
     const finalScore = Math.max(0, Math.min(100, Number(signal.finalScore || 0) + scoreAdjustment));
@@ -398,7 +481,22 @@ class EngineRunnerService {
 
       for (const symbol of symbolsToProcess) {
         try {
-          if (!this.rateLimiter.canProceed(3)) {
+          const previousAnalysis = this.lastAnalysisBySymbol.get(symbol);
+
+          if (this.shouldSkipRecentlyAnalyzed(symbol)) {
+            const cachedResult = this.buildCachedAnalysisResult(
+              symbol,
+              previousAnalysis,
+              "recently_analyzed"
+            );
+
+            if (cachedResult) {
+              cycleResults.push(cachedResult);
+              continue;
+            }
+          }
+
+          if (!this.rateLimiter.canProceed(SNAPSHOT_REQUEST_COST)) {
             this.rateLimit = this.rateLimiter.getStats();
             console.log(
               `⏸ Rate limit protegido: aguardando janela. Uso ${this.rateLimit.usedInCurrentWindow}/${this.rateLimit.maxPerMinute}`
@@ -406,10 +504,33 @@ class EngineRunnerService {
             continue;
           }
 
-          this.rateLimiter.register(3);
+          this.rateLimiter.register(SNAPSHOT_REQUEST_COST);
           this.rateLimit = this.rateLimiter.getStats();
 
           const snapshot = await marketData.getMarketSnapshot(symbol);
+          const nextSignature = this.getSnapshotSignature(snapshot);
+
+          if (
+            previousAnalysis?.result &&
+            !this.hasRelevantSnapshotChange(previousAnalysis.signature, nextSignature)
+          ) {
+            const cachedResult = this.buildCachedAnalysisResult(
+              symbol,
+              previousAnalysis,
+              "no_relevant_market_change"
+            );
+
+            if (cachedResult) {
+              this.lastAnalysisBySymbol.set(symbol, {
+                ...previousAnalysis,
+                analyzedAt: Date.now(),
+                signature: nextSignature
+              });
+              cycleResults.push(cachedResult);
+              continue;
+            }
+          }
+
           const indicators = this.buildIndicators(snapshot, mode);
 
           const predictiveDecision = await predictiveAiService.evaluatePreSignal({
@@ -426,6 +547,7 @@ class EngineRunnerService {
             });
 
             cycleResults.push(blockedSignal);
+            this.rememberAnalysis(symbol, snapshot, blockedSignal);
             engineDebugService.recordAnalyzed(blockedSignal, {
               source: "engine_runner",
               stage: "predictive_ai_pre_check"
@@ -467,6 +589,7 @@ class EngineRunnerService {
           signal = this.normalizeForDatabase(signal);
 
           cycleResults.push(signal);
+          this.rememberAnalysis(symbol, snapshot, signal);
           engineDebugService.recordFinalDecision(signal, {
             source: "engine_runner",
             stage: "post_execution_validation"

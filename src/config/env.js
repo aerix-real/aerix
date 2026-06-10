@@ -52,7 +52,7 @@ const env = {
 
   engine: {
     mode: process.env.MODE || "equilibrado",
-    intervalMs: toNumber(process.env.ENGINE_INTERVAL_MS, 15000),
+    intervalMs: toNumber(process.env.ENGINE_INTERVAL_MS, 5 * 60 * 1000),
     resultCheckIntervalMs: toNumber(process.env.RESULT_CHECK_INTERVAL_MS, 10000),
     rankingIntervalMs: toNumber(process.env.RANKING_INTERVAL_MS, 30000),
     expirationMinutes: toNumber(process.env.EXPIRATION_MINUTES, 1),
