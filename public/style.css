@@ -996,3 +996,364 @@ body.design-system-institutional::after { opacity: 0.24; }
   .refined-hero-grid,
   .operational-compact-grid { grid-template-columns: 1fr; }
 }
+
+/* Compact Commercial Dashboard refinement: decision-first, no decorative charts. */
+body.design-system-institutional {
+  overflow-x: hidden;
+}
+
+body.design-system-institutional .app-shell {
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.compact-status-strip {
+  flex: 1.2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, 1fr)) minmax(118px, 0.8fr);
+  min-width: 0;
+}
+
+.compact-status-strip .top-status-card,
+.compact-status-strip .live-clock-card {
+  min-width: 0;
+  min-height: 72px;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 14px;
+}
+
+.compact-status-strip .top-status-card {
+  flex-direction: column;
+  color: var(--gold-strong);
+}
+
+.compact-status-strip .connection-card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.compact-status-strip .top-status-card span:not(.connection-badge),
+.compact-status-strip .live-clock-card span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.compact-status-strip .top-status-card strong,
+.compact-status-strip .live-clock-card strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--gold-strong);
+  font-size: clamp(0.88rem, 1.2vw, 1.08rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-layout {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: clamp(14px, 1.5vw, 20px);
+}
+
+.side-panel {
+  gap: 12px;
+}
+
+.side-panel .panel {
+  padding: 13px;
+}
+
+.premium-list,
+.timeline-panel {
+  display: none;
+}
+
+.mode-switcher {
+  gap: 7px;
+}
+
+.mode-btn {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.mode-description,
+.premium-status,
+.plan-row {
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.compact-commercial-panel,
+.content-panel {
+  min-width: 0;
+}
+
+.compact-headline {
+  padding: 14px 16px;
+}
+
+.compact-headline .headline {
+  font-size: clamp(1.05rem, 1.7vw, 1.45rem);
+  line-height: 1.25;
+}
+
+.compact-headline .headline-sub {
+  display: none;
+}
+
+.decision-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.22fr) minmax(280px, 0.78fr);
+  gap: clamp(14px, 1.5vw, 20px);
+  align-items: stretch;
+}
+
+.decision-focus-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 228, 163, 0.34);
+  background:
+    radial-gradient(circle at 85% 12%, rgba(240, 207, 130, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(17, 15, 11, 0.96), rgba(4, 5, 5, 0.92));
+}
+
+.decision-focus-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 228, 163, 0.08);
+}
+
+.decision-asset-row {
+  display: grid;
+  gap: 8px;
+  padding: clamp(12px, 2vw, 20px) 0 clamp(16px, 2.2vw, 24px);
+}
+
+.decision-asset-row strong {
+  overflow-wrap: anywhere;
+  color: #fff8e8;
+  font-size: clamp(2.6rem, 6vw, 6.2rem);
+  font-weight: 950;
+  letter-spacing: -0.065em;
+  line-height: 0.9;
+}
+
+.decision-direction-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.38fr);
+  gap: 12px;
+}
+
+.decision-direction-row > div,
+.compact-opportunity-grid .opportunity-essential-item,
+.essential-stats-grid .stat-card {
+  border-color: rgba(240, 207, 130, 0.16);
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.decision-direction-row > div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(240, 207, 130, 0.16);
+  border-radius: 16px;
+}
+
+.decision-direction-row span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.decision-direction-row strong {
+  display: block;
+  overflow: hidden;
+  color: var(--gold-strong);
+  font-size: clamp(1.7rem, 3.2vw, 3.2rem);
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-opportunity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.essential-metrics-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.essential-stats-grid {
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.essential-stats-grid .stat-card {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.essential-stats-grid .stat-card strong {
+  font-size: clamp(1.9rem, 3.5vw, 3.2rem);
+}
+
+.compact-history-panel .history-list {
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.compact-history-item {
+  display: block;
+  padding: 0;
+  border: 1px solid rgba(240, 207, 130, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.history-summary-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(64px, auto) minmax(72px, auto);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.history-summary-row::-webkit-details-marker {
+  display: none;
+}
+
+.history-summary-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 0 12px 12px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.history-detail-row .action-buttons {
+  margin-left: auto;
+}
+
+.advanced-hub-details {
+  margin-top: 0;
+}
+
+.advanced-hub-grid {
+  display: grid;
+  gap: 14px;
+  padding: 0 12px 12px;
+}
+
+.advanced-hub-grid .institutional-center-panel {
+  padding: 14px;
+}
+
+.advanced-hub-grid .institutional-metrics-grid,
+.advanced-hub-grid .realtime-metrics-grid,
+.filter-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.compact-signal-details.signal-card::before,
+.mini-chart-wrap,
+.equity-panel,
+.equity-chart-wrap {
+  display: none !important;
+}
+
+@media (max-width: 1400px) {
+  .compact-status-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .decision-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    width: min(288px, 84vw);
+  }
+}
+
+@media (max-width: 980px) {
+  .topbar-left,
+  .topbar-right,
+  .compact-status-strip {
+    width: 100%;
+  }
+
+  .compact-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compact-clock {
+    display: none;
+  }
+
+  .decision-asset-row strong {
+    font-size: clamp(2.2rem, 12vw, 4.5rem);
+  }
+
+  .compact-opportunity-grid,
+  .advanced-hub-grid .institutional-metrics-grid,
+  .advanced-hub-grid .realtime-metrics-grid,
+  .filter-summary-grid,
+  .filter-analytics-grid,
+  .institutional-ops-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .brand-copy {
+    display: none;
+  }
+
+  .logo-banner {
+    min-width: 0;
+  }
+
+  .decision-direction-row,
+  .essential-stats-grid,
+  .signal-meta-grid,
+  .engine-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-summary-row {
+    grid-template-columns: minmax(72px, 1fr) auto auto;
+    gap: 6px;
+  }
+}
