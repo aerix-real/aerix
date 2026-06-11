@@ -2,6 +2,7 @@ const signalRepository = require("../repositories/signal.repository");
 const { getMarketSnapshot } = require("./market-data.service");
 const executionService = require("./execution.service");
 const filterAnalyticsService = require("./filter-analytics.service");
+const { registerAudit } = require("./audit.service");
 
 class ResultCheckerService {
   constructor() {
@@ -31,6 +32,42 @@ class ResultCheckerService {
     }
 
     return "loss";
+  }
+
+  buildOutcomeAuditPayload(signal = {}, saved = {}, finalResult = null, resultPrice = null) {
+    return {
+      symbol: saved.symbol || signal.symbol || "UNKNOWN",
+      signal: saved.signal || saved.direction || signal.signal || signal.direction || "WAIT",
+      strategyName: saved.strategy_name || signal.strategy_name || signal.strategyName || null,
+      score: Number(saved.adjusted_score || saved.final_score || signal.adjusted_score || signal.final_score || signal.finalScore || signal.confidence || 0),
+      confidence: Number(saved.confidence || signal.confidence || 0),
+      entryPrice: this.normalizePrice(saved.entry_price ?? signal.entry_price),
+      resultPrice: this.normalizePrice(saved.result_price ?? resultPrice),
+      result: finalResult || saved.result || null,
+      createdAt: saved.created_at || signal.created_at || null,
+      checkedAt: saved.checked_at || new Date().toISOString(),
+      marketRegime: saved.market_regime || signal.market_regime || signal.marketRegime || "NORMAL"
+    };
+  }
+
+  async registerOutcomeAudit(signal, saved, finalResult, resultPrice) {
+    const payload = this.buildOutcomeAuditPayload(signal, saved, finalResult, resultPrice);
+
+    console.log(JSON.stringify({
+      scope: "aerix_signal_outcome_audit",
+      event: "signal_outcome_audit",
+      timestamp: new Date().toISOString(),
+      ...payload
+    }));
+
+    await registerAudit(
+      "signal_outcome_audit",
+      "Resultado operacional do sinal AERIX",
+      payload,
+      saved?.user_id || signal?.user_id || null
+    );
+
+    return payload;
   }
 
   buildLearningSignal(signal, savedResult) {
@@ -78,6 +115,9 @@ class ResultCheckerService {
             // 🧠 IA aprende com WIN/LOSS
             executionService.learnFromResult(learningSignal, finalResult);
             await filterAnalyticsService.updateShadowOutcomes(saved, finalResult).catch(() => 0);
+            await this.registerOutcomeAudit(signal, saved, finalResult, resultPrice).catch((error) => {
+              console.error("Erro ao registrar signal_outcome_audit:", error.message || error);
+            });
 
             updated.push({
               ...saved,

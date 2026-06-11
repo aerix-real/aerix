@@ -445,7 +445,8 @@ function safeEvaluateStrategy(strategy, payload) {
       score: Number(result?.score || 0),
       context: result?.context || {},
       explanation: result?.explanation || "",
-      eligibilityAudit: result?.eligibilityAudit || null
+      eligibilityAudit: result?.eligibilityAudit || null,
+      activationReason: result?.eligibilityAudit?.activationReason || null
     };
   } catch (error) {
     return {
@@ -455,7 +456,8 @@ function safeEvaluateStrategy(strategy, payload) {
       score: 0,
       context: {},
       explanation: error?.message || "Erro ao executar estratégia.",
-      eligibilityAudit: null
+      eligibilityAudit: null,
+      activationReason: null
     };
   }
 }
@@ -623,7 +625,8 @@ function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinSco
     rawScore: item.rawScore,
     weightedScore: item.weightedScore,
     explanation: item.explanation || null,
-    eligibilityAudit: item.eligibilityAudit || null
+    eligibilityAudit: item.eligibilityAudit || null,
+    activationReason: item.activationReason || item.eligibilityAudit?.activationReason || null
   }));
 
   return {
@@ -691,7 +694,8 @@ function buildStrategyEligibilityReport(evaluated = []) {
       direction: item.direction || null,
       criteriaPassed: Number(audit.criteriaPassed || 0),
       criteriaFailed: Number(audit.criteriaFailed || 0),
-      blockedBy: audit.blockedBy || item.explanation || null,
+      blockedBy: activated ? null : audit.blockedBy || item.explanation || null,
+      activationReason: activated ? audit.activationReason || `Estratégia ${item.name} aprovada para ${item.direction}` : null,
       partialScore: Number(audit.score ?? item.rawScore ?? item.score ?? 0),
       rawScore: Number(item.rawScore || item.score || 0),
       weightedScore: Number(item.weightedScore || 0)
@@ -746,6 +750,7 @@ function buildStrategyEligibilityAuditLog({ snapshot, mode, mtf, marketRegime, d
       score: Number(item.rawScore ?? item.score ?? 0),
       weightedScore: Number(item.weightedScore || 0),
       explanation: item.explanation || null,
+      activationReason: item.activationReason || item.eligibilityAudit?.activationReason || null,
       audit: item.eligibilityAudit || null
     })),
     report
@@ -851,7 +856,8 @@ function buildSignalNearActivationAuditLog({ snapshot, mode, evaluated, report }
       strategy: item.name,
       valid: item.valid,
       partialScore: Number(item.eligibilityAudit?.score ?? item.rawScore ?? item.score ?? 0),
-      blocker: item.eligibilityAudit?.blockedBy || item.explanation || null
+      blocker: item.valid ? null : item.eligibilityAudit?.blockedBy || item.explanation || null,
+      activationReason: item.valid ? item.eligibilityAudit?.activationReason || null : null
     }))
   };
 }
@@ -1112,6 +1118,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     entryQuality: buildEntryQuality(confidence),
     strategyName: best.name,
     explanation: `Estratégia: ${best.name} | Score: ${confidence}`,
+    activationReason: best.activationReason || best.eligibilityAudit?.activationReason || `Estratégia ${best.name} aprovada para ${best.direction} com score ${confidence}.`,
     reasons: unique([
       `MTF alinhado: ${mtf.alignment}/3`,
       `Direção dominante: ${mtf.dominantDirection}`,

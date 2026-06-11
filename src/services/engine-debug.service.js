@@ -106,6 +106,8 @@ function buildDebugEvent(signal = {}, options = {}) {
     executionAllowed: getExecutionAllowed(signal),
     blocked: Boolean(options.blocked),
     blockReason: options.blocked ? blockReason : null,
+    blockedBy: options.blocked ? filterName : null,
+    activationReason: options.blocked ? null : signal.activationReason || signal.execution?.reason || "Entrada aprovada pelos critérios operacionais.",
     filter: options.blocked ? filterName : null,
     filterLabel: options.blocked ? normalizeFilterLabel(filterName) : null,
     signal: signal.signal || signal.direction || "WAIT",

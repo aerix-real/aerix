@@ -34,6 +34,22 @@ async function analyzePreferredSymbols(req, res) {
   }
 }
 
+async function getOverview(req, res) {
+  try {
+    const overview = await engineService.getOperationalOverview();
+
+    return res.status(200).json({
+      ok: true,
+      data: overview
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      message: error.message || "Erro ao consultar visão operacional da engine."
+    });
+  }
+}
+
 async function getDebugSummary(req, res) {
   try {
     const summary = engineService.getDebugSummary();
@@ -56,5 +72,6 @@ async function getDebugSummary(req, res) {
 module.exports = {
   analyzeSymbol,
   analyzePreferredSymbols,
+  getOverview,
   getDebugSummary
 };

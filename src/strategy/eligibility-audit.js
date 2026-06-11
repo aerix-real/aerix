@@ -20,7 +20,7 @@ function summarizeCriteria(criteria = [], fallbackBlockedBy = null, forcedScore 
   const failed = safeCriteria.length - passed;
   const blockedBy = failed > 0
     ? safeCriteria.find((criterion) => !criterion.passed)?.name || fallbackBlockedBy
-    : fallbackBlockedBy;
+    : null;
   const score = forcedScore === null || forcedScore === undefined
     ? (safeCriteria.length > 0 ? round((passed / safeCriteria.length) * 100) : 0)
     : round(forcedScore);
@@ -54,18 +54,41 @@ function selectClosestCandidate(candidates = []) {
     })[0] || null;
 }
 
+function buildActivationReason(strategyName, direction, summary = {}) {
+  if (!direction) return null;
+
+  return [
+    `Estratégia ${strategyName || "desconhecida"} aprovada`,
+    `direção ${direction}`,
+    `${Number(summary.criteriaPassed || 0)} critérios confirmados`,
+    `score ${Number(summary.score || 0)}`
+  ].join("; ");
+}
+
 function buildEligibilityAudit({ strategyName, direction = null, valid = false, criteria = [], candidates = [], score = null, blockedBy = null, reason = null, context = {} }) {
   const closestCandidate = selectClosestCandidate(candidates);
   const activeCriteria = Array.isArray(criteria) && criteria.length > 0
     ? criteria
     : closestCandidate?.criteria || [];
-  const summary = summarizeCriteria(activeCriteria, blockedBy || closestCandidate?.audit?.blockedBy || reason, score);
+  const isValid = Boolean(valid);
+  const summary = summarizeCriteria(
+    activeCriteria,
+    isValid ? null : blockedBy || closestCandidate?.audit?.blockedBy || reason,
+    score
+  );
+  const normalizedSummary = {
+    ...summary,
+    blockedBy: isValid ? null : summary.blockedBy || null
+  };
 
   return {
     strategyName,
-    valid: Boolean(valid),
+    valid: isValid,
     direction: direction || null,
-    ...summary,
+    ...normalizedSummary,
+    activationReason: isValid
+      ? buildActivationReason(strategyName, direction, normalizedSummary)
+      : null,
     reason: reason || null,
     closestDirection: direction || closestCandidate?.direction || null,
     candidates: candidates.map((candidate) => ({

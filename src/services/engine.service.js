@@ -8,6 +8,7 @@ const adaptiveService = require("./adaptive.service");
 const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
 const engineDebugService = require("./engine-debug.service");
+const signalRepository = require("../repositories/signal.repository");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 const ANALYSIS_CACHE_TTL_MS = Math.max(60 * 1000, Number(process.env.ANALYSIS_CACHE_TTL_MS || 5 * 60 * 1000));
@@ -295,6 +296,7 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     reasons: Array.isArray(strategyResult.reasons) ? strategyResult.reasons : [],
     blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
     explanation: strategyResult.explanation || "",
+    activationReason: strategyResult.activationReason || null,
     strategies: Array.isArray(strategyResult.strategies) ? strategyResult.strategies : [],
     strategyEligibilityReport: strategyResult.strategyEligibilityReport || null,
     mtf: strategyResult.mtf || {},
@@ -668,6 +670,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     reasons: finalResult.reasons,
     blocks: finalResult.blocks,
     explanation: finalResult.explanation,
+    activationReason: finalResult.activationReason || null,
     strategies: finalResult.strategies,
     mtf: finalResult.mtf,
     adaptiveAdjustment: finalResult.adaptiveAdjustment,
@@ -693,6 +696,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
       finalScore: finalResult.finalScore,
       blocks: finalResult.blocks,
       marketRegime: finalResult.marketRegime || "NORMAL",
+      activationReason: finalResult.activationReason || null,
       dynamicMinScore: finalResult.dynamicMinScore || finalResult.dynamicThresholds?.minimumScore || null,
       dynamicThresholds: finalResult.dynamicThresholds || null,
       thresholdHistory: finalResult.thresholdHistory || null,
@@ -1001,9 +1005,14 @@ async function analyzePreferredSymbols(userId) {
   };
 }
 
+async function getOperationalOverview() {
+  return signalRepository.getOperationalOverview();
+}
+
 module.exports = {
   analyzeSymbolForUser,
   analyzePreferredSymbols,
+  getOperationalOverview,
   getUserModeConfig,
   getDebugSummary: engineDebugService.getDebugSummary
 };
