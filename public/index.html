@@ -181,9 +181,46 @@
             </div>
           </div>
         </section>
-        <section class="panel history-panel compact-history-panel">
-          <div class="panel-header"><h3>Histórico compacto</h3><span id="historyCount">0</span></div>
+        <section class="panel history-panel compact-history-panel recent-signals-panel">
+          <div class="panel-header">
+            <h3>Últimos Sinais</h3>
+            <span id="historyCount">0</span>
+          </div>
+          <div class="history-toolbar" aria-label="Filtros do histórico de últimos sinais">
+            <label>
+              Direção
+              <select id="historyFilterDirection">
+                <option value="">Todas</option>
+                <option value="CALL">CALL</option>
+                <option value="PUT">PUT</option>
+              </select>
+            </label>
+            <label>
+              Resultado
+              <select id="historyFilterResult">
+                <option value="">Todos</option>
+                <option value="pending">Pendente</option>
+                <option value="win">WIN</option>
+                <option value="loss">LOSS</option>
+              </select>
+            </label>
+            <label>
+              Modo
+              <select id="historyFilterMode">
+                <option value="">Todos</option>
+                <option value="conservador">Conservador</option>
+                <option value="equilibrado">Equilibrado</option>
+                <option value="agressivo">Agressivo</option>
+              </select>
+            </label>
+          </div>
           <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
+          <div class="history-pagination" aria-label="Paginação dos últimos sinais">
+            <button id="historyPrev" type="button">Anterior</button>
+            <span id="historyPageInfo">Página 1</span>
+            <button id="historyNext" type="button">Próxima</button>
+            <small id="historyUpdated">sincronizando</small>
+          </div>
         </section>
 
         <section class="panel advanced-hub-panel secondary-details-panel">

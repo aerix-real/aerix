@@ -9,6 +9,7 @@ const socket = typeof io === "function"
 
 const MAX_HISTORY_ITEMS = 30;
 const COMPACT_HISTORY_ITEMS = 10;
+const HISTORY_PAGE_SIZE = 10;
 const SHADOW_EVENT_LIMIT = 12;
 const TIMELINE_EVENT_LIMIT = 7;
 
@@ -40,6 +41,8 @@ const state = {
   visualFrame: null,
   pendingHistoryRender: false,
   pendingEquityDraw: false,
+  historyPagination: { page: 1, limit: HISTORY_PAGE_SIZE, total: 0, hasMore: false },
+  historyFilters: { direction: "", result: "", mode: "" },
   isDocumentVisible: document.visibilityState === "visible",
   shadowMode: {
     signals: [],
@@ -104,6 +107,13 @@ const el = {
 
   historyList: document.getElementById("historyList"),
   historyCount: document.getElementById("historyCount"),
+  historyFilterDirection: document.getElementById("historyFilterDirection"),
+  historyFilterResult: document.getElementById("historyFilterResult"),
+  historyFilterMode: document.getElementById("historyFilterMode"),
+  historyPrev: document.getElementById("historyPrev"),
+  historyNext: document.getElementById("historyNext"),
+  historyPageInfo: document.getElementById("historyPageInfo"),
+  historyUpdated: document.getElementById("historyUpdated"),
 
   statTotal: document.getElementById("statTotal"),
   statWins: document.getElementById("statWins"),
@@ -1016,23 +1026,59 @@ function rotateAIState() {
   }
 }
 
+function buildHistoryQuery() {
+  const params = new URLSearchParams();
+  const page = Math.max(1, Number(state.historyPagination.page || 1));
+  const limit = Math.max(1, Number(state.historyPagination.limit || HISTORY_PAGE_SIZE));
+
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+
+  Object.entries(state.historyFilters || {}).forEach(([key, value]) => {
+    const text = String(value || "").trim();
+    if (text) params.set(key, text);
+  });
+
+  return params.toString();
+}
+
+function syncHistoryPagination(pagination = {}, receivedCount = 0) {
+  const limit = Number(pagination.limit || state.historyPagination.limit || HISTORY_PAGE_SIZE);
+  const page = Number(pagination.page || state.historyPagination.page || 1);
+  const total = Number(pagination.total || receivedCount || 0);
+
+  state.historyPagination = {
+    page: Number.isFinite(page) && page > 0 ? page : 1,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : HISTORY_PAGE_SIZE,
+    total: Number.isFinite(total) ? total : receivedCount,
+    hasMore: Boolean(pagination.hasMore)
+  };
+}
+
 async function loadHistory() {
   try {
-    const response = await apiFetch("/api/signals/recent");
+    const query = buildHistoryQuery();
+    const response = await apiFetch(`/api/signals/recent?${query}`);
     const data = await response.json().catch(() => null);
 
     if (data?.ok && Array.isArray(data.signals)) {
       state.history = filterConfirmedOperationalSignals(data.signals).slice(0, MAX_HISTORY_ITEMS);
+      syncHistoryPagination(data.pagination, state.history.length);
     } else if (data?.ok && Array.isArray(data.data)) {
       state.history = filterConfirmedOperationalSignals(data.data).slice(0, MAX_HISTORY_ITEMS);
+      syncHistoryPagination(data.pagination, state.history.length);
     } else {
       state.history = [];
+      syncHistoryPagination({}, 0);
     }
 
+    if (el.historyUpdated) el.historyUpdated.textContent = "atualizado agora";
     scheduleHistoryRender();
     scheduleEquityDraw();
   } catch (error) {
     state.history = [];
+    syncHistoryPagination({}, 0);
+    if (el.historyUpdated) el.historyUpdated.textContent = "falha ao sincronizar";
     scheduleHistoryRender();
     scheduleEquityDraw();
   }
@@ -1550,9 +1596,26 @@ async function loadFilterAnalytics() {
 
 
 function getHistoryRenderLimit() {
-  return window.matchMedia("(min-width: 900px) and (max-width: 1400px)").matches
-    ? COMPACT_HISTORY_ITEMS
-    : MAX_HISTORY_ITEMS;
+  return Math.min(
+    state.historyPagination.limit || HISTORY_PAGE_SIZE,
+    window.matchMedia("(min-width: 900px) and (max-width: 1400px)").matches
+      ? COMPACT_HISTORY_ITEMS
+      : MAX_HISTORY_ITEMS
+  );
+}
+
+function renderHistoryPagination() {
+  const { page, limit, total, hasMore } = state.historyPagination;
+  const pageCount = total ? Math.max(1, Math.ceil(total / limit)) : 1;
+
+  if (el.historyPageInfo) {
+    el.historyPageInfo.textContent = total
+      ? `Página ${page}/${pageCount}`
+      : `Página ${page}`;
+  }
+
+  if (el.historyPrev) el.historyPrev.disabled = page <= 1;
+  if (el.historyNext) el.historyNext.disabled = !hasMore && page >= pageCount;
 }
 
 function renderHistory() {
@@ -1563,6 +1626,7 @@ function renderHistory() {
   if (!state.history.length) {
     el.historyList.innerHTML = `<div class="history-empty">Nenhum sinal ainda</div>`;
     if (el.historyCount) el.historyCount.textContent = "0";
+    renderHistoryPagination();
     return;
   }
 
@@ -1597,9 +1661,13 @@ function renderHistory() {
   });
 
   if (el.historyCount) {
-    el.historyCount.textContent = `${visibleHistory.length}/${state.history.length}`;
+    const total = state.historyPagination.total || state.history.length;
+    el.historyCount.textContent = `${visibleHistory.length}/${total}`;
   }
+
+  renderHistoryPagination();
 }
+
 
 function normalizeOperationalDirection(value) {
   const direction = String(value || "").trim().toUpperCase();
@@ -1672,6 +1740,26 @@ function isConfirmedOperationalSignal(signal = {}) {
   }
 
   return Boolean(getOperationalDirection(signal)) && getOperationalScore(signal) >= getMinimumValidatedScore(signal);
+}
+
+function signalMatchesHistoryFilters(signal = {}) {
+  const directionFilter = String(state.historyFilters.direction || "").toUpperCase();
+  const resultFilter = String(state.historyFilters.result || "").toLowerCase();
+  const modeFilter = String(state.historyFilters.mode || "").toLowerCase();
+  const direction = getOperationalDirection(signal);
+  const result = String(signal.result || "pending").toLowerCase();
+  const mode = String(signal.mode || "").toLowerCase();
+
+  const modeAliases = {
+    conservador: ["conservador", "conservative"],
+    equilibrado: ["equilibrado", "balanced", "balanceado"],
+    agressivo: ["agressivo", "aggressive"]
+  };
+  const acceptedModes = modeFilter ? (modeAliases[modeFilter] || [modeFilter]) : [];
+
+  return (!directionFilter || direction === directionFilter)
+    && (!resultFilter || result === resultFilter)
+    && (!acceptedModes.length || acceptedModes.includes(mode));
 }
 
 function filterConfirmedOperationalSignals(signals = []) {
@@ -2013,6 +2101,42 @@ if (el.upgradeBtn) {
   });
 }
 
+function resetHistoryPageAndLoad() {
+  state.historyPagination.page = 1;
+  loadHistory();
+}
+
+function setupHistoryControls() {
+  const filterBindings = [
+    [el.historyFilterDirection, "direction"],
+    [el.historyFilterResult, "result"],
+    [el.historyFilterMode, "mode"]
+  ];
+
+  filterBindings.forEach(([node, key]) => {
+    if (!node) return;
+    node.value = state.historyFilters[key] || "";
+    node.addEventListener("change", () => {
+      state.historyFilters[key] = node.value;
+      resetHistoryPageAndLoad();
+    });
+  });
+
+  if (el.historyPrev) {
+    el.historyPrev.addEventListener("click", () => {
+      state.historyPagination.page = Math.max(1, state.historyPagination.page - 1);
+      loadHistory();
+    });
+  }
+
+  if (el.historyNext) {
+    el.historyNext.addEventListener("click", () => {
+      state.historyPagination.page += 1;
+      loadHistory();
+    });
+  }
+}
+
 const handleBestOpportunity = throttle((signal) => {
   if (!signal) return;
   renderShadowMode(signal, "bestOpportunity");
@@ -2087,9 +2211,11 @@ socket.on("signal", (signal) => {
 
   renderSignal(signal);
 
-  if (isConfirmedOperationalSignal(signal)) {
+  if (isConfirmedOperationalSignal(signal) && signalMatchesHistoryFilters(signal)) {
     state.history.unshift(signal);
     state.history = state.history.slice(0, MAX_HISTORY_ITEMS);
+    state.historyPagination.total += 1;
+    state.historyPagination.hasMore = state.history.length >= state.historyPagination.limit;
   }
   scheduleHistoryRender();
   scheduleEquityDraw();
@@ -2101,10 +2227,11 @@ socket.on("signal-result-updated", (signal) => {
   const index = state.history.findIndex((item) => item.id === signal.id);
 
   if (index !== -1) {
-    if (isConfirmedOperationalSignal(signal)) {
+    if (isConfirmedOperationalSignal(signal) && signalMatchesHistoryFilters(signal)) {
       state.history[index] = signal;
     } else {
       state.history.splice(index, 1);
+      state.historyPagination.total = Math.max(0, state.historyPagination.total - 1);
     }
     scheduleHistoryRender();
     scheduleEquityDraw();
@@ -2166,6 +2293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startChartLoop();
   startAIEngine();
   setupModeSwitcher();
+  setupHistoryControls();
   setConnection("Conectando");
 
   const validSession = await checkSession();

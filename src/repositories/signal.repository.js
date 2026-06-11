@@ -175,22 +175,112 @@ async function getLatest(limit = 20) {
   return result.rows;
 }
 
-async function getLatestConfirmed(limit = 20) {
+function normalizeHistoryLimit(value, fallback = 20) {
+  const limit = Number(value);
+  if (!Number.isFinite(limit)) return fallback;
+  return Math.min(200, Math.max(1, Math.trunc(limit)));
+}
+
+function normalizeHistoryOffset(value, fallback = 0) {
+  const offset = Number(value);
+  if (!Number.isFinite(offset)) return fallback;
+  return Math.max(0, Math.trunc(offset));
+}
+
+function normalizeTextFilter(value) {
+  const text = String(value || "").trim();
+  return text || null;
+}
+
+function normalizeModeAliases(value) {
+  const mode = String(value || "").trim().toLowerCase();
+
+  if (["conservador", "conservative"].includes(mode)) return ["conservador", "conservative"];
+  if (["agressivo", "aggressive"].includes(mode)) return ["agressivo", "aggressive"];
+  if (["equilibrado", "balanced", "balanceado"].includes(mode)) return ["equilibrado", "balanced", "balanceado"];
+
+  return mode ? [mode] : [];
+}
+
+function buildConfirmedHistoryQuery(filters = {}) {
+  const clauses = [CONFIRMED_OPERATIONAL_WHERE];
+  const values = [];
+
+  const addValue = (value) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+
+  const direction = normalizeTextFilter(filters.direction || filters.signal);
+  if (direction) {
+    clauses.push(`UPPER(COALESCE(signal, direction, '')) = UPPER(${addValue(direction)})`);
+  }
+
+  const result = normalizeTextFilter(filters.result);
+  if (result) {
+    clauses.push(`LOWER(COALESCE(result, 'pending')) = LOWER(${addValue(result)})`);
+  }
+
+  const modeAliases = normalizeModeAliases(filters.mode);
+  if (modeAliases.length) {
+    clauses.push(`LOWER(COALESCE(mode, 'balanced')) = ANY(${addValue(modeAliases)}::text[])`);
+  }
+
+  const symbol = normalizeTextFilter(filters.symbol || filters.asset);
+  if (symbol) {
+    clauses.push(`symbol ILIKE ${addValue(`%${symbol}%`)}`);
+  }
+
+  return {
+    whereSql: clauses.map((clause) => `(${clause})`).join(" AND "),
+    values
+  };
+}
+
+async function getConfirmedHistory(options = {}) {
+  const normalizedOptions = typeof options === "number"
+    ? { limit: options }
+    : (options || {});
+
+  const limit = normalizeHistoryLimit(normalizedOptions.limit, 20);
+  const offset = normalizeHistoryOffset(normalizedOptions.offset, 0);
+  const { whereSql, values } = buildConfirmedHistoryQuery(normalizedOptions);
+  const limitParam = `$${values.length + 1}`;
+  const offsetParam = `$${values.length + 2}`;
+
   const result = await db.query(
     `
     SELECT
       *,
+      COUNT(*) OVER()::int AS total_count,
       execution_allowed AS "executionAllowed",
       minimum_score AS "minimumScore",
       adjusted_score AS "adjustedScore"
     FROM public.signal_history
-    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
+    WHERE ${whereSql}
     ORDER BY created_at DESC
-    LIMIT $1
+    LIMIT ${limitParam}
+    OFFSET ${offsetParam}
     `,
-    [limit]
+    [...values, limit, offset]
   );
 
+  const total = Number(result.rows[0]?.total_count || 0);
+  const rows = result.rows.map(({ total_count, ...row }) => row);
+
+  return {
+    rows,
+    total,
+    limit,
+    offset
+  };
+}
+
+async function getLatestConfirmed(limit = 20, filters = {}) {
+  const options = typeof limit === "object" && limit !== null
+    ? limit
+    : { ...filters, limit };
+  const result = await getConfirmedHistory(options);
   return result.rows;
 }
 
@@ -730,6 +820,7 @@ module.exports = {
   save,
   getLatest,
   getLatestConfirmed,
+  getConfirmedHistory,
   getStats,
   getPerformanceBySymbol,
   getPerformanceByHour,
