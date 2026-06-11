@@ -60,7 +60,7 @@ function getModeRules(mode = "balanced") {
       },
       blockers: {
         lowVolatility: 0.06,
-        veryLowVolatility: 0.03,
+        veryLowVolatility: 0.025,
         veryWeakTrend: 0.045,
         weakAlignment: 1,
         insufficientCandles: 45,
@@ -114,6 +114,37 @@ function roundMetric(value, decimals = 6) {
   return Number(numeric.toFixed(decimals));
 }
 
+const INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_SCORE = 75;
+const INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_ALIGNMENT = 2;
+const INSTITUTIONAL_VOLATILITY_OVERRIDE_SCORE_PENALTY = 5;
+
+function isInstitutionalVolatilityOverrideEligible({ mode = "balanced", score = 0, alignment = 0 } = {}) {
+  const normalizedMode = normalizeMode(mode);
+
+  if (normalizedMode === "conservative") return false;
+
+  return (
+    Number(score || 0) >= INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_SCORE &&
+    Number(alignment || 0) >= INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_ALIGNMENT
+  );
+}
+
+function buildInstitutionalVolatilityOverrideAudit({
+  snapshot,
+  score = 0,
+  volatility = 0,
+  overrideApplied = false,
+  finalDecision = "not_applicable"
+} = {}) {
+  return {
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    score: roundMetric(score, 2),
+    volatility: roundMetric(volatility),
+    overrideApplied: Boolean(overrideApplied),
+    finalDecision
+  };
+}
+
 function getLastClose(candles = []) {
   if (!Array.isArray(candles) || candles.length === 0) return null;
 
@@ -145,6 +176,32 @@ function buildVolatilityAudit({ snapshot, mtf, mode = "balanced", marketRegime =
     lowVolatilityReleaseThreshold !== null &&
     lowVolatilityCandidateScore > lowVolatilityReleaseThreshold
   );
+  const institutionalVolatilityOverrideEligible = isInstitutionalVolatilityOverrideEligible({
+    mode: normalizedMode,
+    score: lowVolatilityCandidateScore,
+    alignment: Number(mtf?.alignment || 0)
+  });
+  const institutionalVolatilityOverrideApplied = Boolean(
+    isVeryLowVolatility &&
+    !isLowVolatilityScoreReleaseEligible &&
+    institutionalVolatilityOverrideEligible
+  );
+  const shouldHardBlockVeryLowVolatility = Boolean(
+    isVeryLowVolatility &&
+    !isLowVolatilityScoreReleaseEligible &&
+    !institutionalVolatilityOverrideApplied
+  );
+  const institutionalVolatilityOverride = buildInstitutionalVolatilityOverrideAudit({
+    snapshot,
+    score: lowVolatilityCandidateScore,
+    volatility: calculatedVolatility,
+    overrideApplied: institutionalVolatilityOverrideApplied,
+    finalDecision: shouldHardBlockVeryLowVolatility
+      ? "hard_block"
+      : institutionalVolatilityOverrideApplied
+        ? "override_penalty_final_validation"
+        : "standard_validation"
+  });
 
   return {
     atr: roundMetric(atr),
@@ -156,6 +213,7 @@ function buildVolatilityAudit({ snapshot, mtf, mode = "balanced", marketRegime =
       validationVeryLowVolatility: veryLowVolatilityThreshold,
       scoreRelease: lowVolatilityReleaseThreshold
     },
+    institutionalVolatilityOverride,
     regime: {
       final: marketRegime,
       classifiedAsLowVolatility: calculatedVolatility > 0 && calculatedVolatility < lowVolatilityRegimeThreshold,
@@ -178,10 +236,14 @@ function buildVolatilityAudit({ snapshot, mtf, mode = "balanced", marketRegime =
       scoreReleaseWhy: lowVolatilityReleaseThreshold === null
         ? `modo ${normalizedMode} não possui liberação por score`
         : `candidateScore ${roundMetric(lowVolatilityCandidateScore, 2)} ${isLowVolatilityScoreReleaseEligible ? ">" : "<="} scoreRelease ${lowVolatilityReleaseThreshold}`,
-      shouldHardBlockVeryLowVolatility: Boolean(isVeryLowVolatility && !isLowVolatilityScoreReleaseEligible),
-      shouldHardBlockVeryLowVolatilityWhy: isVeryLowVolatility && !isLowVolatilityScoreReleaseEligible
-        ? "isVeryLowVolatility=true e scoreReleaseEligible=false"
-        : "não combina isVeryLowVolatility=true com scoreReleaseEligible=false"
+      institutionalVolatilityOverrideEligible,
+      institutionalVolatilityOverrideWhy: institutionalVolatilityOverrideEligible
+        ? `candidateScore ${roundMetric(lowVolatilityCandidateScore, 2)} >= ${INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_SCORE} e alignment ${Number(mtf?.alignment || 0)} >= ${INSTITUTIONAL_VOLATILITY_OVERRIDE_MIN_ALIGNMENT}`
+        : `modo ${normalizedMode}, candidateScore ${roundMetric(lowVolatilityCandidateScore, 2)} e alignment ${Number(mtf?.alignment || 0)} não atendem override institucional`,
+      shouldHardBlockVeryLowVolatility,
+      shouldHardBlockVeryLowVolatilityWhy: shouldHardBlockVeryLowVolatility
+        ? "isVeryLowVolatility=true sem scoreReleaseEligible e sem institutionalVolatilityOverrideEligible"
+        : "não combina isVeryLowVolatility=true com bloqueio institucional obrigatório"
     }
   };
 }
@@ -436,9 +498,20 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
     lowVolatilityReleaseThreshold !== null &&
     lowVolatilityCandidateScore > lowVolatilityReleaseThreshold
   );
+  const institutionalVolatilityOverrideEligible = isInstitutionalVolatilityOverrideEligible({
+    mode: normalizedMode,
+    score: lowVolatilityCandidateScore,
+    alignment: mtf.alignment
+  });
+  const institutionalVolatilityOverrideApplied = Boolean(
+    isVeryLowVolatility &&
+    !isLowVolatilityScoreReleaseEligible &&
+    institutionalVolatilityOverrideEligible
+  );
   const shouldHardBlockVeryLowVolatility = Boolean(
     isVeryLowVolatility &&
-    !isLowVolatilityScoreReleaseEligible
+    !isLowVolatilityScoreReleaseEligible &&
+    !institutionalVolatilityOverrideApplied
   );
   const isFallbackData = Boolean(snapshot?.isFallback || dataQuality.isFallback);
   const minimumCandles = rules.blockers.insufficientCandles;
@@ -472,6 +545,9 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
     isVeryLowVolatility && isLowVolatilityScoreReleaseEligible
       ? { reason: `Baixa volatilidade severa liberada por score ${lowVolatilityCandidateScore} acima do corte ${lowVolatilityReleaseThreshold}; penalidade mantida.`, value: rules.penalties.lowVolatility }
       : null,
+    institutionalVolatilityOverrideApplied
+      ? { reason: `Override institucional de volatilidade extrema aplicado: score ${roundMetric(lowVolatilityCandidateScore, 2)} e alinhamento ${mtf.alignment}/3; penalidade fixa mantida.`, value: INSTITUTIONAL_VOLATILITY_OVERRIDE_SCORE_PENALTY }
+      : null,
     isWeakTrend && !isVeryWeakTrend && normalizedMode !== "conservative"
       ? { reason: "Trend strength fraco convertido em penalidade de score.", value: rules.penalties.weakTrend }
       : null,
@@ -486,6 +562,20 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
       : null
   ].filter(Boolean);
 
+  const institutionalVolatilityOverride = buildInstitutionalVolatilityOverrideAudit({
+    snapshot,
+    score: lowVolatilityCandidateScore,
+    volatility,
+    overrideApplied: institutionalVolatilityOverrideApplied,
+    finalDecision: shouldHardBlockVeryLowVolatility
+      ? "hard_block"
+      : institutionalVolatilityOverrideApplied
+        ? "override_penalty_final_validation"
+        : "standard_validation"
+  });
+
+  volatilityAudit.institutionalVolatilityOverride = institutionalVolatilityOverride;
+
   return {
     isLowVolatility,
     isVeryLowVolatility,
@@ -496,6 +586,10 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
       candidateScore: lowVolatilityCandidateScore,
       eligible: isLowVolatilityScoreReleaseEligible,
       applied: Boolean(isVeryLowVolatility && isLowVolatilityScoreReleaseEligible)
+    },
+    institutionalVolatilityOverride: {
+      ...institutionalVolatilityOverride,
+      scorePenalty: institutionalVolatilityOverrideApplied ? INSTITUTIONAL_VOLATILITY_OVERRIDE_SCORE_PENALTY : 0
     },
     isWeakTrend,
     isVeryWeakTrend,
@@ -861,6 +955,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     bestStrategy: best?.name || null,
     bestDirection: best?.direction || null,
     bestScore: best ? getCandidateScore(best) : 0,
+    institutionalVolatilityOverride: marketValidation.institutionalVolatilityOverride,
     audit: {
       ...marketValidation.volatilityAudit,
       regime: {

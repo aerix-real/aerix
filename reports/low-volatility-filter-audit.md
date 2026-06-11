@@ -13,7 +13,7 @@ Não foram alterados cache, banco de dados, frontend ou API. A coleta histórica
 ## Diagnóstico do comportamento anterior
 
 - `isLowVolatility` identifica volatilidade M5 entre `0` e `0.12`.
-- `isVeryLowVolatility` usa cortes por modo (`0.12` conservador, `0.05` equilibrado, `0.035` agressivo).
+- `isVeryLowVolatility` usa cortes por modo (`0.05` conservador, `0.025` equilibrado, `0.02` agressivo).
 - Antes do ajuste, qualquer `isVeryLowVolatility` entrava em `blocks`, então `shouldBlock` ficava verdadeiro independentemente do score estratégico.
 - O modo conservador também mantinha bloqueio para baixa volatilidade moderada por meio dos bloqueios moderados do modo.
 

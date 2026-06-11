@@ -10,9 +10,9 @@ const NORMALIZED_MODE_SQL = `
 `;
 const VERY_LOW_THRESHOLD_SQL = `
   CASE ${NORMALIZED_MODE_SQL}
-    WHEN 'conservative' THEN 0.12
-    WHEN 'aggressive' THEN 0.035
-    ELSE 0.05
+    WHEN 'conservative' THEN 0.05
+    WHEN 'aggressive' THEN 0.02
+    ELSE 0.025
   END
 `;
 const LOW_VOLATILITY_REGIME_CONDITION = "UPPER(COALESCE(market_regime, '')) = 'LOW_VOLATILITY'";
@@ -63,7 +63,7 @@ function releaseThreshold(mode) {
 
 function thresholdSet(mode) {
   const normalized = normalizeMode(mode);
-  const veryLow = normalized === "conservative" ? 0.12 : normalized === "aggressive" ? 0.035 : 0.05;
+  const veryLow = normalized === "conservative" ? 0.05 : normalized === "aggressive" ? 0.02 : 0.025;
 
   return {
     regimeLowVolatility: 0.1,
