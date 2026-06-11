@@ -32,6 +32,76 @@ const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_PROVIDER_REQUESTS_PER_DAY = Math.max(1, Number(process.env.MAX_PROVIDER_REQUESTS_PER_DAY || 480));
 const inFlightTimeSeriesRequests = new Map();
 const inFlightSnapshotRequests = new Map();
+
+const CANDLE_PRICE_FIELDS = Object.freeze(["open", "high", "low", "close"]);
+const CANDLE_VOLUME_FIELD = "volume";
+const CANDLE_EXPECTED_FIELDS = Object.freeze([...CANDLE_PRICE_FIELDS, CANDLE_VOLUME_FIELD]);
+
+function parseNumericValue(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().replace(/,/g, "");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function describeCandleFields(rawCandle = {}) {
+  const receivedFields = rawCandle && typeof rawCandle === "object" ? Object.keys(rawCandle) : [];
+  const fieldDiagnostics = Object.fromEntries(CANDLE_EXPECTED_FIELDS.map((field) => {
+    const value = rawCandle?.[field];
+    const parsed = parseNumericValue(value);
+    const present = Object.prototype.hasOwnProperty.call(rawCandle || {}, field);
+
+    return [field, {
+      expected: true,
+      received: present,
+      type: present ? typeof value : "missing",
+      numeric: parsed !== null,
+      required: field !== CANDLE_VOLUME_FIELD
+    }];
+  }));
+
+  return {
+    expectedFields: CANDLE_EXPECTED_FIELDS,
+    receivedFields,
+    missingFields: CANDLE_EXPECTED_FIELDS.filter((field) => !fieldDiagnostics[field].received),
+    nonNumericFields: CANDLE_EXPECTED_FIELDS.filter((field) =>
+      fieldDiagnostics[field].received && !fieldDiagnostics[field].numeric
+    ),
+    fieldDiagnostics
+  };
+}
+
+function normalizeTwelveDataCandle(rawCandle = {}) {
+  const normalized = {
+    datetime: rawCandle.datetime,
+    open: parseNumericValue(rawCandle.open),
+    high: parseNumericValue(rawCandle.high),
+    low: parseNumericValue(rawCandle.low),
+    close: parseNumericValue(rawCandle.close),
+    volume: parseNumericValue(rawCandle.volume)
+  };
+
+  if (normalized.volume === null) normalized.volume = 0;
+
+  return normalized;
+}
+
+function findMalformedCandle(candles) {
+  return candles.find((candle) =>
+    !candle.datetime ||
+    !Number.isFinite(candle.open) ||
+    !Number.isFinite(candle.high) ||
+    !Number.isFinite(candle.low) ||
+    !Number.isFinite(candle.close) ||
+    !Number.isFinite(candle.volume)
+  );
+}
+
 const twelveDataMetrics = {
   startedAt: new Date().toISOString(),
   budgetDay: new Date().toISOString().slice(0, 10),
@@ -439,33 +509,49 @@ async function resolveTimeSeriesRequest(symbol, normalized, interval = "5min", o
       throw invalidResponseError;
     }
 
-    const normalizedCandles = data.values
-      .map((c) => ({
-        datetime: c.datetime,
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-        volume: Number(c.volume)
-      }));
+    const rawSampleCandle = data.values[0] || null;
+    const sampleFieldAudit = describeCandleFields(rawSampleCandle);
 
-    const malformedCandle = normalizedCandles.find((candle) =>
-      !candle.datetime ||
-      !Number.isFinite(candle.open) ||
-      !Number.isFinite(candle.high) ||
-      !Number.isFinite(candle.low) ||
-      !Number.isFinite(candle.close) ||
-      !Number.isFinite(candle.volume)
-    );
+    logMarketDataAudit("time_series_raw_candle_sample", {
+      symbol: normalized,
+      interval,
+      cacheKey,
+      provider: PROVIDER,
+      providerStatus: "raw_candle_received",
+      apiResponse,
+      rawCandle: rawSampleCandle,
+      expectedFields: sampleFieldAudit.expectedFields,
+      receivedFields: sampleFieldAudit.receivedFields,
+      missingFields: sampleFieldAudit.missingFields,
+      nonNumericFields: sampleFieldAudit.nonNumericFields,
+      fieldDiagnostics: sampleFieldAudit.fieldDiagnostics,
+      marketDataSource: "twelvedata"
+    });
+
+    const normalizedCandles = data.values.map(normalizeTwelveDataCandle);
+    const malformedCandle = findMalformedCandle(normalizedCandles);
 
     if (malformedCandle) {
+      const malformedRawCandle = data.values[normalizedCandles.indexOf(malformedCandle)] || null;
+      const malformedFieldAudit = describeCandleFields(malformedRawCandle);
+      const invalidRequiredFields = CANDLE_PRICE_FIELDS.filter((field) =>
+        malformedFieldAudit.missingFields.includes(field) || malformedFieldAudit.nonNumericFields.includes(field)
+      );
       const parsingError = new Error("Erro de parsing nos candles da API");
       parsingError.audit = {
         apiResponse,
         fallbackReason: buildFallbackReason("invalid_candle_payload", {
           parsing: true,
-          message: "Campos OHLCV ausentes ou não numéricos"
-        })
+          message: `Campos OHLC obrigatórios ausentes ou não numéricos: ${invalidRequiredFields.join(", ") || "desconhecido"}`
+        }),
+        candleFieldAudit: {
+          rawCandle: malformedRawCandle,
+          expectedFields: malformedFieldAudit.expectedFields,
+          receivedFields: malformedFieldAudit.receivedFields,
+          missingFields: malformedFieldAudit.missingFields,
+          nonNumericFields: malformedFieldAudit.nonNumericFields,
+          fieldDiagnostics: malformedFieldAudit.fieldDiagnostics
+        }
       };
       throw parsingError;
     }
@@ -518,6 +604,7 @@ async function resolveTimeSeriesRequest(symbol, normalized, interval = "5min", o
       providerStatus: statusCode ? `http_error_${statusCode}` : "request_error",
       apiResponse,
       fallbackReason,
+      candleFieldAudit: err?.audit?.candleFieldAudit || null,
       fallbackSource: FALLBACK_SOURCE,
       marketDataSource: "fallback"
     };
@@ -814,5 +901,12 @@ module.exports = {
   fetchTimeSeries,
   getMarketSnapshot,
   getMarketStatus,
-  buildTwelveDataConsumptionReport
+  buildTwelveDataConsumptionReport,
+  _internals: {
+    CANDLE_EXPECTED_FIELDS,
+    describeCandleFields,
+    normalizeTwelveDataCandle,
+    parseNumericValue,
+    findMalformedCandle
+  }
 };
