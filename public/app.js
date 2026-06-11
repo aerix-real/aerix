@@ -42,7 +42,7 @@ const state = {
   pendingHistoryRender: false,
   pendingEquityDraw: false,
   historyPagination: { page: 1, limit: HISTORY_PAGE_SIZE, total: 0, hasMore: false },
-  historyFilters: { direction: "", result: "", mode: "" },
+  historyFilters: { symbol: "", strategy: "", result: "" },
   isDocumentVisible: document.visibilityState === "visible",
   shadowMode: {
     signals: [],
@@ -91,8 +91,15 @@ const el = {
   bestDirection: document.getElementById("bestDirection"),
   bestConfidence: document.getElementById("bestConfidence"),
   bestExpiry: document.getElementById("bestExpiry"),
+  bestStrategy: document.getElementById("bestStrategy"),
+  bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
   marketRegime: document.getElementById("marketRegime"),
+  techStrategy: document.getElementById("techStrategy"),
+  techVolatility: document.getElementById("techVolatility"),
+  techDynamicThresholds: document.getElementById("techDynamicThresholds"),
+  techBlockReason: document.getElementById("techBlockReason"),
+  techActivationReason: document.getElementById("techActivationReason"),
   currentRisk: document.getElementById("currentRisk"),
   decisionReason: document.getElementById("decisionReason"),
   aiReleaseStatus: document.getElementById("aiReleaseStatus"),
@@ -102,6 +109,11 @@ const el = {
   lastCycleCompact: document.getElementById("lastCycleCompact"),
   engineTopStatus: document.getElementById("engineTopStatus"),
   topCurrentMode: document.getElementById("topCurrentMode"),
+  summaryWinrate24h: document.getElementById("summaryWinrate24h"),
+  summarySignalsToday: document.getElementById("summarySignalsToday"),
+  summaryEngineStatus: document.getElementById("summaryEngineStatus"),
+  summarySocketStatus: document.getElementById("summarySocketStatus"),
+  summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
   rateLimitStatus: document.getElementById("rateLimitStatus"),
   websocketStatus: document.getElementById("websocketStatus"),
   monitorUptime: document.getElementById("monitorUptime"),
@@ -116,9 +128,9 @@ const el = {
 
   historyList: document.getElementById("historyList"),
   historyCount: document.getElementById("historyCount"),
-  historyFilterDirection: document.getElementById("historyFilterDirection"),
+  historyFilterSymbol: document.getElementById("historyFilterSymbol"),
+  historyFilterStrategy: document.getElementById("historyFilterStrategy"),
   historyFilterResult: document.getElementById("historyFilterResult"),
-  historyFilterMode: document.getElementById("historyFilterMode"),
   historyPrev: document.getElementById("historyPrev"),
   historyNext: document.getElementById("historyNext"),
   historyPageInfo: document.getElementById("historyPageInfo"),
@@ -245,6 +257,15 @@ function throttle(fn, wait = 300) {
         lastArgs = null;
       }, remaining);
     }
+  };
+}
+
+function debounce(fn, wait = 250) {
+  let timeout = null;
+
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
   };
 }
 
@@ -758,6 +779,42 @@ function getRiskLabel(signal = {}) {
   return "Baixo";
 }
 
+function getStrategyLabel(signal = {}) {
+  return signal.strategy ||
+    signal.strategyName ||
+    signal.strategy_name ||
+    signal.strategy?.name ||
+    signal.context?.strategy ||
+    signal.execution?.strategy ||
+    "--";
+}
+
+function getVolatilityLabel(signal = {}) {
+  const value = signal.volatility ?? signal.context?.volatility ?? signal.market?.volatility ?? signal.indicators?.volatility;
+  if (value === null || value === undefined || value === "") return "--";
+  if (typeof value === "number") return `${Math.round(value * 100) / 100}`;
+  return String(value).slice(0, 34);
+}
+
+function formatCompactObject(value) {
+  if (value === null || value === undefined || value === "") return "--";
+  if (typeof value !== "object") return String(value).slice(0, 44);
+
+  return Object.entries(value)
+    .slice(0, 3)
+    .map(([key, item]) => `${key}:${typeof item === "number" ? Math.round(item * 100) / 100 : item}`)
+    .join(" · ") || "--";
+}
+
+function getBlockReason(signal = {}) {
+  return signal.blockReason || signal.block_reason || signal.execution?.reason || signal.reason || "--";
+}
+
+function getActivationReason(signal = {}) {
+  return signal.activationReason || signal.activation_reason || signal.execution?.activationReason || signal.explanation || "--";
+}
+
+
 function updateCompactOperations(signal = {}, source = "engine") {
   const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
   const score = getOperationalScore(signal);
@@ -766,18 +823,35 @@ function updateCompactOperations(signal = {}, source = "engine") {
   const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
   const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
   const release = entryStatus === "Liberada" ? "Sinal liberado" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
+  const strategyLabel = getStrategyLabel(signal);
+  const marketRegime = getMarketRegime(signal);
+  const blockReason = getBlockReason(signal);
+  const activationReason = getActivationReason(signal);
 
   setTextContent(el.bestDirection, direction || "WAIT");
+  if (el.bestDirection) {
+    el.bestDirection.className = `signal-direction ${direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
+  }
   setTextContent(el.bestConfidence, `${Math.round(score || Number(signal.confidence || 0))}%`);
   setTextContent(el.bestExpiry, signal.expiry || signal.expiration || signal.countdown || "--");
+  setTextContent(el.bestStrategy, strategyLabel);
+  setTextContent(el.bestAiStatus, release);
   setTextContent(el.bestEntryStatus, entryStatus);
-  setTextContent(el.marketRegime, getMarketRegime(signal));
+  setTextContent(el.marketRegime, marketRegime);
+  setTextContent(el.techStrategy, strategyLabel);
+  setTextContent(el.techVolatility, getVolatilityLabel(signal));
+  setTextContent(el.techDynamicThresholds, formatCompactObject(signal.dynamicThresholds || signal.dynamic_thresholds));
+  setTextContent(el.techBlockReason, blockReason);
+  setTextContent(el.techActivationReason, activationReason);
   setTextContent(el.currentRisk, getRiskLabel(signal));
   setTextContent(el.decisionReason, getDecisionReason(signal));
   setTextContent(el.aiReleaseStatus, release);
   const engineStatus = socket.connected ? "Online" : "Offline";
   setTextContent(el.engineOnlineStatus, engineStatus);
   setTextContent(el.engineTopStatus, engineStatus);
+  setTextContent(el.summaryEngineStatus, engineStatus);
+  setTextContent(el.summarySocketStatus, socket.connected ? "Socket online" : "Reconectando");
+  setTextContent(el.summaryLastAnalysis, cycleTime);
   setTextContent(el.engineProcessStatus, source === "engine" || source === "bestOpportunity" ? "Processando" : "Aguardando");
   setTextContent(el.lastCycleTime, cycleTime);
   setTextContent(el.lastCycleCompact, cycleTime);
@@ -1081,7 +1155,8 @@ function buildHistoryQuery() {
 
   Object.entries(state.historyFilters || {}).forEach(([key, value]) => {
     const text = String(value || "").trim();
-    if (text) params.set(key, text);
+    if (!text || key === "strategy") return;
+    params.set(key === "symbol" ? "asset" : key, text);
   });
 
   return params.toString();
@@ -1485,6 +1560,8 @@ function renderPerformanceDashboard(data = {}) {
   if (el.perfBlockedToday) el.perfBlockedToday.textContent = data.blockedSignalsToday ?? data.blockedToday ?? 0;
   if (el.perfApprovalRate) el.perfApprovalRate.textContent = formatPercent(data.approvalRate);
   if (el.perfWinrate24h) el.perfWinrate24h.textContent = formatPercent(winrate24h);
+  if (el.summaryWinrate24h) el.summaryWinrate24h.textContent = formatPercent(winrate24h);
+  if (el.summarySignalsToday) el.summarySignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
   if (el.perfWinrate7d) el.perfWinrate7d.textContent = formatPercent(winrate7d);
   if (el.perfWinrate30d) el.perfWinrate30d.textContent = formatPercent(winrate30d);
   if (el.perfLastApproved) el.perfLastApproved.textContent = lastApproved?.symbol || "--";
@@ -1673,41 +1750,54 @@ function renderHistory() {
 
   el.historyList.innerHTML = "";
 
-  if (!state.history.length) {
-    el.historyList.innerHTML = `<div class="history-empty">Nenhum sinal ainda</div>`;
+  const visibleHistory = state.history
+    .filter(signalMatchesHistoryFilters)
+    .slice(0, getHistoryRenderLimit());
+
+  if (!visibleHistory.length) {
+    el.historyList.innerHTML = `<div class="history-empty">Nenhum sinal encontrado para os filtros atuais.</div>`;
     if (el.historyCount) el.historyCount.textContent = "0";
     renderHistoryPagination();
     return;
   }
 
-  const visibleHistory = state.history.slice(0, getHistoryRenderLimit());
+  const header = document.createElement("div");
+  header.className = "history-table-row history-table-header";
+  header.innerHTML = `
+    <span>Ativo</span>
+    <span>Direção</span>
+    <span>Resultado</span>
+    <span>Score</span>
+    <span>Estratégia</span>
+    <span>Hora</span>
+    <span>Ações</span>
+  `;
+  el.historyList.appendChild(header);
 
   visibleHistory.forEach((signal) => {
-    const item = document.createElement("details");
-    item.className = "history-item compact-history-item";
+    const row = document.createElement("div");
+    row.className = "history-table-row compact-history-item";
 
-    const direction = getOperationalDirection(signal);
-    const score = getOperationalScore(signal);
+    const direction = getOperationalDirection(signal) || "WAIT";
+    const score = Math.round(getOperationalScore(signal));
     const result = String(signal.result || "PENDING").toUpperCase();
-    const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending";
+    const normalizedResult = result === "DRAW" ? "draw" : result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
     const signalId = Number(signal.id);
     const canSetResult = Number.isFinite(signalId) && signalId > 0;
+    const strategy = getStrategyLabel(signal);
 
-    item.innerHTML = `
-      <summary class="history-summary-row">
-        <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
-        <span class="badge direction-badge ${directionClass}">${escapeHtml(direction || "---")}</span>
-        <span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span>
-      </summary>
-      <div class="history-detail-row">
-        <span>${formatTime(signal.created_at || signal.createdAt || signal.time)}</span>
-        <span>Score ${score}%</span>
-        ${canSetResult ? `<div class="action-buttons"><button onclick="setResult(${signalId}, 'WIN')">WIN</button><button onclick="setResult(${signalId}, 'LOSS')">LOSS</button></div>` : ""}
-      </div>
+    row.innerHTML = `
+      <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
+      <span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span>
+      <span class="badge result-badge ${normalizedResult}">${escapeHtml(result)}</span>
+      <span class="history-score">${score}%</span>
+      <span class="history-strategy">${escapeHtml(strategy)}</span>
+      <time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time>
+      ${canSetResult ? `<div class="action-buttons"><button onclick="setResult(${signalId}, 'WIN')">WIN</button><button onclick="setResult(${signalId}, 'LOSS')">LOSS</button></div>` : `<span class="history-muted">--</span>`}
     `;
 
-    el.historyList.appendChild(item);
+    el.historyList.appendChild(row);
   });
 
   if (el.historyCount) {
@@ -1793,24 +1883,18 @@ function isConfirmedOperationalSignal(signal = {}) {
 }
 
 function signalMatchesHistoryFilters(signal = {}) {
-  const directionFilter = String(state.historyFilters.direction || "").toUpperCase();
+  const symbolFilter = String(state.historyFilters.symbol || "").trim().toUpperCase();
+  const strategyFilter = String(state.historyFilters.strategy || "").trim().toLowerCase();
   const resultFilter = String(state.historyFilters.result || "").toLowerCase();
-  const modeFilter = String(state.historyFilters.mode || "").toLowerCase();
-  const direction = getOperationalDirection(signal);
+  const symbol = String(signal.symbol || signal.asset || "").toUpperCase();
+  const strategy = String(getStrategyLabel(signal)).toLowerCase();
   const result = String(signal.result || "pending").toLowerCase();
-  const mode = String(signal.mode || "").toLowerCase();
 
-  const modeAliases = {
-    conservador: ["conservador", "conservative"],
-    equilibrado: ["equilibrado", "balanced", "balanceado"],
-    agressivo: ["agressivo", "aggressive"]
-  };
-  const acceptedModes = modeFilter ? (modeAliases[modeFilter] || [modeFilter]) : [];
-
-  return (!directionFilter || direction === directionFilter)
-    && (!resultFilter || result === resultFilter)
-    && (!acceptedModes.length || acceptedModes.includes(mode));
+  return (!symbolFilter || symbol.includes(symbolFilter))
+    && (!strategyFilter || strategy.includes(strategyFilter))
+    && (!resultFilter || result === resultFilter);
 }
+
 
 function filterConfirmedOperationalSignals(signals = []) {
   if (!Array.isArray(signals)) return [];
@@ -1946,7 +2030,9 @@ function setConnection(status) {
 
   el.connectionText.textContent = status;
   setTextContent(el.websocketStatus, status);
+  setTextContent(el.summarySocketStatus, status);
   setTextContent(el.engineOnlineStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
+  setTextContent(el.summaryEngineStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
 
   el.connectionBadge.classList.remove("online", "offline", "connecting", "reconnecting");
 
@@ -2157,19 +2243,53 @@ function resetHistoryPageAndLoad() {
   loadHistory();
 }
 
+function setupDashboardTabs() {
+  const tabs = Array.from(document.querySelectorAll(".dashboard-tab"));
+  const panels = Array.from(document.querySelectorAll(".dashboard-tab-panel"));
+
+  if (!tabs.length || !panels.length) return;
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.tab;
+
+      tabs.forEach((item) => {
+        const isActive = item === tab;
+        item.classList.toggle("active", isActive);
+        item.setAttribute("aria-selected", String(isActive));
+      });
+
+      panels.forEach((panel) => {
+        const isActive = panel.dataset.tabPanel === target;
+        panel.classList.toggle("active", isActive);
+        panel.hidden = !isActive;
+      });
+
+      if (target === "history") scheduleHistoryRender();
+      if (target === "technical") {
+        renderOperationalHeatmap();
+        renderAIInsights();
+      }
+    });
+  });
+}
+
 function setupHistoryControls() {
   const filterBindings = [
-    [el.historyFilterDirection, "direction"],
-    [el.historyFilterResult, "result"],
-    [el.historyFilterMode, "mode"]
+    [el.historyFilterSymbol, "symbol", "input"],
+    [el.historyFilterStrategy, "strategy", "input"],
+    [el.historyFilterResult, "result", "change"]
   ];
 
-  filterBindings.forEach(([node, key]) => {
+  const debouncedReload = debounce(resetHistoryPageAndLoad, 260);
+
+  filterBindings.forEach(([node, key, eventName]) => {
     if (!node) return;
     node.value = state.historyFilters[key] || "";
-    node.addEventListener("change", () => {
+    node.addEventListener(eventName, () => {
       state.historyFilters[key] = node.value;
-      resetHistoryPageAndLoad();
+      if (eventName === "input") debouncedReload();
+      else resetHistoryPageAndLoad();
     });
   });
 
@@ -2187,6 +2307,7 @@ function setupHistoryControls() {
     });
   }
 }
+
 
 const handleBestOpportunity = throttle((signal) => {
   if (!signal) return;
@@ -2344,6 +2465,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startChartLoop();
   startAIEngine();
   setupModeSwitcher();
+  setupDashboardTabs();
   setupHistoryControls();
   setConnection("Conectando");
 

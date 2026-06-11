@@ -122,113 +122,132 @@
           <div class="headline" id="headlineText">Painel operacional compacto para leitura rápida de oportunidade, risco e resultado.</div>
         </section>
 
-        <section class="decision-grid" aria-label="Painel principal de decisão">
-          <div class="panel best-opportunity-panel primary-opportunity-card premium-card decision-focus-card">
-            <div class="panel-header"><h3>Melhor oportunidade</h3><span>foco operacional</span></div>
-            <div class="decision-asset-row">
-              <span class="micro-label">Ativo</span>
-              <strong id="bestAsset">---</strong>
+        <section class="commercial-dashboard-grid" aria-label="Resumo comercial do painel AERIX">
+          <article class="panel best-opportunity-panel primary-opportunity-card premium-card decision-focus-card current-signal-card" id="currentSignalCard">
+            <div class="panel-header">
+              <h3>Sinal Atual</h3>
+              <span id="signalMode">operação rápida</span>
             </div>
-            <div class="decision-direction-row">
+            <div class="current-signal-head">
               <div>
-                <span>CALL / PUT</span>
-                <strong id="bestDirection">WAIT</strong>
+                <span class="micro-label">Ativo</span>
+                <strong id="bestAsset" class="current-asset">---</strong>
               </div>
-              <div>
-                <span>Score</span>
-                <strong id="bestScore">0%</strong>
-              </div>
+              <div class="signal-direction neutral" id="bestDirection">WAIT</div>
             </div>
-            <div class="opportunity-essential-grid compact-opportunity-grid" aria-label="Parâmetros essenciais da melhor oportunidade">
-              <div class="opportunity-essential-item"><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
-              <div class="opportunity-essential-item"><span>Regime de mercado</span><strong id="marketRegime">NEUTRO</strong></div>
-              <div class="opportunity-essential-item"><span>Status operacional</span><strong id="bestEntryStatus">Aguardando</strong></div>
+            <div class="current-signal-scoreline">
+              <div><span>Score</span><strong id="bestScore">0%</strong></div>
+              <div><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
+              <div><span>Expiração</span><strong id="bestExpiry">--</strong></div>
             </div>
-          </div>
+            <div class="current-signal-meta">
+              <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
+              <div><span>Status da IA</span><strong id="bestAiStatus">Aguardando</strong></div>
+              <div><span>Status</span><strong id="bestEntryStatus">Aguardando</strong></div>
+            </div>
+            <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
+          </article>
 
-          <section class="panel stats-panel premium-card essential-metrics-panel">
-            <div class="panel-header"><h3>Métricas essenciais</h3><span id="statsUpdated">---</span></div>
-            <div class="stats-grid essential-stats-grid">
-              <div class="stat-card"><span>Winrate</span><strong id="statWinrate">0%</strong></div>
-              <div class="stat-card"><span>Sinais Confirmados</span><strong id="statTotal">0</strong></div>
-              <div class="stat-card"><span>Wins</span><strong id="statWins">0</strong></div>
-              <div class="stat-card"><span>Losses</span><strong id="statLosses">0</strong></div>
+          <aside class="summary-card-grid" aria-label="Indicadores resumidos">
+            <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
+            <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
+            <article class="stat-card commercial-summary-card"><span>Status da Engine</span><strong id="summaryEngineStatus">Sincronizando</strong><small id="summarySocketStatus">WebSocket</small></article>
+            <article class="stat-card commercial-summary-card"><span>Última análise</span><strong id="summaryLastAnalysis">--</strong><small id="statsUpdated">sincronizando</small></article>
+          </aside>
+        </section>
+
+        <nav class="dashboard-tabs" aria-label="Áreas do painel">
+          <button class="dashboard-tab active" type="button" data-tab="operation" aria-selected="true">Operação</button>
+          <button class="dashboard-tab" type="button" data-tab="history" aria-selected="false">Histórico</button>
+          <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false">Análise técnica</button>
+        </nav>
+
+        <section class="dashboard-tab-panel active" data-tab-panel="operation">
+          <section class="operation-fast-grid" aria-label="Dados essenciais para decisão">
+            <article class="panel stats-panel premium-card essential-metrics-panel">
+              <div class="panel-header"><h3>Decisão rápida</h3><span>essencial</span></div>
+              <div class="stats-grid essential-stats-grid">
+                <div class="stat-card"><span>Winrate geral</span><strong id="statWinrate">0%</strong></div>
+                <div class="stat-card"><span>Sinais hoje</span><strong id="perfSignalsToday">0</strong></div>
+                <div class="stat-card"><span>Aprovados</span><strong id="perfApprovedToday">0</strong></div>
+                <div class="stat-card"><span>Último aprovado</span><strong id="perfLastApproved">--</strong></div>
+              </div>
+            </article>
+
+            <article class="panel signal-card compact-signal-details premium-card operation-signal-details">
+              <div class="signal-top">
+                <div>SINAL OPERACIONAL</div>
+                <div class="signal-time" id="signalTime">Aguardando dados</div>
+              </div>
+              <div class="signal-main">
+                <div>
+                  <span class="micro-label">Ativo monitorado</span>
+                  <div class="signal-asset" id="signalAsset">---</div>
+                </div>
+                <div class="signal-direction neutral" id="signalDirection">AGUARDANDO</div>
+              </div>
+              <div class="signal-meta-grid">
+                <div class="signal-meta-card"><span>Entrada</span><strong id="signalEntry">--</strong></div>
+                <div class="signal-meta-card"><span>Expiração</span><strong id="signalExpiry">--</strong></div>
+                <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
+                <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section class="dashboard-tab-panel" data-tab-panel="history" hidden>
+          <section class="panel history-panel compact-history-panel recent-signals-panel premium-card">
+            <div class="panel-header">
+              <h3>Últimos Sinais</h3>
+              <span id="historyCount">0</span>
+            </div>
+            <div class="history-toolbar" aria-label="Filtros do histórico de últimos sinais">
+              <label>
+                Ativo
+                <input id="historyFilterSymbol" type="search" placeholder="Ex: EURUSD" autocomplete="off" />
+              </label>
+              <label>
+                Estratégia
+                <input id="historyFilterStrategy" type="search" placeholder="Todas" autocomplete="off" />
+              </label>
+              <label>
+                Resultado
+                <select id="historyFilterResult">
+                  <option value="">Todos</option>
+                  <option value="pending">Pendente</option>
+                  <option value="win">WIN</option>
+                  <option value="loss">LOSS</option>
+                  <option value="draw">DRAW</option>
+                </select>
+              </label>
+            </div>
+            <div class="history-table-shell">
+              <div class="history-table" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
+            </div>
+            <div class="history-pagination" aria-label="Paginação dos últimos sinais">
+              <button id="historyPrev" type="button">Anterior</button>
+              <span id="historyPageInfo">Página 1</span>
+              <button id="historyNext" type="button">Próxima</button>
+              <small id="historyUpdated">sincronizando</small>
             </div>
           </section>
         </section>
 
-
-        <section class="panel performance-dashboard-panel premium-card secondary-details-panel">
-          <div class="panel-header"><h3>Performance Institucional</h3><span id="performanceUpdated">sincronizando</span></div>
-          <div class="performance-kpi-grid" aria-label="Dashboard institucional de performance">
-            <div class="stat-card performance-kpi-card"><span>Sinais hoje</span><strong id="perfSignalsToday">0</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Sinais aprovados hoje</span><strong id="perfApprovedToday">0</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Sinais bloqueados hoje</span><strong id="perfBlockedToday">0</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Taxa de aprovação</span><strong id="perfApprovalRate">0%</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Winrate 24h</span><strong id="perfWinrate24h">0%</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Winrate 7 dias</span><strong id="perfWinrate7d">0%</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Winrate 30 dias</span><strong id="perfWinrate30d">0%</strong></div>
-            <div class="stat-card performance-kpi-card"><span>Último aprovado</span><strong id="perfLastApproved">--</strong></div>
-          </div>
-          <div class="performance-breakdown-grid">
-            <div class="institutional-subpanel">
-              <div class="subpanel-title"><strong>Winrate por ativo</strong><span>últimos 7 dias</span></div>
-              <div class="performance-list" id="perfWinrateByAsset"><div class="history-empty">Sem resultados por ativo</div></div>
+        <section class="dashboard-tab-panel" data-tab-panel="technical" hidden>
+          <section class="panel advanced-hub-panel secondary-details-panel premium-card">
+            <div class="panel-header"><h3>Análise técnica</h3><span id="engineOnlineStatus">Sincronizando</span></div>
+            <div class="technical-snapshot-grid">
+              <div class="compact-status-item"><span>Estratégia</span><strong id="techStrategy">--</strong></div>
+              <div class="compact-status-item"><span>marketRegime</span><strong id="marketRegime">NEUTRO</strong></div>
+              <div class="compact-status-item"><span>volatility</span><strong id="techVolatility">--</strong></div>
+              <div class="compact-status-item"><span>dynamicThresholds</span><strong id="techDynamicThresholds">--</strong></div>
+              <div class="compact-status-item"><span>blockReason</span><strong id="techBlockReason">--</strong></div>
+              <div class="compact-status-item"><span>activationReason</span><strong id="techActivationReason">--</strong></div>
             </div>
-            <div class="institutional-subpanel">
-              <div class="subpanel-title"><strong>Winrate por estratégia</strong><span>últimos 7 dias</span></div>
-              <div class="performance-list" id="perfWinrateByStrategy"><div class="history-empty">Sem resultados por estratégia</div></div>
-            </div>
-          </div>
-        </section>
-        <section class="panel history-panel compact-history-panel recent-signals-panel">
-          <div class="panel-header">
-            <h3>Últimos Sinais</h3>
-            <span id="historyCount">0</span>
-          </div>
-          <div class="history-toolbar" aria-label="Filtros do histórico de últimos sinais">
-            <label>
-              Direção
-              <select id="historyFilterDirection">
-                <option value="">Todas</option>
-                <option value="CALL">CALL</option>
-                <option value="PUT">PUT</option>
-              </select>
-            </label>
-            <label>
-              Resultado
-              <select id="historyFilterResult">
-                <option value="">Todos</option>
-                <option value="pending">Pendente</option>
-                <option value="win">WIN</option>
-                <option value="loss">LOSS</option>
-              </select>
-            </label>
-            <label>
-              Modo
-              <select id="historyFilterMode">
-                <option value="">Todos</option>
-                <option value="conservador">Conservador</option>
-                <option value="equilibrado">Equilibrado</option>
-                <option value="agressivo">Agressivo</option>
-              </select>
-            </label>
-          </div>
-          <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
-          <div class="history-pagination" aria-label="Paginação dos últimos sinais">
-            <button id="historyPrev" type="button">Anterior</button>
-            <span id="historyPageInfo">Página 1</span>
-            <button id="historyNext" type="button">Próxima</button>
-            <small id="historyUpdated">sincronizando</small>
-          </div>
-        </section>
-
-        <section class="panel advanced-hub-panel secondary-details-panel">
-          <details class="technical-details advanced-hub-details">
-            <summary>Informações avançadas: engine, razões completas, logs e auditoria</summary>
-            <div class="advanced-hub-grid">
+            <div class="advanced-hub-grid technical-advanced-grid">
               <article class="institutional-subpanel compact-engine-panel premium-card">
-                <div class="subpanel-title"><strong>Status da engine</strong><span id="engineOnlineStatus">Sincronizando</span></div>
+                <div class="subpanel-title"><strong>Status da engine</strong><span>runtime</span></div>
                 <div class="compact-status-grid engine-status-grid">
                   <div class="compact-status-item"><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div>
                   <div class="compact-status-item"><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div>
@@ -236,27 +255,6 @@
                   <div class="compact-status-item"><span>WebSocket</span><strong id="websocketStatus">Conectando</strong></div>
                   <div class="compact-status-item"><span>Risco atual</span><strong id="currentRisk">--</strong></div>
                   <div class="compact-status-item"><span>Liberação IA</span><strong id="aiReleaseStatus">Aguardando</strong></div>
-                </div>
-                <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
-              </article>
-
-              <article class="institutional-subpanel signal-card compact-signal-details premium-card">
-                <div class="signal-top">
-                  <div class="signal-mode" id="signalMode">SINAL OPERACIONAL</div>
-                  <div class="signal-time" id="signalTime">Aguardando dados</div>
-                </div>
-                <div class="signal-main">
-                  <div>
-                    <span class="micro-label">Ativo monitorado</span>
-                    <div class="signal-asset" id="signalAsset">---</div>
-                  </div>
-                  <div class="signal-direction neutral" id="signalDirection">AGUARDANDO</div>
-                </div>
-                <div class="signal-meta-grid">
-                  <div class="signal-meta-card"><span>Entrada</span><strong id="signalEntry">--</strong></div>
-                  <div class="signal-meta-card"><span>Expiração</span><strong id="signalExpiry">--</strong></div>
-                  <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
-                  <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
                 </div>
                 <div class="ai-content">
                   <span class="micro-label">Razões completas</span>
@@ -306,7 +304,28 @@
                 </div>
               </section>
             </div>
-          </details>
+          </section>
+
+          <section class="panel performance-dashboard-panel premium-card secondary-details-panel">
+            <div class="panel-header"><h3>Performance Institucional</h3><span id="performanceUpdated">sincronizando</span></div>
+            <div class="performance-kpi-grid" aria-label="Dashboard institucional de performance">
+              <div class="stat-card performance-kpi-card"><span>Bloqueados hoje</span><strong id="perfBlockedToday">0</strong></div>
+              <div class="stat-card performance-kpi-card"><span>Taxa de aprovação</span><strong id="perfApprovalRate">0%</strong></div>
+              <div class="stat-card performance-kpi-card"><span>Winrate 24h</span><strong id="perfWinrate24h">0%</strong></div>
+              <div class="stat-card performance-kpi-card"><span>Winrate 7 dias</span><strong id="perfWinrate7d">0%</strong></div>
+              <div class="stat-card performance-kpi-card"><span>Winrate 30 dias</span><strong id="perfWinrate30d">0%</strong></div>
+            </div>
+            <div class="performance-breakdown-grid">
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Winrate por ativo</strong><span>últimos 7 dias</span></div>
+                <div class="performance-list" id="perfWinrateByAsset"><div class="history-empty">Sem resultados por ativo</div></div>
+              </div>
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Winrate por estratégia</strong><span>últimos 7 dias</span></div>
+                <div class="performance-list" id="perfWinrateByStrategy"><div class="history-empty">Sem resultados por estratégia</div></div>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section class="panel filter-analytics-panel premium-card secondary-details-panel">
