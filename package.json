@@ -6,7 +6,8 @@
     "dev": "node src/server.js",
     "start": "node src/server.js",
     "db:validate-schema": "node scripts/validate-db-schema-compatibility.js",
-    "validate:twelvedata-parser": "node scripts/validate-twelvedata-candle-parser.js"
+    "validate:twelvedata-parser": "node scripts/validate-twelvedata-candle-parser.js",
+    "audit:volatility": "node scripts/audit-low-volatility-filters.js"
   },
   "dependencies": {
     "axios": "^1.15.1",

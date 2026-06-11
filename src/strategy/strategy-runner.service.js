@@ -5,6 +5,7 @@ const {
   createReversalStrategy,
   createTrendContinuationStrategy
 } = require("./index");
+const { getLastATR } = require("../indicators/atr.indicator");
 
 function normalizeMode(mode = "balanced") {
   if (mode === "conservative") return "conservative";
@@ -100,6 +101,95 @@ function getModeRules(mode = "balanced") {
   };
 
   return rules[normalized];
+}
+
+function roundMetric(value, decimals = 6) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) return null;
+
+  return Number(numeric.toFixed(decimals));
+}
+
+function getLastClose(candles = []) {
+  if (!Array.isArray(candles) || candles.length === 0) return null;
+
+  const lastCandle = candles[candles.length - 1] || {};
+  const close = Number(lastCandle.close);
+
+  return Number.isFinite(close) && close > 0 ? close : null;
+}
+
+function buildVolatilityAudit({ snapshot, mtf, mode = "balanced", marketRegime = null, candidate = {} } = {}) {
+  const normalizedMode = normalizeMode(mode);
+  const rules = getModeRules(normalizedMode);
+  const m5 = snapshot?.timeframes?.m5 || {};
+  const candles = Array.isArray(m5.candles) ? m5.candles : [];
+  const atr = getLastATR(candles, 14);
+  const lastClose = getLastClose(candles);
+  const atrPercent = atr !== null && lastClose
+    ? (Number(atr) / lastClose) * 100
+    : null;
+  const calculatedVolatility = Number(m5.volatilityPercent || 0);
+  const lowVolatilityRegimeThreshold = 0.1;
+  const lowVolatilityValidationThreshold = 0.12;
+  const veryLowVolatilityThreshold = Number(rules.blockers.veryLowVolatility);
+  const lowVolatilityReleaseThreshold = getLowVolatilityReleaseThreshold(normalizedMode);
+  const lowVolatilityCandidateScore = getCandidateScore(candidate);
+  const isLowVolatility = calculatedVolatility > 0 && calculatedVolatility < lowVolatilityValidationThreshold;
+  const isVeryLowVolatility = calculatedVolatility > 0 && calculatedVolatility < veryLowVolatilityThreshold;
+  const isLowVolatilityScoreReleaseEligible = Boolean(
+    lowVolatilityReleaseThreshold !== null &&
+    lowVolatilityCandidateScore > lowVolatilityReleaseThreshold
+  );
+
+  return {
+    atr: roundMetric(atr),
+    atrPercent: roundMetric(atrPercent),
+    calculatedVolatility: roundMetric(calculatedVolatility),
+    thresholds: {
+      regimeLowVolatility: lowVolatilityRegimeThreshold,
+      validationLowVolatility: lowVolatilityValidationThreshold,
+      validationVeryLowVolatility: veryLowVolatilityThreshold,
+      scoreRelease: lowVolatilityReleaseThreshold
+    },
+    regime: {
+      final: marketRegime,
+      classifiedAsLowVolatility: calculatedVolatility > 0 && calculatedVolatility < lowVolatilityRegimeThreshold,
+      reason: calculatedVolatility > 0 && calculatedVolatility < lowVolatilityRegimeThreshold
+        ? `volatility ${roundMetric(calculatedVolatility)} < regimeLowVolatility ${lowVolatilityRegimeThreshold}`
+        : `volatility ${roundMetric(calculatedVolatility)} >= regimeLowVolatility ${lowVolatilityRegimeThreshold} ou sem volatilidade positiva`,
+      mtfAlignment: Number(mtf?.alignment || 0),
+      mtfAligned: Boolean(mtf?.isAligned)
+    },
+    validation: {
+      isLowVolatility,
+      isLowVolatilityWhy: isLowVolatility
+        ? `volatility ${roundMetric(calculatedVolatility)} > 0 e < validationLowVolatility ${lowVolatilityValidationThreshold}`
+        : `volatility ${roundMetric(calculatedVolatility)} não está entre 0 e ${lowVolatilityValidationThreshold}`,
+      isVeryLowVolatility,
+      isVeryLowVolatilityWhy: isVeryLowVolatility
+        ? `volatility ${roundMetric(calculatedVolatility)} > 0 e < validationVeryLowVolatility ${veryLowVolatilityThreshold} (${normalizedMode})`
+        : `volatility ${roundMetric(calculatedVolatility)} não está entre 0 e ${veryLowVolatilityThreshold} (${normalizedMode})`,
+      scoreReleaseEligible: isLowVolatilityScoreReleaseEligible,
+      scoreReleaseWhy: lowVolatilityReleaseThreshold === null
+        ? `modo ${normalizedMode} não possui liberação por score`
+        : `candidateScore ${roundMetric(lowVolatilityCandidateScore, 2)} ${isLowVolatilityScoreReleaseEligible ? ">" : "<="} scoreRelease ${lowVolatilityReleaseThreshold}`,
+      shouldHardBlockVeryLowVolatility: Boolean(isVeryLowVolatility && !isLowVolatilityScoreReleaseEligible),
+      shouldHardBlockVeryLowVolatilityWhy: isVeryLowVolatility && !isLowVolatilityScoreReleaseEligible
+        ? "isVeryLowVolatility=true e scoreReleaseEligible=false"
+        : "não combina isVeryLowVolatility=true com scoreReleaseEligible=false"
+    }
+  };
+}
+
+function emitVolatilityAuditLog(payload) {
+  console.log(JSON.stringify({
+    scope: "aerix_volatility_regime_audit",
+    event: "volatility_regime_evaluation",
+    timestamp: new Date().toISOString(),
+    ...payload
+  }));
 }
 
 function buildMtfContext(snapshot) {
@@ -321,8 +411,15 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
   const fallbackSource = dataQuality.fallbackSource || null;
   const marketDataSource = dataQuality.marketDataSource || dataQuality.source || snapshot?.source || null;
 
-  const isLowVolatility = volatility > 0 && volatility < 0.12;
-  const isVeryLowVolatility = volatility > 0 && volatility < rules.blockers.veryLowVolatility;
+  const volatilityAudit = buildVolatilityAudit({
+    snapshot,
+    mtf,
+    mode: normalizedMode,
+    marketRegime: classifyMarketRegime(snapshot, mtf),
+    candidate
+  });
+  const isLowVolatility = volatilityAudit.validation.isLowVolatility;
+  const isVeryLowVolatility = volatilityAudit.validation.isVeryLowVolatility;
   const isWeakTrend = avgTrendStrength > 0 && avgTrendStrength < 0.14;
   const isVeryWeakTrend = avgTrendStrength > 0 && avgTrendStrength < rules.blockers.veryWeakTrend;
   const isWeakAlignment = mtf.alignment < 2;
@@ -388,6 +485,7 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
     isLowVolatility,
     isVeryLowVolatility,
     shouldHardBlockVeryLowVolatility,
+    volatilityAudit,
     lowVolatilityRelease: {
       threshold: lowVolatilityReleaseThreshold,
       candidateScore: lowVolatilityCandidateScore,
@@ -454,6 +552,7 @@ function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinSco
         : 0
     },
     volatility: Number(m5.volatilityPercent || 0),
+    volatilityAudit: marketValidation?.volatilityAudit || null,
     marketRegime,
     provider: snapshot?.dataQuality?.provider || null,
     providerStatus: snapshot?.dataQuality?.providerStatus || null,
@@ -510,6 +609,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 
   const best = validStrategies[0] || null;
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
+
+
   const fallbackSignal = marketValidation.isFallbackData
     ? getFallbackSignalEligibility({ best, mtf, mode })
     : null;
@@ -522,6 +623,23 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   const effectiveDynamicMinScore = effectiveMarketRegime === marketRegime
     ? dynamicMinScore
     : getDynamicMinScore(rules, effectiveMarketRegime, mode);
+
+  emitVolatilityAuditLog({
+    mode: normalizeMode(mode),
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    marketRegime,
+    finalRegime: effectiveMarketRegime,
+    bestStrategy: best?.name || null,
+    bestDirection: best?.direction || null,
+    bestScore: best ? getCandidateScore(best) : 0,
+    audit: {
+      ...marketValidation.volatilityAudit,
+      regime: {
+        ...marketValidation.volatilityAudit.regime,
+        final: effectiveMarketRegime
+      }
+    }
+  });
 
   if (!best || marketValidation.shouldBlock || fallbackGraceBlocked) {
     const absenceReason = !best
@@ -696,5 +814,6 @@ module.exports = {
   buildMtfContext,
   classifyMarketRegime,
   validateMarketConditions,
-  getLowVolatilityReleaseThreshold
+  getLowVolatilityReleaseThreshold,
+  buildVolatilityAudit
 };
