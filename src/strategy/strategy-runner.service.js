@@ -211,6 +211,21 @@ function getDynamicScoreTolerance(mode = "balanced") {
   return 0;
 }
 
+function getLowVolatilityReleaseThreshold(mode = "balanced") {
+  const normalizedMode = normalizeMode(mode);
+
+  if (normalizedMode === "balanced") return 90;
+  if (normalizedMode === "aggressive") return 80;
+
+  return null;
+}
+
+function getCandidateScore(candidate = {}) {
+  const score = Number(candidate?.weightedScore ?? candidate?.score ?? candidate?.rawScore ?? 0);
+
+  return Number.isFinite(score) ? score : 0;
+}
+
 function applyWeight(result, weight = 1) {
   const raw = Number(result?.score || 0);
   const weighted = Math.min(100, Number((raw * weight).toFixed(2)));
@@ -288,7 +303,7 @@ function safeEvaluateStrategy(strategy, payload) {
   }
 }
 
-function validateMarketConditions(snapshot, mtf, mode = "balanced") {
+function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = {}) {
   const normalizedMode = normalizeMode(mode);
   const rules = getModeRules(normalizedMode);
   const h1 = snapshot?.timeframes?.h1 || {};
@@ -313,6 +328,16 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   const isWeakAlignment = mtf.alignment < 2;
   const isSevereWeakAlignment = mtf.alignment <= rules.blockers.weakAlignment;
   const isHighVolatility = volatility >= 0.6;
+  const lowVolatilityReleaseThreshold = getLowVolatilityReleaseThreshold(normalizedMode);
+  const lowVolatilityCandidateScore = getCandidateScore(candidate);
+  const isLowVolatilityScoreReleaseEligible = Boolean(
+    lowVolatilityReleaseThreshold !== null &&
+    lowVolatilityCandidateScore > lowVolatilityReleaseThreshold
+  );
+  const shouldHardBlockVeryLowVolatility = Boolean(
+    isVeryLowVolatility &&
+    !isLowVolatilityScoreReleaseEligible
+  );
   const isFallbackData = Boolean(snapshot?.isFallback || dataQuality.isFallback);
   const minimumCandles = rules.blockers.insufficientCandles;
   const hasInsufficientCandles = ["m5", "m15", "h1"].some((timeframe) => {
@@ -332,7 +357,7 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   const blocks = [
     isFallbackData && normalizedMode === "conservative" ? "Fonte de dados em fallback; modo conservador mantém bloqueio operacional." : null,
     hasInsufficientCandles ? "Histórico insuficiente de candles para validação institucional." : null,
-    isVeryLowVolatility ? "Baixa liquidez severa / volatilidade extremamente baixa." : null,
+    shouldHardBlockVeryLowVolatility ? "Baixa liquidez severa / volatilidade extremamente baixa." : null,
     isVeryWeakTrend ? "Tendência muito fraca para entrada institucional." : null,
     isSevereWeakAlignment ? "Inconsistência grave entre timeframes." : null,
     ...conservativeModerateBlocks
@@ -341,6 +366,9 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   const penalties = [
     isLowVolatility && !isVeryLowVolatility && normalizedMode !== "conservative"
       ? { reason: "Baixa volatilidade convertida em penalidade de score.", value: rules.penalties.lowVolatility }
+      : null,
+    isVeryLowVolatility && isLowVolatilityScoreReleaseEligible
+      ? { reason: `Baixa volatilidade severa liberada por score ${lowVolatilityCandidateScore} acima do corte ${lowVolatilityReleaseThreshold}; penalidade mantida.`, value: rules.penalties.lowVolatility }
       : null,
     isWeakTrend && !isVeryWeakTrend && normalizedMode !== "conservative"
       ? { reason: "Trend strength fraco convertido em penalidade de score.", value: rules.penalties.weakTrend }
@@ -359,6 +387,13 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced") {
   return {
     isLowVolatility,
     isVeryLowVolatility,
+    shouldHardBlockVeryLowVolatility,
+    lowVolatilityRelease: {
+      threshold: lowVolatilityReleaseThreshold,
+      candidateScore: lowVolatilityCandidateScore,
+      eligible: isLowVolatilityScoreReleaseEligible,
+      applied: Boolean(isVeryLowVolatility && isLowVolatilityScoreReleaseEligible)
+    },
     isWeakTrend,
     isVeryWeakTrend,
     isWeakAlignment,
@@ -474,7 +509,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     .sort((a, b) => b.weightedScore - a.weightedScore);
 
   const best = validStrategies[0] || null;
-  const marketValidation = validateMarketConditions(snapshot, mtf, mode);
+  const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
   const fallbackSignal = marketValidation.isFallbackData
     ? getFallbackSignalEligibility({ best, mtf, mode })
     : null;
@@ -659,5 +694,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 module.exports = {
   runStrategies,
   buildMtfContext,
-  classifyMarketRegime
+  classifyMarketRegime,
+  validateMarketConditions,
+  getLowVolatilityReleaseThreshold
 };
