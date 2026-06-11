@@ -6,6 +6,7 @@ const { Server } = require("socket.io");
 const createApp = require("./app");
 const engineRunner = require("./services/engine-runner.service");
 const { initializeSocket } = require("./websocket/socket");
+const { bootstrapDatabase } = require("./bootstrap/database-bootstrap");
 
 const app = createApp();
 const server = http.createServer(app);
@@ -29,10 +30,21 @@ initializeSocket(io);
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log(`🚀 AERIX rodando na porta ${PORT}`);
-
-  if (String(process.env.AUTO_START_ENGINE).toLowerCase() === "true") {
-    engineRunner.start();
+async function startServer() {
+  try {
+    await bootstrapDatabase();
+  } catch (error) {
+    console.error("❌ Falha ao sincronizar schema do banco antes do startup:", error.message || error);
+    process.exit(1);
   }
-});
+
+  server.listen(PORT, () => {
+    console.log(`🚀 AERIX rodando na porta ${PORT}`);
+
+    if (String(process.env.AUTO_START_ENGINE).toLowerCase() === "true") {
+      engineRunner.start();
+    }
+  });
+}
+
+startServer();

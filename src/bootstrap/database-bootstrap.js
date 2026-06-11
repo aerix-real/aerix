@@ -312,6 +312,11 @@ async function ensureFilterBlockEventsTable() {
     CREATE INDEX IF NOT EXISTS idx_filter_block_events_event_type
       ON public.filter_block_events(event_type);
   `);
+
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_filter_block_events_symbol_signal_timestamp
+      ON public.filter_block_events(symbol, signal, event_timestamp DESC);
+  `);
 }
 
 async function ensureDynamicThresholdTables() {
@@ -432,6 +437,23 @@ async function ensureDynamicThresholdTables() {
   await db.query(`
     CREATE INDEX IF NOT EXISTS idx_threshold_performance_scope
       ON public.threshold_performance (scope_type, scope_key);
+  `);
+
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM public.threshold_performance
+        GROUP BY scope_type, scope_key
+        HAVING COUNT(*) > 1
+      ) THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_threshold_performance_scope_unique
+          ON public.threshold_performance (scope_type, scope_key);
+      ELSE
+        RAISE NOTICE 'idx_threshold_performance_scope_unique not created: duplicate threshold_performance scope rows require manual consolidation.';
+      END IF;
+    END $$;
   `);
 }
 

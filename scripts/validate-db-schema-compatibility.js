@@ -229,7 +229,17 @@ const tableRegex = /\b(?:from|join|into|update)\s+(?:public\.)?([a-z_][a-z0-9_]*
 let match;
 while ((match = tableRegex.exec(sourceSql))) {
   const table = normalizeTableName(match[1]);
-  if (!["information_schema", "columns", "set", "created_at", "event_timestamp"].includes(table)) referencedTables.add(table);
+  if (![
+    "information_schema",
+    "columns",
+    "set",
+    "created_at",
+    "event_timestamp",
+    "pg_attribute",
+    "pg_class",
+    "pg_namespace",
+    "users_id_type"
+  ].includes(table)) referencedTables.add(table);
 }
 
 const failures = [];
@@ -277,4 +287,4 @@ if (failures.length) {
 }
 
 console.log("✅ Compatibilidade estática validada: tabelas, colunas e índices requeridos pelas queries estão cobertos.");
-console.log("✅ Alvos de erro 42703/42P01 cobertos pela migration 012_complete_schema_audit_compatibility.sql.");
+console.log("✅ Alvos de erro 42703/42P01 cobertos pelas migrations de compatibilidade 012/013.");
