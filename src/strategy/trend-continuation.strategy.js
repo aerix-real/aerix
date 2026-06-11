@@ -78,7 +78,7 @@ function createTrendContinuationStrategy() {
     const valid = Boolean(
       direction &&
       partialScore >= modeRules.minPartialScore &&
-      score >= modeRules.minPartialScore
+      score >= modeRules.minStrategyScore
     );
 
     return {
@@ -127,18 +127,21 @@ function createTrendContinuationStrategy() {
       conservative: {
         minAlignment: 3,
         minPartialScore: 100,
+        minStrategyScore: 100,
         requireM5M15Aligned: true,
         requireAllCriteria: true
       },
       balanced: {
         minAlignment: 2,
-        minPartialScore: 70,
+        minPartialScore: 65,
+        minStrategyScore: 70,
         requireM5M15Aligned: true,
         requireAllCriteria: false
       },
       aggressive: {
         minAlignment: 2,
         minPartialScore: 60,
+        minStrategyScore: 60,
         requireM5M15Aligned: false,
         requireAllCriteria: false
       }
@@ -266,6 +269,7 @@ function createTrendContinuationStrategy() {
         mode: normalizeMode(mode),
         minAlignment: rules.minAlignment,
         minPartialScore: rules.minPartialScore,
+        minStrategyScore: rules.minStrategyScore,
         requireM5M15Aligned: rules.requireM5M15Aligned
       }
     });
