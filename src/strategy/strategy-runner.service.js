@@ -8,8 +8,11 @@ const {
 const { getLastATR } = require("../indicators/atr.indicator");
 
 function normalizeMode(mode = "balanced") {
-  if (mode === "conservative") return "conservative";
-  if (mode === "aggressive") return "aggressive";
+  const normalized = String(mode || "balanced").toLowerCase();
+
+  if (["conservador", "conservative"].includes(normalized)) return "conservative";
+  if (["agressivo", "aggressive"].includes(normalized)) return "aggressive";
+
   return "balanced";
 }
 
@@ -30,9 +33,9 @@ function getModeRules(mode = "balanced") {
       },
       blockers: {
         lowVolatility: 0.12,
-        veryLowVolatility: 0.12,
+        veryLowVolatility: 0.05,
         veryWeakTrend: 0.08,
-        weakAlignment: 1,
+        weakAlignment: 2,
         insufficientCandles: 60,
         fallbackData: true
       },
@@ -57,7 +60,7 @@ function getModeRules(mode = "balanced") {
       },
       blockers: {
         lowVolatility: 0.06,
-        veryLowVolatility: 0.05,
+        veryLowVolatility: 0.03,
         veryWeakTrend: 0.045,
         weakAlignment: 1,
         insufficientCandles: 45,
@@ -84,7 +87,7 @@ function getModeRules(mode = "balanced") {
       },
       blockers: {
         lowVolatility: 0.04,
-        veryLowVolatility: 0.035,
+        veryLowVolatility: 0.02,
         veryWeakTrend: 0.03,
         weakAlignment: 0,
         insufficientCandles: 30,
@@ -659,6 +662,60 @@ function emitStrategyEligibilityAuditLog(payload) {
   console.log(JSON.stringify(payload));
 }
 
+function getModePartialScoreMinimum(mode = "balanced") {
+  const normalizedMode = normalizeMode(mode);
+
+  if (normalizedMode === "conservative") return 100;
+  if (normalizedMode === "aggressive") return 60;
+
+  return 70;
+}
+
+function buildSignalNearActivationAuditLog({ snapshot, mode, evaluated, report }) {
+  const normalizedMode = normalizeMode(mode);
+  const minimumPartialScore = getModePartialScoreMinimum(normalizedMode);
+  const candidates = (report?.byStrategy || [])
+    .filter((item) => item.blocked)
+    .map((item) => ({
+      strategy: item.strategyName,
+      partialScore: Number(item.partialScore || 0),
+      blocker: item.blockedBy || "unknown",
+      distanceToActivation: Number(Math.max(0, minimumPartialScore - Number(item.partialScore || 0)).toFixed(2))
+    }))
+    .sort((left, right) => {
+      if (left.distanceToActivation !== right.distanceToActivation) {
+        return left.distanceToActivation - right.distanceToActivation;
+      }
+
+      return right.partialScore - left.partialScore;
+    });
+  const nearest = candidates[0] || null;
+
+  return {
+    scope: "aerix_signal_near_activation_audit",
+    event: "signalNearActivation",
+    timestamp: new Date().toISOString(),
+    mode: normalizedMode,
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    strategy: nearest?.strategy || null,
+    partialScore: nearest?.partialScore || 0,
+    blocker: nearest?.blocker || null,
+    distanceToActivation: nearest?.distanceToActivation ?? null,
+    minimumPartialScore,
+    candidates,
+    diagnostics: evaluated.map((item) => ({
+      strategy: item.name,
+      valid: item.valid,
+      partialScore: Number(item.eligibilityAudit?.score ?? item.rawScore ?? item.score ?? 0),
+      blocker: item.eligibilityAudit?.blockedBy || item.explanation || null
+    }))
+  };
+}
+
+function emitSignalNearActivationAuditLog(payload) {
+  console.log(JSON.stringify(payload));
+}
+
 function runStrategies({ snapshot, mode = "balanced" }) {
   const rules = getModeRules(mode);
   const mtf = buildMtfContext(snapshot);
@@ -669,7 +726,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     m5: snapshot?.timeframes?.m5?.candles || [],
     m15: snapshot?.timeframes?.m15?.candles || [],
     h1: snapshot?.timeframes?.h1?.candles || [],
-    mtf
+    mtf,
+    mode: normalizeMode(mode)
   };
 
   const strategies = [
@@ -692,7 +750,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 
   const best = validStrategies[0] || null;
 
-  emitStrategyEligibilityAuditLog(buildStrategyEligibilityAuditLog({
+  const strategyEligibilityAuditLog = buildStrategyEligibilityAuditLog({
     snapshot,
     mode,
     mtf,
@@ -701,6 +759,14 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     evaluated,
     validStrategies,
     best
+  });
+
+  emitStrategyEligibilityAuditLog(strategyEligibilityAuditLog);
+  emitSignalNearActivationAuditLog(buildSignalNearActivationAuditLog({
+    snapshot,
+    mode,
+    evaluated,
+    report: strategyEligibilityAuditLog.report
   }));
 
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
