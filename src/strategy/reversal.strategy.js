@@ -17,6 +17,7 @@ const {
   getLastATR,
   classifyATR
 } = require("../indicators/atr.indicator");
+const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createReversalStrategy() {
   function evaluate({ m5, m15, h1, mtf }) {
@@ -59,7 +60,7 @@ function createReversalStrategy() {
       return invalidResult("indicator_unavailable");
     }
 
-    const direction = resolveDirection({
+    const directionAudit = buildDirectionAudit({
       mtf,
       priceZone,
       rsiM5,
@@ -69,9 +70,10 @@ function createReversalStrategy() {
       lastM5,
       lastM15
     });
+    const direction = directionAudit.direction;
 
     if (!direction) {
-      return invalidResult("no_reversal_setup");
+      return invalidResult("no_reversal_setup", directionAudit.audit);
     }
 
     const score = calculateScore({
@@ -118,11 +120,18 @@ function createReversalStrategy() {
         bollingerState,
         atrLevel,
         mtf
-      })
+      }),
+      eligibilityAudit: {
+        ...directionAudit.audit,
+        valid,
+        direction,
+        score,
+        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+      }
     };
   }
 
-  function resolveDirection(input) {
+  function buildDirectionAudit(input) {
     const {
       mtf,
       priceZone,
@@ -134,35 +143,52 @@ function createReversalStrategy() {
       lastM15
     } = input;
 
-    const bullishReversal =
-      priceZone.zone === "near_support" &&
-      (rsiM5 <= 35 || getRSIZone(rsiM5) === "oversold") &&
-      rsiM15 <= 45 &&
-      (stochasticState === "oversold" || stochasticState === "bullish") &&
-      (bollingerState === "below_lower" || bollingerState === "lower_half") &&
-      lastM5.close >= lastM5.open &&
-      lastM15.close >= lastM15.open &&
-      mtf.m5.trend !== "down";
+    const bullishCriteria = [
+      createCriterion("reversalPatternFound", priceZone.zone === "near_support", { zone: priceZone.zone }),
+      createCriterion("rsiM5Oversold", rsiM5 <= 35 || getRSIZone(rsiM5) === "oversold", { rsiM5 }),
+      createCriterion("rsiM15AllowsReversal", rsiM15 <= 45, { rsiM15 }),
+      createCriterion("stochasticReversalConfirmed", stochasticState === "oversold" || stochasticState === "bullish", { stochasticState }),
+      createCriterion("bollingerReversalZone", bollingerState === "below_lower" || bollingerState === "lower_half", { bollingerState }),
+      createCriterion("m5CandleReversalConfirmed", lastM5.close >= lastM5.open, { close: lastM5.close, open: lastM5.open }),
+      createCriterion("m15CandleReversalConfirmed", lastM15.close >= lastM15.open, { close: lastM15.close, open: lastM15.open }),
+      createCriterion("counterTrendNotBlocked", mtf.m5.trend !== "down", { m5Trend: mtf.m5.trend })
+    ];
 
-    if (bullishReversal) {
-      return "CALL";
-    }
+    const bearishCriteria = [
+      createCriterion("reversalPatternFound", priceZone.zone === "near_resistance", { zone: priceZone.zone }),
+      createCriterion("rsiM5Overbought", rsiM5 >= 65 || getRSIZone(rsiM5) === "overbought", { rsiM5 }),
+      createCriterion("rsiM15AllowsReversal", rsiM15 >= 55, { rsiM15 }),
+      createCriterion("stochasticReversalConfirmed", stochasticState === "overbought" || stochasticState === "bearish", { stochasticState }),
+      createCriterion("bollingerReversalZone", bollingerState === "above_upper" || bollingerState === "upper_half", { bollingerState }),
+      createCriterion("m5CandleReversalConfirmed", lastM5.close <= lastM5.open, { close: lastM5.close, open: lastM5.open }),
+      createCriterion("m15CandleReversalConfirmed", lastM15.close <= lastM15.open, { close: lastM15.close, open: lastM15.open }),
+      createCriterion("counterTrendNotBlocked", mtf.m5.trend !== "up", { m5Trend: mtf.m5.trend })
+    ];
 
-    const bearishReversal =
-      priceZone.zone === "near_resistance" &&
-      (rsiM5 >= 65 || getRSIZone(rsiM5) === "overbought") &&
-      rsiM15 >= 55 &&
-      (stochasticState === "overbought" || stochasticState === "bearish") &&
-      (bollingerState === "above_upper" || bollingerState === "upper_half") &&
-      lastM5.close <= lastM5.open &&
-      lastM15.close <= lastM15.open &&
-      mtf.m5.trend !== "up";
+    const bullishReversal = bullishCriteria.every((criterion) => criterion.passed);
+    const bearishReversal = bearishCriteria.every((criterion) => criterion.passed);
+    const direction = bullishReversal ? "CALL" : bearishReversal ? "PUT" : null;
+    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
 
-    if (bearishReversal) {
-      return "PUT";
-    }
+    return {
+      direction,
+      audit: buildEligibilityAudit({
+        strategyName: "reversal",
+        direction,
+        valid: Boolean(direction),
+        criteria,
+        candidates: [
+          { direction: "CALL", criteria: bullishCriteria, blockedBy: "reversalPatternFound" },
+          { direction: "PUT", criteria: bearishCriteria, blockedBy: "reversalPatternFound" }
+        ],
+        blockedBy: direction ? null : "reversalPatternNotFound",
+        context: { zone: priceZone.zone, rsiM5, rsiM15, stochasticState, bollingerState, dominantDirection: mtf.dominantDirection }
+      })
+    };
+  }
 
-    return null;
+  function resolveDirection(input) {
+    return buildDirectionAudit(input).direction;
   }
 
   function calculateScore(input) {
@@ -243,14 +269,15 @@ function createReversalStrategy() {
     ].join(" | ");
   }
 
-  function invalidResult(reason) {
+  function invalidResult(reason, eligibilityAudit = null) {
     return {
       name: "reversal",
       valid: false,
       direction: null,
       score: 0,
       context: {},
-      explanation: reason
+      explanation: reason,
+      eligibilityAudit: eligibilityAudit || invalidEligibilityAudit("reversal", reason)
     };
   }
 

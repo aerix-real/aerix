@@ -3,6 +3,7 @@ const { getLastRSIFromCandles } = require("../indicators/rsi.indicator");
 const { getLastADX, getADXState } = require("../indicators/adx.indicator");
 const { getLastATR, classifyATR } = require("../indicators/atr.indicator");
 const { getLastEMAFromCandles } = require("../indicators/ema.indicator");
+const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createMomentumStrategy() {
   function evaluate({ m5, m15, h1, mtf }) {
@@ -56,7 +57,7 @@ function createMomentumStrategy() {
       return invalidResult("indicator_unavailable");
     }
 
-    const direction = resolveDirection({
+    const directionAudit = buildDirectionAudit({
       mtf,
       macdStateM5,
       macdStateM15,
@@ -72,9 +73,10 @@ function createMomentumStrategy() {
       ema9M5,
       ema21M5
     });
+    const direction = directionAudit.direction;
 
     if (!direction) {
-      return invalidResult("no_momentum_setup");
+      return invalidResult("no_momentum_setup", directionAudit.audit);
     }
 
     const score = calculateScore({
@@ -127,11 +129,18 @@ function createMomentumStrategy() {
         adxState,
         atrLevel,
         mtf
-      })
+      }),
+      eligibilityAudit: {
+        ...directionAudit.audit,
+        valid,
+        direction,
+        score,
+        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+      }
     };
   }
 
-  function resolveDirection(input) {
+  function buildDirectionAudit(input) {
     const {
       mtf,
       macdStateM5,
@@ -148,52 +157,55 @@ function createMomentumStrategy() {
       ema9M5,
       ema21M5
     } = input;
+    const bullishAdx = adxState === "bullish_trend" || adxState === "strong_bullish_trend" || adxState === "developing_trend";
+    const bearishAdx = adxState === "bearish_trend" || adxState === "strong_bearish_trend" || adxState === "developing_trend";
 
-    const bullish =
-      mtf.dominantDirection === "up" &&
-      mtf.alignment >= 2 &&
-      (macdStateM5 === "bullish" || macdStateM15 === "bullish") &&
-      macdM5.histogram > 0 &&
-      macdM15.histogram >= 0 &&
-      rsiM5 >= 55 &&
-      rsiM15 >= 52 &&
-      lastM5.close > prevM5.close &&
-      lastM15.close >= prevM15.close &&
-      lastM5.close > ema9M5 &&
-      ema9M5 >= ema21M5 &&
-      (
-        adxState === "bullish_trend" ||
-        adxState === "strong_bullish_trend" ||
-        adxState === "developing_trend"
-      );
+    const bullishCriteria = [
+      createCriterion("trendAligned", mtf.dominantDirection === "up", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("alignmentThresholdMet", mtf.alignment >= 2, { alignment: mtf.alignment, threshold: 2 }),
+      createCriterion("macdDirectionConfirmed", macdStateM5 === "bullish" || macdStateM15 === "bullish", { macdStateM5, macdStateM15 }),
+      createCriterion("momentumStrengthConfirmed", macdM5.histogram > 0 && macdM15.histogram >= 0, { macdM5Histogram: macdM5.histogram, macdM15Histogram: macdM15.histogram }),
+      createCriterion("rsiMomentumConfirmed", rsiM5 >= 55 && rsiM15 >= 52, { rsiM5, rsiM15 }),
+      createCriterion("priceImpulseConfirmed", lastM5.close > prevM5.close && lastM15.close >= prevM15.close, { m5Close: lastM5.close, prevM5Close: prevM5.close, m15Close: lastM15.close, prevM15Close: prevM15.close }),
+      createCriterion("emaMomentumConfirmed", lastM5.close > ema9M5 && ema9M5 >= ema21M5, { close: lastM5.close, ema9M5, ema21M5 }),
+      createCriterion("adxMomentumConfirmed", bullishAdx, { adxState })
+    ];
 
-    if (bullish) {
-      return "CALL";
-    }
+    const bearishCriteria = [
+      createCriterion("trendAligned", mtf.dominantDirection === "down", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("alignmentThresholdMet", mtf.alignment >= 2, { alignment: mtf.alignment, threshold: 2 }),
+      createCriterion("macdDirectionConfirmed", macdStateM5 === "bearish" || macdStateM15 === "bearish", { macdStateM5, macdStateM15 }),
+      createCriterion("momentumStrengthConfirmed", macdM5.histogram < 0 && macdM15.histogram <= 0, { macdM5Histogram: macdM5.histogram, macdM15Histogram: macdM15.histogram }),
+      createCriterion("rsiMomentumConfirmed", rsiM5 <= 45 && rsiM15 <= 48, { rsiM5, rsiM15 }),
+      createCriterion("priceImpulseConfirmed", lastM5.close < prevM5.close && lastM15.close <= prevM15.close, { m5Close: lastM5.close, prevM5Close: prevM5.close, m15Close: lastM15.close, prevM15Close: prevM15.close }),
+      createCriterion("emaMomentumConfirmed", lastM5.close < ema9M5 && ema9M5 <= ema21M5, { close: lastM5.close, ema9M5, ema21M5 }),
+      createCriterion("adxMomentumConfirmed", bearishAdx, { adxState })
+    ];
 
-    const bearish =
-      mtf.dominantDirection === "down" &&
-      mtf.alignment >= 2 &&
-      (macdStateM5 === "bearish" || macdStateM15 === "bearish") &&
-      macdM5.histogram < 0 &&
-      macdM15.histogram <= 0 &&
-      rsiM5 <= 45 &&
-      rsiM15 <= 48 &&
-      lastM5.close < prevM5.close &&
-      lastM15.close <= prevM15.close &&
-      lastM5.close < ema9M5 &&
-      ema9M5 <= ema21M5 &&
-      (
-        adxState === "bearish_trend" ||
-        adxState === "strong_bearish_trend" ||
-        adxState === "developing_trend"
-      );
+    const bullish = bullishCriteria.every((criterion) => criterion.passed);
+    const bearish = bearishCriteria.every((criterion) => criterion.passed);
+    const direction = bullish ? "CALL" : bearish ? "PUT" : null;
+    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
 
-    if (bearish) {
-      return "PUT";
-    }
+    return {
+      direction,
+      audit: buildEligibilityAudit({
+        strategyName: "momentum",
+        direction,
+        valid: Boolean(direction),
+        criteria,
+        candidates: [
+          { direction: "CALL", criteria: bullishCriteria, blockedBy: "momentumStrengthConfirmed" },
+          { direction: "PUT", criteria: bearishCriteria, blockedBy: "momentumStrengthConfirmed" }
+        ],
+        blockedBy: direction ? null : "momentumWeak",
+        context: { alignment: mtf.alignment, macdStateM5, macdStateM15, rsiM5, rsiM15, adxState }
+      })
+    };
+  }
 
-    return null;
+  function resolveDirection(input) {
+    return buildDirectionAudit(input).direction;
   }
 
   function calculateScore(input) {
@@ -290,14 +302,15 @@ function createMomentumStrategy() {
     ].join(" | ");
   }
 
-  function invalidResult(reason) {
+  function invalidResult(reason, eligibilityAudit = null) {
     return {
       name: "momentum",
       valid: false,
       direction: null,
       score: 0,
       context: {},
-      explanation: reason
+      explanation: reason,
+      eligibilityAudit: eligibilityAudit || invalidEligibilityAudit("momentum", reason)
     };
   }
 

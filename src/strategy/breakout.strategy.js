@@ -8,6 +8,7 @@ const {
 } = require("../indicators/support-resistance.indicator");
 const { getLastMACD, getMACDState } = require("../indicators/macd.indicator");
 const { getLastADX, getADXState } = require("../indicators/adx.indicator");
+const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createBreakoutStrategy() {
   function evaluate({ m5, m15, h1, mtf }) {
@@ -41,7 +42,7 @@ function createBreakoutStrategy() {
     const adxData = getLastADX(m15, 14);
     const adxState = getADXState(adxData.adx, adxData.plusDI, adxData.minusDI);
 
-    const direction = resolveDirection({
+    const directionAudit = buildDirectionAudit({
       mtf,
       lastM5,
       lastM15,
@@ -50,9 +51,10 @@ function createBreakoutStrategy() {
       adxState,
       bollingerState
     });
+    const direction = directionAudit.direction;
 
     if (!direction) {
-      return invalidResult("no_breakout_setup");
+      return invalidResult("no_breakout_setup", directionAudit.audit);
     }
 
     const score = calculateScore({
@@ -96,48 +98,66 @@ function createBreakoutStrategy() {
         adxState,
         bollingerState,
         mtf
+      }),
+      eligibilityAudit: {
+        ...directionAudit.audit,
+        valid,
+        direction,
+        score,
+        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+      }
+    };
+  }
+
+  function buildDirectionAudit(input) {
+    const { mtf, lastM5, lastM15, sr, macdState, adxState, bollingerState } = input;
+    const bullishTrendState = adxState === "bullish_trend" || adxState === "strong_bullish_trend" || adxState === "developing_trend";
+    const bearishTrendState = adxState === "bearish_trend" || adxState === "strong_bearish_trend" || adxState === "developing_trend";
+
+    const bullishCriteria = [
+      createCriterion("trendAligned", mtf.dominantDirection === "up", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("alignmentThresholdMet", mtf.alignment >= 2, { alignment: mtf.alignment, threshold: 2 }),
+      createCriterion("resistanceAvailable", sr.nearestResistance !== null, { nearestResistance: sr.nearestResistance }),
+      createCriterion("breakoutStrengthAboveThreshold", sr.nearestResistance !== null && lastM15.close > sr.nearestResistance, { close: lastM15.close, nearestResistance: sr.nearestResistance }),
+      createCriterion("m5ImpulseConfirmed", lastM5.close > lastM15.open, { m5Close: lastM5.close, m15Open: lastM15.open }),
+      createCriterion("momentumConfirmed", macdState === "bullish" || bollingerState === "above_upper", { macdState, bollingerState }),
+      createCriterion("adxBreakoutStateConfirmed", bullishTrendState, { adxState })
+    ];
+
+    const bearishCriteria = [
+      createCriterion("trendAligned", mtf.dominantDirection === "down", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("alignmentThresholdMet", mtf.alignment >= 2, { alignment: mtf.alignment, threshold: 2 }),
+      createCriterion("supportAvailable", sr.nearestSupport !== null, { nearestSupport: sr.nearestSupport }),
+      createCriterion("breakoutStrengthAboveThreshold", sr.nearestSupport !== null && lastM15.close < sr.nearestSupport, { close: lastM15.close, nearestSupport: sr.nearestSupport }),
+      createCriterion("m5ImpulseConfirmed", lastM5.close < lastM15.open, { m5Close: lastM5.close, m15Open: lastM15.open }),
+      createCriterion("momentumConfirmed", macdState === "bearish" || bollingerState === "below_lower", { macdState, bollingerState }),
+      createCriterion("adxBreakoutStateConfirmed", bearishTrendState, { adxState })
+    ];
+
+    const breakoutUp = bullishCriteria.every((criterion) => criterion.passed);
+    const breakoutDown = bearishCriteria.every((criterion) => criterion.passed);
+    const direction = breakoutUp ? "CALL" : breakoutDown ? "PUT" : null;
+    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
+
+    return {
+      direction,
+      audit: buildEligibilityAudit({
+        strategyName: "breakout",
+        direction,
+        valid: Boolean(direction),
+        criteria,
+        candidates: [
+          { direction: "CALL", criteria: bullishCriteria, blockedBy: "breakoutStrengthAboveThreshold" },
+          { direction: "PUT", criteria: bearishCriteria, blockedBy: "breakoutStrengthAboveThreshold" }
+        ],
+        blockedBy: direction ? null : "breakoutStrengthBelowThreshold",
+        context: { alignment: mtf.alignment, macdState, adxState, bollingerState }
       })
     };
   }
 
   function resolveDirection(input) {
-    const { mtf, lastM5, lastM15, sr, macdState, adxState, bollingerState } = input;
-
-    const breakoutUp =
-      mtf.dominantDirection === "up" &&
-      mtf.alignment >= 2 &&
-      sr.nearestResistance !== null &&
-      lastM15.close > sr.nearestResistance &&
-      lastM5.close > lastM15.open &&
-      (macdState === "bullish" || bollingerState === "above_upper") &&
-      (
-        adxState === "bullish_trend" ||
-        adxState === "strong_bullish_trend" ||
-        adxState === "developing_trend"
-      );
-
-    if (breakoutUp) {
-      return "CALL";
-    }
-
-    const breakoutDown =
-      mtf.dominantDirection === "down" &&
-      mtf.alignment >= 2 &&
-      sr.nearestSupport !== null &&
-      lastM15.close < sr.nearestSupport &&
-      lastM5.close < lastM15.open &&
-      (macdState === "bearish" || bollingerState === "below_lower") &&
-      (
-        adxState === "bearish_trend" ||
-        adxState === "strong_bearish_trend" ||
-        adxState === "developing_trend"
-      );
-
-    if (breakoutDown) {
-      return "PUT";
-    }
-
-    return null;
+    return buildDirectionAudit(input).direction;
   }
 
   function calculateScore(input) {
@@ -224,14 +244,15 @@ function createBreakoutStrategy() {
     ].join(" | ");
   }
 
-  function invalidResult(reason) {
+  function invalidResult(reason, eligibilityAudit = null) {
     return {
       name: "breakout",
       valid: false,
       direction: null,
       score: 0,
       context: {},
-      explanation: reason
+      explanation: reason,
+      eligibilityAudit: eligibilityAudit || invalidEligibilityAudit("breakout", reason)
     };
   }
 

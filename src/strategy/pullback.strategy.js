@@ -2,6 +2,7 @@ const { getLastEMAFromCandles } = require("../indicators/ema.indicator");
 const { getLastRSIFromCandles, getRSIZone } = require("../indicators/rsi.indicator");
 const { getLastATR, classifyATR } = require("../indicators/atr.indicator");
 const { getLastADX, getADXState } = require("../indicators/adx.indicator");
+const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createPullbackStrategy() {
   function evaluate({ m5, m15, h1, mtf }) {
@@ -44,7 +45,7 @@ function createPullbackStrategy() {
       return invalidResult("indicator_unavailable");
     }
 
-    const direction = resolveDirection({
+    const directionAudit = buildDirectionAudit({
       mtf,
       lastM5,
       lastM15,
@@ -58,9 +59,10 @@ function createPullbackStrategy() {
       rsiM5,
       rsiM15
     });
+    const direction = directionAudit.direction;
 
     if (!direction) {
-      return invalidResult("no_pullback_setup");
+      return invalidResult("no_pullback_setup", directionAudit.audit);
     }
 
     const score = calculateScore({
@@ -100,11 +102,18 @@ function createPullbackStrategy() {
         rsiM5,
         rsiM15,
         mtf
-      })
+      }),
+      eligibilityAudit: {
+        ...directionAudit.audit,
+        valid,
+        direction,
+        score,
+        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+      }
     };
   }
 
-  function resolveDirection(input) {
+  function buildDirectionAudit(input) {
     const {
       mtf,
       lastM5,
@@ -138,9 +147,11 @@ function createPullbackStrategy() {
       lastM5.close >= ema21M5 &&
       ema9M5 >= ema21M5;
 
-    if (bullishContext && bullishPullback && bullishRecovery) {
-      return "CALL";
-    }
+    const bullishCriteria = [
+      createCriterion("trendAligned", bullishContext, { h1Trend: mtf.h1.trend, m15Trend: mtf.m15.trend }),
+      createCriterion("retracementDetected", bullishPullback, { rsiM5, rsiM15, close: lastM5.close, ema9M5, ema21M5 }),
+      createCriterion("pullbackRecoveryConfirmed", bullishRecovery, { close: lastM5.close, ema9M5, ema21M5 })
+    ];
 
     const bearishContext =
       mtf.h1.trend === "down" &&
@@ -160,11 +171,36 @@ function createPullbackStrategy() {
       lastM5.close <= ema21M5 &&
       ema9M5 <= ema21M5;
 
-    if (bearishContext && bearishPullback && bearishRecovery) {
-      return "PUT";
-    }
+    const bearishCriteria = [
+      createCriterion("trendAligned", bearishContext, { h1Trend: mtf.h1.trend, m15Trend: mtf.m15.trend }),
+      createCriterion("retracementDetected", bearishPullback, { rsiM5, rsiM15, close: lastM5.close, ema9M5, ema21M5 }),
+      createCriterion("pullbackRecoveryConfirmed", bearishRecovery, { close: lastM5.close, ema9M5, ema21M5 })
+    ];
 
-    return null;
+    const bullish = bullishCriteria.every((criterion) => criterion.passed);
+    const bearish = bearishCriteria.every((criterion) => criterion.passed);
+    const direction = bullish ? "CALL" : bearish ? "PUT" : null;
+    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
+
+    return {
+      direction,
+      audit: buildEligibilityAudit({
+        strategyName: "pullback",
+        direction,
+        valid: Boolean(direction),
+        criteria,
+        candidates: [
+          { direction: "CALL", criteria: bullishCriteria, blockedBy: "retracementDetected" },
+          { direction: "PUT", criteria: bearishCriteria, blockedBy: "retracementDetected" }
+        ],
+        blockedBy: direction ? null : "retracementDetected",
+        context: { alignment: mtf.alignment, rsiM5, rsiM15 }
+      })
+    };
+  }
+
+  function resolveDirection(input) {
+    return buildDirectionAudit(input).direction;
   }
 
   function calculateScore(input) {
@@ -230,14 +266,15 @@ function createPullbackStrategy() {
     ].join(" | ");
   }
 
-  function invalidResult(reason) {
+  function invalidResult(reason, eligibilityAudit = null) {
     return {
       name: "pullback",
       valid: false,
       direction: null,
       score: 0,
       context: {},
-      explanation: reason
+      explanation: reason,
+      eligibilityAudit: eligibilityAudit || invalidEligibilityAudit("pullback", reason)
     };
   }
 

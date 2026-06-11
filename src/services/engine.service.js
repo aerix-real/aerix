@@ -296,6 +296,7 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
     explanation: strategyResult.explanation || "",
     strategies: Array.isArray(strategyResult.strategies) ? strategyResult.strategies : [],
+    strategyEligibilityReport: strategyResult.strategyEligibilityReport || null,
     mtf: strategyResult.mtf || {},
     operationalTuning: strategyResult.operationalTuning || {},
     marketRegime: strategyResult.marketRegime || "NORMAL",

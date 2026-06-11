@@ -1,6 +1,7 @@
 const { getLastEMAFromCandles } = require("../indicators/ema.indicator");
 const { getLastADX, getADXState } = require("../indicators/adx.indicator");
 const { getLastATR, classifyATR } = require("../indicators/atr.indicator");
+const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createTrendContinuationStrategy() {
   function evaluate({ m5, m15, h1, mtf }) {
@@ -38,7 +39,7 @@ function createTrendContinuationStrategy() {
     const atr = getLastATR(m15, 14);
     const atrLevel = classifyATR(atr);
 
-    const direction = resolveDirection({
+    const directionAudit = buildDirectionAudit({
       lastM5,
       lastM15,
       lastH1,
@@ -50,9 +51,10 @@ function createTrendContinuationStrategy() {
       ema21H1,
       mtf
     });
+    const direction = directionAudit.direction;
 
     if (!direction) {
-      return invalidResult("no_direction");
+      return invalidResult("no_direction", directionAudit.audit);
     }
 
     const score = calculateScore({
@@ -91,11 +93,18 @@ function createTrendContinuationStrategy() {
         adxState,
         atrLevel,
         mtf
-      })
+      }),
+      eligibilityAudit: {
+        ...directionAudit.audit,
+        valid,
+        direction,
+        score,
+        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+      }
     };
   }
 
-  function resolveDirection(input) {
+  function buildDirectionAudit(input) {
     const {
       lastM5,
       lastM15,
@@ -109,37 +118,54 @@ function createTrendContinuationStrategy() {
       mtf
     } = input;
 
-    const bullish =
-      mtf.h1.trend === "up" &&
-      mtf.m15.trend === "up" &&
-      mtf.dominantDirection === "up" &&
-      ema9H1 > ema21H1 &&
-      ema9M15 > ema21M15 &&
-      ema9M5 > ema21M5 &&
-      lastH1.close > ema9H1 &&
-      lastM15.close > ema9M15 &&
-      lastM5.close > ema9M5;
+    const bullishCriteria = [
+      createCriterion("h1TrendUp", mtf.h1.trend === "up", { actual: mtf.h1.trend }),
+      createCriterion("m15TrendUp", mtf.m15.trend === "up", { actual: mtf.m15.trend }),
+      createCriterion("trendAligned", mtf.dominantDirection === "up", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("emaH1Bullish", ema9H1 > ema21H1, { ema9H1, ema21H1 }),
+      createCriterion("emaM15Bullish", ema9M15 > ema21M15, { ema9M15, ema21M15 }),
+      createCriterion("emaM5Bullish", ema9M5 > ema21M5, { ema9M5, ema21M5 }),
+      createCriterion("priceAboveH1Ema", lastH1.close > ema9H1, { close: lastH1.close, ema9H1 }),
+      createCriterion("priceAboveM15Ema", lastM15.close > ema9M15, { close: lastM15.close, ema9M15 }),
+      createCriterion("priceAboveM5Ema", lastM5.close > ema9M5, { close: lastM5.close, ema9M5 })
+    ];
 
-    if (bullish) {
-      return "CALL";
-    }
+    const bearishCriteria = [
+      createCriterion("h1TrendDown", mtf.h1.trend === "down", { actual: mtf.h1.trend }),
+      createCriterion("m15TrendDown", mtf.m15.trend === "down", { actual: mtf.m15.trend }),
+      createCriterion("trendAligned", mtf.dominantDirection === "down", { dominantDirection: mtf.dominantDirection }),
+      createCriterion("emaH1Bearish", ema9H1 < ema21H1, { ema9H1, ema21H1 }),
+      createCriterion("emaM15Bearish", ema9M15 < ema21M15, { ema9M15, ema21M15 }),
+      createCriterion("emaM5Bearish", ema9M5 < ema21M5, { ema9M5, ema21M5 }),
+      createCriterion("priceBelowH1Ema", lastH1.close < ema9H1, { close: lastH1.close, ema9H1 }),
+      createCriterion("priceBelowM15Ema", lastM15.close < ema9M15, { close: lastM15.close, ema9M15 }),
+      createCriterion("priceBelowM5Ema", lastM5.close < ema9M5, { close: lastM5.close, ema9M5 })
+    ];
 
-    const bearish =
-      mtf.h1.trend === "down" &&
-      mtf.m15.trend === "down" &&
-      mtf.dominantDirection === "down" &&
-      ema9H1 < ema21H1 &&
-      ema9M15 < ema21M15 &&
-      ema9M5 < ema21M5 &&
-      lastH1.close < ema9H1 &&
-      lastM15.close < ema9M15 &&
-      lastM5.close < ema9M5;
+    const bullish = bullishCriteria.every((criterion) => criterion.passed);
+    const bearish = bearishCriteria.every((criterion) => criterion.passed);
+    const direction = bullish ? "CALL" : bearish ? "PUT" : null;
+    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
 
-    if (bearish) {
-      return "PUT";
-    }
+    return {
+      direction,
+      audit: buildEligibilityAudit({
+        strategyName: "trend_continuation",
+        direction,
+        valid: Boolean(direction),
+        criteria,
+        candidates: [
+          { direction: "CALL", criteria: bullishCriteria, blockedBy: "trendAlignment" },
+          { direction: "PUT", criteria: bearishCriteria, blockedBy: "trendAlignment" }
+        ],
+        blockedBy: direction ? null : "trendAlignment",
+        context: { alignment: mtf.alignment, dominantDirection: mtf.dominantDirection }
+      })
+    };
+  }
 
-    return null;
+  function resolveDirection(input) {
+    return buildDirectionAudit(input).direction;
   }
 
   function calculateScore(input) {
@@ -204,14 +230,15 @@ function createTrendContinuationStrategy() {
     ].join(" | ");
   }
 
-  function invalidResult(reason) {
+  function invalidResult(reason, eligibilityAudit = null) {
     return {
       name: "trend_continuation",
       valid: false,
       direction: null,
       score: 0,
       context: {},
-      explanation: reason
+      explanation: reason,
+      eligibilityAudit: eligibilityAudit || invalidEligibilityAudit("trend_continuation", reason)
     };
   }
 
