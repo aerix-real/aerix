@@ -5,6 +5,7 @@ const dashboardController = require("../controllers/dashboard.controller");
 const router = express.Router();
 
 router.get("/", authMiddleware, dashboardController.getDashboard);
+router.get("/performance", authMiddleware, dashboardController.getPerformance);
 router.get("/history", authMiddleware, dashboardController.getHistory);
 
 module.exports = router;

@@ -43,6 +43,10 @@ function buildAdaptiveInsights(symbols = [], hours = []) {
   };
 }
 
+async function getPerformanceDashboard() {
+  return signalRepository.getOperationalOverview();
+}
+
 async function getGlobalAnalytics() {
   const [stats, topSymbols, hourlyPerformance, directionalPerformance, recentHistory] =
     await Promise.all([
@@ -120,5 +124,6 @@ async function getGlobalAnalytics() {
 }
 
 module.exports = {
-  getGlobalAnalytics
+  getGlobalAnalytics,
+  getPerformanceDashboard
 };
