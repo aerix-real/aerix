@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=compact-commercial-1" />
+  <link rel="stylesheet" href="/style.css?v=performance-dashboard-1" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -157,6 +157,30 @@
           </section>
         </section>
 
+
+        <section class="panel performance-dashboard-panel premium-card secondary-details-panel">
+          <div class="panel-header"><h3>Performance Institucional</h3><span id="performanceUpdated">sincronizando</span></div>
+          <div class="performance-kpi-grid" aria-label="Dashboard institucional de performance">
+            <div class="stat-card performance-kpi-card"><span>Sinais hoje</span><strong id="perfSignalsToday">0</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Sinais aprovados hoje</span><strong id="perfApprovedToday">0</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Sinais bloqueados hoje</span><strong id="perfBlockedToday">0</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Taxa de aprovação</span><strong id="perfApprovalRate">0%</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Winrate 24h</span><strong id="perfWinrate24h">0%</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Winrate 7 dias</span><strong id="perfWinrate7d">0%</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Winrate 30 dias</span><strong id="perfWinrate30d">0%</strong></div>
+            <div class="stat-card performance-kpi-card"><span>Último aprovado</span><strong id="perfLastApproved">--</strong></div>
+          </div>
+          <div class="performance-breakdown-grid">
+            <div class="institutional-subpanel">
+              <div class="subpanel-title"><strong>Winrate por ativo</strong><span>últimos 7 dias</span></div>
+              <div class="performance-list" id="perfWinrateByAsset"><div class="history-empty">Sem resultados por ativo</div></div>
+            </div>
+            <div class="institutional-subpanel">
+              <div class="subpanel-title"><strong>Winrate por estratégia</strong><span>últimos 7 dias</span></div>
+              <div class="performance-list" id="perfWinrateByStrategy"><div class="history-empty">Sem resultados por estratégia</div></div>
+            </div>
+          </div>
+        </section>
         <section class="panel history-panel compact-history-panel">
           <div class="panel-header"><h3>Histórico compacto</h3><span id="historyCount">0</span></div>
           <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
@@ -286,6 +310,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=compact-commercial-1"></script>
+  <script src="/app.js?v=performance-dashboard-1"></script>
 </body>
 </html>

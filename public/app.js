@@ -34,6 +34,7 @@ const state = {
   premiumSnapshot: null,
   filterAnalytics: null,
   filterPerformance: null,
+  performanceDashboard: null,
   domCache: new Map(),
   rafQueue: new Map(),
   visualFrame: null,
@@ -46,7 +47,8 @@ const state = {
     executions: [],
     lastUpdated: null
   },
-  filterAnalyticsTimer: null
+  filterAnalyticsTimer: null,
+  performanceDashboardTimer: null
 };
 
 const el = {
@@ -138,6 +140,18 @@ const el = {
   shadowModeStatus: document.getElementById("shadowModeStatus"),
   shadowModeList: document.getElementById("shadowModeList"),
   shadowModeUpdated: document.getElementById("shadowModeUpdated"),
+
+  performanceUpdated: document.getElementById("performanceUpdated"),
+  perfSignalsToday: document.getElementById("perfSignalsToday"),
+  perfApprovedToday: document.getElementById("perfApprovedToday"),
+  perfBlockedToday: document.getElementById("perfBlockedToday"),
+  perfApprovalRate: document.getElementById("perfApprovalRate"),
+  perfWinrate24h: document.getElementById("perfWinrate24h"),
+  perfWinrate7d: document.getElementById("perfWinrate7d"),
+  perfWinrate30d: document.getElementById("perfWinrate30d"),
+  perfLastApproved: document.getElementById("perfLastApproved"),
+  perfWinrateByAsset: document.getElementById("perfWinrateByAsset"),
+  perfWinrateByStrategy: document.getElementById("perfWinrateByStrategy"),
 
   filterPerformancePanel: document.getElementById("filterPerformancePanel"),
   filterPerformanceCards: document.getElementById("filterPerformanceCards"),
@@ -1307,12 +1321,108 @@ function syncRuntimeDashboard(runtimePayload = {}) {
   }
 
   const stats = runtime.analytics?.historyStats || {};
+  if (runtime.analytics?.performanceDashboard) {
+    renderPerformanceDashboard(runtime.analytics.performanceDashboard);
+  }
+
   if (Object.keys(stats).length) {
     if (el.statTotal) el.statTotal.textContent = stats.total ?? stats.totalSignals ?? el.statTotal.textContent;
     if (el.statWins) el.statWins.textContent = stats.wins ?? el.statWins.textContent;
     if (el.statLosses) el.statLosses.textContent = stats.losses ?? el.statLosses.textContent;
     if (el.statWinrate) el.statWinrate.textContent = `${stats.winRate ?? stats.winrate ?? 0}%`;
     if (el.statsUpdated) el.statsUpdated.textContent = "Engine live";
+  }
+}
+
+
+function formatPercent(value) {
+  const numeric = Number(value || 0);
+  return `${Number.isFinite(numeric) ? numeric.toFixed(1) : "0.0"}%`;
+}
+
+function getWinrateValue(bucket = {}) {
+  const numeric = Number(bucket.winrate ?? bucket.winRate ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function renderWinrateBreakdown(items = [], options = {}) {
+  const { labelKey = "symbol", empty = "Sem resultados" } = options;
+
+  if (!Array.isArray(items) || !items.length) {
+    return `<div class="history-empty">${escapeHtml(empty)}</div>`;
+  }
+
+  return items.slice(0, 8).map((item, index) => {
+    const label = item[labelKey] || item.strategyName || item.strategy_name || "UNKNOWN";
+    const winrate = getWinrateValue(item);
+    const total = Number(item.total || 0);
+    const wins = Number(item.wins || 0);
+    const losses = Number(item.losses || 0);
+
+    return `
+      <div class="performance-row">
+        <div class="rank-left">
+          <span class="rank-position">#${index + 1}</span>
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <span>${wins} wins · ${losses} losses · ${total} resolvidos</span>
+          </div>
+        </div>
+        <div class="performance-rate">${formatPercent(winrate)}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderPerformanceDashboard(data = {}) {
+  if (!data || typeof data !== "object") data = {};
+
+  state.performanceDashboard = data;
+
+  const winrate24h = getWinrateValue(data.winrate24h);
+  const winrate7d = getWinrateValue(data.winrate7d);
+  const winrate30d = getWinrateValue(data.winrate30d);
+  const lastApproved = data.lastApprovedSignal;
+
+  if (el.perfSignalsToday) el.perfSignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
+  if (el.perfApprovedToday) el.perfApprovedToday.textContent = data.approvedSignalsToday ?? data.approvedToday ?? 0;
+  if (el.perfBlockedToday) el.perfBlockedToday.textContent = data.blockedSignalsToday ?? data.blockedToday ?? 0;
+  if (el.perfApprovalRate) el.perfApprovalRate.textContent = formatPercent(data.approvalRate);
+  if (el.perfWinrate24h) el.perfWinrate24h.textContent = formatPercent(winrate24h);
+  if (el.perfWinrate7d) el.perfWinrate7d.textContent = formatPercent(winrate7d);
+  if (el.perfWinrate30d) el.perfWinrate30d.textContent = formatPercent(winrate30d);
+  if (el.perfLastApproved) el.perfLastApproved.textContent = lastApproved?.symbol || "--";
+  if (el.performanceUpdated) el.performanceUpdated.textContent = data.generatedAt ? `Atualizado ${formatTime(data.generatedAt)}` : "sem dados";
+
+  if (el.perfWinrateByAsset) {
+    el.perfWinrateByAsset.innerHTML = renderWinrateBreakdown(data.winrateBySymbol, {
+      labelKey: "symbol",
+      empty: "Sem resultados por ativo"
+    });
+  }
+
+  if (el.perfWinrateByStrategy) {
+    el.perfWinrateByStrategy.innerHTML = renderWinrateBreakdown(data.winrateByStrategy, {
+      labelKey: "strategyName",
+      empty: "Sem resultados por estratégia"
+    });
+  }
+}
+
+async function loadPerformanceDashboard() {
+  try {
+    const response = await apiFetch("/api/dashboard/performance");
+    const data = await response.json().catch(() => null);
+    const performance = data?.ok ? data.data : data;
+
+    if (performance && typeof performance === "object") {
+      renderPerformanceDashboard(performance);
+      return;
+    }
+
+    renderPerformanceDashboard({});
+  } catch (error) {
+    renderPerformanceDashboard({});
   }
 }
 
@@ -1801,7 +1911,18 @@ async function bootPanel() {
     if (state.accessToken) loadFilterAnalytics();
   }, 30000);
 
-  await Promise.allSettled([loadHistory(), loadStats(), loadRuntimeIntegrations(), loadFilterAnalytics()]);
+  if (state.performanceDashboardTimer) clearInterval(state.performanceDashboardTimer);
+  state.performanceDashboardTimer = setInterval(() => {
+    if (state.accessToken && state.isDocumentVisible) loadPerformanceDashboard();
+  }, 15000);
+
+  await Promise.allSettled([
+    loadHistory(),
+    loadStats(),
+    loadRuntimeIntegrations(),
+    loadFilterAnalytics(),
+    loadPerformanceDashboard()
+  ]);
 }
 
 function escapeHtml(value) {
@@ -1929,6 +2050,8 @@ const handleExecutionUpdate = throttle((payload) => {
   if (payload.allowed === false) {
     loadFilterAnalytics();
   }
+
+  loadPerformanceDashboard();
 }, 420);
 
 socket.on("connect", () => {
@@ -1987,6 +2110,7 @@ socket.on("signal-result-updated", (signal) => {
     scheduleEquityDraw();
     loadStats();
     loadFilterAnalytics();
+    loadPerformanceDashboard();
   }
 });
 
@@ -2002,6 +2126,7 @@ socket.on("history", (signals) => {
   scheduleHistoryRender();
   scheduleEquityDraw();
   loadStats();
+  loadPerformanceDashboard();
 });
 
 socket.on("execution", handleExecutionUpdate);
@@ -2025,6 +2150,7 @@ document.addEventListener("visibilitychange", () => {
   if (state.isDocumentVisible) {
     drawEquityCurve();
     renderOperationalHeatmap();
+    if (state.accessToken) loadPerformanceDashboard();
   }
 });
 

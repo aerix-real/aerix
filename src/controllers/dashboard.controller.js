@@ -6,9 +6,10 @@ const { filterConfirmedOperationalSignals } = require("../utils/signal-history-f
 async function getDashboard(req, res) {
   try {
     const engineState = engineRunnerService.getState();
-    const [analytics, filterAnalytics] = await Promise.all([
+    const [analytics, filterAnalytics, performanceDashboard] = await Promise.all([
       analyticsService.getGlobalAnalytics(),
-      filterAnalyticsService.getFilterAnalytics({ limit: 12, rankingLimit: 8 })
+      filterAnalyticsService.getFilterAnalytics({ limit: 12, rankingLimit: 8 }),
+      analyticsService.getPerformanceDashboard()
     ]);
 
     const bestOpportunity = engineState.bestOpportunity || null;
@@ -55,6 +56,7 @@ async function getDashboard(req, res) {
           hourPerformance: analytics.hourPerformance,
           directionalPerformance: analytics.directionalPerformance,
           adaptiveInsights: analytics.adaptiveInsights,
+          performanceDashboard,
           filters: {
             analyzedSignals: filterAnalytics.analyzedSignals,
             blockedSignals: filterAnalytics.blockedSignals,
@@ -86,6 +88,22 @@ async function getDashboard(req, res) {
     return res.status(error.statusCode || 500).json({
       ok: false,
       message: error.message || "Erro ao carregar dashboard."
+    });
+  }
+}
+
+async function getPerformance(req, res) {
+  try {
+    const performanceDashboard = await analyticsService.getPerformanceDashboard();
+
+    return res.status(200).json({
+      ok: true,
+      data: performanceDashboard
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      ok: false,
+      message: error.message || "Erro ao carregar dashboard de performance."
     });
   }
 }
@@ -131,5 +149,6 @@ async function getHistory(req, res) {
 
 module.exports = {
   getDashboard,
+  getPerformance,
   getHistory
 };

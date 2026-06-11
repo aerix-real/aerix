@@ -1357,3 +1357,84 @@ body.design-system-institutional .app-shell {
     gap: 6px;
   }
 }
+
+.performance-dashboard-panel {
+  border-color: rgba(240,207,130,0.24);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(240,207,130,0.12), transparent 30%),
+    linear-gradient(180deg, rgba(16,15,12,0.92), rgba(4,4,4,0.88));
+}
+
+.performance-kpi-grid,
+.performance-breakdown-grid,
+.performance-list {
+  display: grid;
+  gap: 10px;
+}
+
+.performance-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.performance-kpi-card strong {
+  color: #fff2cf;
+}
+
+.performance-breakdown-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.performance-list {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.performance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(240,207,130,0.14);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.018));
+}
+
+.performance-row strong {
+  color: #fff8e8;
+}
+
+.performance-row span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.performance-rate {
+  flex: 0 0 auto;
+  color: var(--buy);
+  font-size: 1.05rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+@media (max-width: 980px) {
+  .performance-kpi-grid,
+  .performance-breakdown-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .performance-kpi-grid,
+  .performance-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

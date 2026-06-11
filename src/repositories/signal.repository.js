@@ -401,8 +401,31 @@ function mapApprovedSignal(row = null) {
   };
 }
 
+function createEmptyOperationalOverview() {
+  const emptyWinrate = mapWinrateRow({});
+
+  return {
+    analyzedToday: 0,
+    signalsToday: 0,
+    approvedToday: 0,
+    approvedSignalsToday: 0,
+    blockedToday: 0,
+    blockedSignalsToday: 0,
+    approvalRate: 0,
+    winrate24h: emptyWinrate,
+    winrate7d: emptyWinrate,
+    winrate30d: emptyWinrate,
+    winrateBySymbol: [],
+    winrateByStrategy: [],
+    topBlockReason: null,
+    lastApprovedSignal: null,
+    generatedAt: new Date().toISOString()
+  };
+}
+
 async function getOperationalOverview() {
-  const [todayResult, outcome24hResult, outcome7dResult, bySymbolResult, byStrategyResult, blockReasonResult, lastApprovedResult] = await Promise.all([
+  try {
+    const [todayResult, outcome24hResult, outcome7dResult, outcome30dResult, bySymbolResult, byStrategyResult, blockReasonResult, lastApprovedResult] = await Promise.all([
     db.query(`
       SELECT
         GREATEST(
@@ -479,6 +502,15 @@ async function getOperationalOverview() {
     `),
     db.query(`
       SELECT
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+      FROM public.signal_history
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+    `),
+    db.query(`
+      SELECT
         symbol,
         COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
@@ -545,12 +577,16 @@ async function getOperationalOverview() {
 
   return {
     analyzedToday,
+    signalsToday: analyzedToday,
     approvedToday,
+    approvedSignalsToday: approvedToday,
     blockedToday,
+    blockedSignalsToday: blockedToday,
     approvalRate: calculateRate(approvedToday, analyzedToday),
     winrate24h: mapWinrateRow(outcome24hResult.rows[0] || {}),
     winrate7d: mapWinrateRow(outcome7dResult.rows[0] || {}),
-    winrateBySymbol: bySymbolResult.rows.map((row) => mapWinrateRow(row, 'symbol')),
+    winrate30d: mapWinrateRow(outcome30dResult.rows[0] || {}),
+    winrateBySymbol: bySymbolResult.rows.map((row) => mapWinrateRow(row, "symbol")),
     winrateByStrategy: byStrategyResult.rows.map((row) => ({
       strategyName: row.strategy_name,
       ...mapWinrateRow(row)
@@ -564,6 +600,17 @@ async function getOperationalOverview() {
     lastApprovedSignal: mapApprovedSignal(lastApprovedResult.rows[0] || null),
     generatedAt: new Date().toISOString()
   };
+  } catch (error) {
+    if (isSchemaMismatchError(error) || error?.code === "42P01") {
+      logStructuredRepositoryError("operational_overview_schema_mismatch", error, {
+        fallback: "empty_operational_overview"
+      });
+
+      return createEmptyOperationalOverview();
+    }
+
+    throw error;
+  }
 }
 
 async function updateSignalResult(id, result) {
