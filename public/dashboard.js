@@ -67,6 +67,76 @@
     return "WAIT";
   }
 
+
+  function isExecutionAllowedSignal(signal = {}) {
+    const direction = String(signal.signal || signal.direction || "").toUpperCase();
+    return (direction === "CALL" || direction === "PUT") &&
+      (signal.executionAllowed === true || signal.execution_allowed === true);
+  }
+
+  function normalizeSignalCollection(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (Array.isArray(value?.data)) return value.data.filter(Boolean);
+    if (Array.isArray(value?.signals)) return value.signals.filter(Boolean);
+    if (Array.isArray(value?.history)) return value.history.filter(Boolean);
+    return [];
+  }
+
+  function findExecutionAllowedSignal(...collections) {
+    for (const collection of collections) {
+      const approved = normalizeSignalCollection(collection).find(isExecutionAllowedSignal);
+      if (approved) {
+        const direction = String(approved.signal || approved.direction).toUpperCase();
+        return {
+          ...approved,
+          signal: direction,
+          direction,
+          executionAllowed: true,
+          execution_allowed: true,
+          blocked: false
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function resolvePrimaryDisplaySignal(data = {}) {
+    const signalCenter = data.signalCenter || {};
+    const directSignal = signalCenter.approvedSignal ||
+      signalCenter.finalApprovedSignal ||
+      signalCenter.displaySignal ||
+      signalCenter.bestOpportunity ||
+      data.approvedSignal ||
+      data.finalApprovedSignal ||
+      data.bestOpportunity ||
+      data.lastSignal ||
+      data.currentSignal ||
+      null;
+
+    if (isExecutionAllowedSignal(directSignal)) {
+      const direction = String(directSignal.signal || directSignal.direction).toUpperCase();
+      return {
+        ...directSignal,
+        signal: direction,
+        direction,
+        executionAllowed: true,
+        execution_allowed: true,
+        blocked: false
+      };
+    }
+
+    return directSignal || findExecutionAllowedSignal(
+      signalCenter.candidates,
+      data.ranking,
+      data.latestResults,
+      data.history,
+      data.recentHistory,
+      data.blockedAnalyses,
+      data.blocked_analyses
+    );
+  }
+
   function renderReasons(reasons = []) {
     if (!reasons.length) {
       return `<div class="mini-empty">Sem justificativas disponíveis no momento.</div>`;
@@ -147,7 +217,7 @@
   function applyDashboard(data) {
     if (!data) return;
 
-    const best = data.signalCenter?.bestOpportunity || null;
+    const best = resolvePrimaryDisplaySignal(data);
     const connection = data.connection || {};
     const userPreferences = data.user?.preferences || {};
     const stats = data.analytics?.historyStats || {};

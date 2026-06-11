@@ -5,6 +5,7 @@ const billingController = require("../controllers/billing.controller");
 const engineRunner = require("../services/engine-runner.service");
 const marketDataService = require("../services/market-data.service");
 const signalRepository = require("../repositories/signal.repository");
+const engineDebugService = require("../services/engine-debug.service");
 const { emitToAll } = require("../websocket/socket");
 const {
   isConfirmedOperationalSignal,
@@ -12,6 +13,64 @@ const {
 } = require("../utils/signal-history-filter");
 
 const router = express.Router();
+
+
+function isExecutionAllowedSignal(signal = {}) {
+  const direction = String(signal.signal || signal.direction || "").toUpperCase();
+  return (direction === "CALL" || direction === "PUT") &&
+    (signal.executionAllowed === true || signal.execution_allowed === true);
+}
+
+function normalizeApprovedDisplaySignal(signal = {}) {
+  if (!signal || typeof signal !== "object") return null;
+
+  const direction = String(signal.signal || signal.direction || "WAIT").toUpperCase();
+
+  return {
+    ...signal,
+    symbol: signal.symbol || signal.asset || "ENGINE",
+    asset: signal.asset || signal.symbol || "ENGINE",
+    signal: direction,
+    direction,
+    confidence: Number(signal.confidence || signal.score || signal.finalScore || 0),
+    finalScore: Number(signal.finalScore || signal.score || signal.confidence || 0),
+    score: Number(signal.score || signal.finalScore || signal.confidence || 0),
+    executionAllowed: true,
+    execution_allowed: true,
+    blocked: false,
+    timestamp: signal.timestamp || signal.created_at || signal.createdAt || new Date().toISOString(),
+    displaySource: signal.displaySource || signal.stage || signal.source || "after_execution_validation"
+  };
+}
+
+function findExecutionAllowedSignal(...collections) {
+  for (const collection of collections) {
+    const items = Array.isArray(collection) ? collection : [collection];
+    const approved = items.find(isExecutionAllowedSignal);
+
+    if (approved) return normalizeApprovedDisplaySignal(approved);
+  }
+
+  return null;
+}
+
+function buildDashboardDisplayState(state = {}) {
+  const approvedSignal = findExecutionAllowedSignal(state.bestOpportunity, state.latestResults || []) ||
+    findExecutionAllowedSignal(engineDebugService.getDebugSummary().recentEvents || []);
+
+  if (!approvedSignal) return state;
+
+  return {
+    ...state,
+    bestOpportunity: approvedSignal,
+    signalCenter: {
+      ...(state.signalCenter || {}),
+      bestOpportunity: approvedSignal,
+      approvedSignal,
+      displaySource: approvedSignal.displaySource
+    }
+  };
+}
 
 router.post(
   "/billing/create-checkout",
@@ -35,7 +94,7 @@ router.get("/dashboard", authMiddleware, (req, res) => {
   try {
     return res.json({
       ok: true,
-      data: engineRunner.getState()
+      data: buildDashboardDisplayState(engineRunner.getState())
     });
   } catch (error) {
     return res.status(500).json({
