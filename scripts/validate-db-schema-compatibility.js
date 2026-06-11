@@ -238,7 +238,9 @@ while ((match = tableRegex.exec(sourceSql))) {
     "pg_attribute",
     "pg_class",
     "pg_namespace",
-    "users_id_type"
+    "users_id_type",
+    "current_user_id_type",
+    "public"
   ].includes(table)) referencedTables.add(table);
 }
 
