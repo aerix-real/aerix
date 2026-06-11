@@ -46,7 +46,23 @@ const state = {
     executions: [],
     lastUpdated: null
   },
-  filterAnalyticsTimer: null
+  filterAnalyticsTimer: null,
+  historyPanel: {
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+    filters: {
+      symbol: "",
+      strategy: "",
+      result: ""
+    },
+    options: {
+      symbols: [],
+      strategies: [],
+      results: []
+    }
+  }
 };
 
 const el = {
@@ -102,6 +118,12 @@ const el = {
 
   historyList: document.getElementById("historyList"),
   historyCount: document.getElementById("historyCount"),
+  historyAssetFilter: document.getElementById("historyAssetFilter"),
+  historyStrategyFilter: document.getElementById("historyStrategyFilter"),
+  historyResultFilter: document.getElementById("historyResultFilter"),
+  historyPrevPage: document.getElementById("historyPrevPage"),
+  historyNextPage: document.getElementById("historyNextPage"),
+  historyPageInfo: document.getElementById("historyPageInfo"),
 
   statTotal: document.getElementById("statTotal"),
   statWins: document.getElementById("statWins"),
@@ -1002,23 +1024,53 @@ function rotateAIState() {
   }
 }
 
+function buildHistoryQuery() {
+  const params = new URLSearchParams({
+    page: String(state.historyPanel.page),
+    limit: String(state.historyPanel.limit)
+  });
+
+  Object.entries(state.historyPanel.filters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+
+  return params.toString();
+}
+
 async function loadHistory() {
   try {
-    const response = await apiFetch("/api/signals/recent");
+    const response = await apiFetch(`/api/signals/recent?${buildHistoryQuery()}`);
     const data = await response.json().catch(() => null);
 
     if (data?.ok && Array.isArray(data.signals)) {
-      state.history = filterConfirmedOperationalSignals(data.signals).slice(0, MAX_HISTORY_ITEMS);
+      state.history = filterConfirmedOperationalSignals(data.signals);
     } else if (data?.ok && Array.isArray(data.data)) {
-      state.history = filterConfirmedOperationalSignals(data.data).slice(0, MAX_HISTORY_ITEMS);
+      state.history = filterConfirmedOperationalSignals(data.data);
     } else {
       state.history = [];
+    }
+
+    const pagination = data?.pagination || {};
+    state.historyPanel.page = Number(pagination.page || state.historyPanel.page || 1);
+    state.historyPanel.limit = Number(pagination.limit || state.historyPanel.limit || 10);
+    state.historyPanel.total = Number(pagination.total || state.history.length);
+    state.historyPanel.totalPages = Math.max(Number(pagination.totalPages || 1), 1);
+
+    if (data?.filters && typeof data.filters === "object") {
+      state.historyPanel.options = {
+        symbols: Array.isArray(data.filters.symbols) ? data.filters.symbols : [],
+        strategies: Array.isArray(data.filters.strategies) ? data.filters.strategies : [],
+        results: Array.isArray(data.filters.results) ? data.filters.results : []
+      };
+      renderHistoryFilters();
     }
 
     scheduleHistoryRender();
     scheduleEquityDraw();
   } catch (error) {
     state.history = [];
+    state.historyPanel.total = 0;
+    state.historyPanel.totalPages = 1;
     scheduleHistoryRender();
     scheduleEquityDraw();
   }
@@ -1445,50 +1497,150 @@ function getHistoryRenderLimit() {
     : MAX_HISTORY_ITEMS;
 }
 
+function normalizeHistoryResult(value) {
+  const result = String(value || "pending").trim().toLowerCase();
+  if (result === "win") return { label: "WIN", className: "win" };
+  if (result === "loss") return { label: "LOSS", className: "loss" };
+  return { label: "PENDENTE", className: "pending" };
+}
+
+function getSignalStrategy(signal = {}) {
+  return signal.strategyName || signal.strategy_name || signal.strategy_label || signal.strategy || "Sem estratégia";
+}
+
+function renderHistoryFilters() {
+  const renderOptions = (select, values = [], placeholder) => {
+    if (!select) return;
+
+    const selected = select.value;
+    select.innerHTML = `<option value="">${placeholder}</option>`;
+
+    values.forEach((value) => {
+      if (!value) return;
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    });
+
+    select.value = selected;
+  };
+
+  renderOptions(el.historyAssetFilter, state.historyPanel.options.symbols, "Todos");
+  renderOptions(el.historyStrategyFilter, state.historyPanel.options.strategies, "Todas");
+
+  if (el.historyResultFilter) {
+    const selected = el.historyResultFilter.value;
+    const defaultResults = ["pending", "win", "loss"];
+    const results = Array.from(new Set([...defaultResults, ...state.historyPanel.options.results]));
+    el.historyResultFilter.innerHTML = `<option value="">Todos</option>`;
+    results.forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = normalizeHistoryResult(value).label;
+      el.historyResultFilter.appendChild(option);
+    });
+    el.historyResultFilter.value = selected;
+  }
+}
+
+function renderHistoryPagination() {
+  const pagination = state.historyPanel;
+  const firstItem = pagination.total ? ((pagination.page - 1) * pagination.limit) + 1 : 0;
+  const lastItem = pagination.total ? Math.min(pagination.page * pagination.limit, pagination.total) : 0;
+
+  if (el.historyPageInfo) {
+    el.historyPageInfo.textContent = `Página ${pagination.page} de ${pagination.totalPages} · ${firstItem}-${lastItem} de ${pagination.total}`;
+  }
+
+  if (el.historyPrevPage) {
+    el.historyPrevPage.disabled = pagination.page <= 1;
+  }
+
+  if (el.historyNextPage) {
+    el.historyNextPage.disabled = pagination.page >= pagination.totalPages;
+  }
+}
+
 function renderHistory() {
   if (!el.historyList) return;
 
+  renderHistoryPagination();
   el.historyList.innerHTML = "";
 
   if (!state.history.length) {
-    el.historyList.innerHTML = `<div class="history-empty">Nenhum sinal ainda</div>`;
-    if (el.historyCount) el.historyCount.textContent = "0";
+    el.historyList.innerHTML = `<div class="history-empty">Nenhum sinal encontrado para os filtros atuais</div>`;
+    if (el.historyCount) el.historyCount.textContent = "0 sinais";
     return;
   }
 
-  const visibleHistory = state.history.slice(0, getHistoryRenderLimit());
+  const table = document.createElement("table");
+  table.className = "signal-history-grid";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Horário</th>
+        <th>Ativo</th>
+        <th>CALL/PUT</th>
+        <th>Score</th>
+        <th>Confidence</th>
+        <th>Estratégia</th>
+        <th>Resultado</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
 
-  visibleHistory.forEach((signal) => {
-    const item = document.createElement("details");
-    item.className = "history-item compact-history-item";
+  const body = table.querySelector("tbody");
 
-    const direction = getOperationalDirection(signal);
-    const score = getOperationalScore(signal);
-    const result = String(signal.result || "PENDING").toUpperCase();
-    const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending";
+  state.history.forEach((signal) => {
+    const direction = getOperationalDirection(signal) || "---";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
-    const signalId = Number(signal.id);
-    const canSetResult = Number.isFinite(signalId) && signalId > 0;
+    const result = normalizeHistoryResult(signal.result);
+    const row = document.createElement("tr");
 
-    item.innerHTML = `
-      <summary class="history-summary-row">
-        <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
-        <span class="badge direction-badge ${directionClass}">${escapeHtml(direction || "---")}</span>
-        <span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span>
-      </summary>
-      <div class="history-detail-row">
-        <span>${formatTime(signal.created_at || signal.createdAt || signal.time)}</span>
-        <span>Score ${score}%</span>
-        ${canSetResult ? `<div class="action-buttons"><button onclick="setResult(${signalId}, 'WIN')">WIN</button><button onclick="setResult(${signalId}, 'LOSS')">LOSS</button></div>` : ""}
-      </div>
+    row.innerHTML = `
+      <td><time>${formatTime(signal.created_at || signal.createdAt || signal.time)}</time></td>
+      <td><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong></td>
+      <td><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span></td>
+      <td><span class="score-badge">${getOperationalScore(signal).toFixed(1)}</span></td>
+      <td>${Number(signal.confidence || 0).toFixed(1)}%</td>
+      <td>${escapeHtml(getSignalStrategy(signal))}</td>
+      <td><span class="badge result-badge ${result.className}">${result.label}</span></td>
     `;
 
-    el.historyList.appendChild(item);
+    body.appendChild(row);
   });
 
+  el.historyList.appendChild(table);
+
   if (el.historyCount) {
-    el.historyCount.textContent = `${visibleHistory.length}/${state.history.length}`;
+    el.historyCount.textContent = `${state.historyPanel.total} sinais`;
   }
+}
+
+function setupHistoryPanel() {
+  const updateFilter = (key, value) => {
+    state.historyPanel.filters[key] = value;
+    state.historyPanel.page = 1;
+    loadHistory();
+  };
+
+  el.historyAssetFilter?.addEventListener("change", (event) => updateFilter("symbol", event.target.value));
+  el.historyStrategyFilter?.addEventListener("change", (event) => updateFilter("strategy", event.target.value));
+  el.historyResultFilter?.addEventListener("change", (event) => updateFilter("result", event.target.value));
+
+  el.historyPrevPage?.addEventListener("click", () => {
+    if (state.historyPanel.page <= 1) return;
+    state.historyPanel.page -= 1;
+    loadHistory();
+  });
+
+  el.historyNextPage?.addEventListener("click", () => {
+    if (state.historyPanel.page >= state.historyPanel.totalPages) return;
+    state.historyPanel.page += 1;
+    loadHistory();
+  });
 }
 
 function normalizeOperationalDirection(value) {
@@ -2040,6 +2192,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startChartLoop();
   startAIEngine();
   setupModeSwitcher();
+  setupHistoryPanel();
   setConnection("Conectando");
 
   const validSession = await checkSession();

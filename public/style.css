@@ -1357,3 +1357,143 @@ body.design-system-institutional .app-shell {
     gap: 6px;
   }
 }
+
+.signal-history-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.signal-history-header {
+  align-items: flex-start;
+}
+
+.signal-history-header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.signal-history-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.signal-history-filters label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.signal-history-filters span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.signal-history-filters select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(240, 207, 130, 0.18);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(3, 4, 6, 0.72);
+  padding: 0 12px;
+  outline: none;
+}
+
+.signal-history-filters select:focus {
+  border-color: rgba(240, 207, 130, 0.42);
+  box-shadow: 0 0 0 3px rgba(240, 207, 130, 0.08);
+}
+
+.signal-history-table {
+  max-height: min(50vh, 520px);
+  overflow: auto;
+  border: 1px solid rgba(240, 207, 130, 0.12);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.signal-history-grid {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.signal-history-grid th,
+.signal-history-grid td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.signal-history-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--gold-2);
+  background: rgba(9, 10, 10, 0.96);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.signal-history-grid td {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.signal-history-grid td strong {
+  color: #fff8e8;
+}
+
+.signal-history-grid time,
+.signal-history-grid .score-badge {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.signal-history-grid tbody tr:hover {
+  background: rgba(240, 207, 130, 0.045);
+}
+
+.signal-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.signal-history-pagination button {
+  min-height: 38px;
+  border: 1px solid rgba(240, 207, 130, 0.2);
+  border-radius: 999px;
+  color: var(--gold-strong);
+  background: rgba(240, 207, 130, 0.08);
+  padding: 0 14px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signal-history-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@media (max-width: 760px) {
+  .signal-history-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-history-pagination {
+    flex-wrap: wrap;
+  }
+}

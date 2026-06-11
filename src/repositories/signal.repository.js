@@ -194,6 +194,94 @@ async function getLatestConfirmed(limit = 20) {
   return result.rows;
 }
 
+async function getSignalHistory({ page = 1, limit = 10, symbol = "", strategy = "", result = "" } = {}) {
+  const safePage = Math.max(Number.parseInt(page, 10) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 10, 1), 100);
+  const offset = (safePage - 1) * safeLimit;
+  const where = [CONFIRMED_OPERATIONAL_WHERE];
+  const values = [];
+
+  const addFilter = (clause, value) => {
+    values.push(value);
+    where.push(clause.replace("?", `$${values.length}`));
+  };
+
+  if (symbol) {
+    addFilter("symbol = ?", symbol);
+  }
+
+  if (strategy) {
+    addFilter("COALESCE(strategy_name, strategy, 'unknown') = ?", strategy);
+  }
+
+  if (result) {
+    addFilter("LOWER(COALESCE(result, 'pending')) = LOWER(?)", result);
+  }
+
+  const whereSql = where.map((clause) => `(${clause})`).join(" AND ");
+  const listValues = [...values, safeLimit, offset];
+
+  const [itemsResult, countResult] = await Promise.all([
+    db.query(
+      `
+      SELECT
+        *,
+        COALESCE(NULLIF(adjusted_score, 0), final_score, confidence, 0) AS score,
+        COALESCE(strategy_name, strategy, 'unknown') AS strategy_label,
+        execution_allowed AS "executionAllowed",
+        minimum_score AS "minimumScore",
+        adjusted_score AS "adjustedScore"
+      FROM public.signal_history
+      WHERE ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}
+      `,
+      listValues
+    ),
+    db.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM public.signal_history
+      WHERE ${whereSql}
+      `,
+      values
+    )
+  ]);
+
+  const total = Number(countResult.rows[0]?.total || 0);
+  const totalPages = Math.max(Math.ceil(total / safeLimit), 1);
+
+  return {
+    items: itemsResult.rows,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages,
+      hasPreviousPage: safePage > 1,
+      hasNextPage: safePage < totalPages
+    }
+  };
+}
+
+async function getSignalHistoryFilterOptions() {
+  const result = await db.query(`
+    SELECT
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT symbol ORDER BY symbol), NULL) AS symbols,
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(strategy_name, strategy, 'unknown') ORDER BY COALESCE(strategy_name, strategy, 'unknown')), NULL) AS strategies,
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT LOWER(COALESCE(result, 'pending')) ORDER BY LOWER(COALESCE(result, 'pending'))), NULL) AS results
+    FROM public.signal_history
+    WHERE ${CONFIRMED_OPERATIONAL_WHERE}
+  `);
+
+  return {
+    symbols: result.rows[0]?.symbols || [],
+    strategies: result.rows[0]?.strategies || [],
+    results: result.rows[0]?.results || []
+  };
+}
+
 async function getStats() {
   try {
     const result = await db.query(`
@@ -683,6 +771,8 @@ module.exports = {
   save,
   getLatest,
   getLatestConfirmed,
+  getSignalHistory,
+  getSignalHistoryFilterOptions,
   getStats,
   getPerformanceBySymbol,
   getPerformanceByHour,
