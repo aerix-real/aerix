@@ -101,30 +101,68 @@ router.get("/market/status", authMiddleware, async (req, res) => {
 
 router.get("/signals/recent", authMiddleware, async (req, res) => {
   try {
-    const state = typeof engineRunner.getState === "function"
-      ? engineRunner.getState()
-      : {};
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 10, 1), 100);
+    const filters = {
+      symbol: String(req.query.symbol || "").trim(),
+      strategy: String(req.query.strategy || "").trim(),
+      result: String(req.query.result || "").trim().toLowerCase()
+    };
 
-    let signals =
-      state.recentSignals ||
-      state.history ||
-      state.signals ||
-      state.latestResults ||
-      [];
-
-    if (!Array.isArray(signals) || signals.length === 0) {
-      signals = await signalRepository.getLatestConfirmed(200);
-    }
+    const [history, filterOptions] = await Promise.all([
+      signalRepository.getSignalHistory({ page, limit, ...filters }),
+      signalRepository.getSignalHistoryFilterOptions()
+    ]);
 
     return res.json({
       ok: true,
-      signals: filterConfirmedOperationalSignals(signals).slice(0, 50)
+      signals: history.items,
+      data: history.items,
+      pagination: history.pagination,
+      filters: filterOptions
     });
   } catch (error) {
-    return res.json({
-      ok: true,
-      signals: []
-    });
+    try {
+      const state = typeof engineRunner.getState === "function"
+        ? engineRunner.getState()
+        : {};
+
+      let signals =
+        state.recentSignals ||
+        state.history ||
+        state.signals ||
+        state.latestResults ||
+        [];
+
+      if (!Array.isArray(signals) || signals.length === 0) {
+        signals = await signalRepository.getLatestConfirmed(200);
+      }
+
+      const filteredSignals = filterConfirmedOperationalSignals(signals).slice(0, 50);
+
+      return res.json({
+        ok: true,
+        signals: filteredSignals,
+        data: filteredSignals,
+        pagination: {
+          page: 1,
+          limit: filteredSignals.length,
+          total: filteredSignals.length,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false
+        },
+        filters: { symbols: [], strategies: [], results: [] }
+      });
+    } catch (fallbackError) {
+      return res.json({
+        ok: true,
+        signals: [],
+        data: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 1, hasPreviousPage: false, hasNextPage: false },
+        filters: { symbols: [], strategies: [], results: [] }
+      });
+    }
   }
 });
 

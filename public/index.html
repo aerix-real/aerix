@@ -157,9 +157,39 @@
           </section>
         </section>
 
-        <section class="panel history-panel compact-history-panel">
-          <div class="panel-header"><h3>Histórico compacto</h3><span id="historyCount">0</span></div>
-          <div class="history-list" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
+        <section class="panel history-panel compact-history-panel signal-history-panel">
+          <div class="panel-header signal-history-header">
+            <div>
+              <h3>Últimos sinais</h3>
+              <span>histórico operacional completo</span>
+            </div>
+            <span id="historyCount">0</span>
+          </div>
+          <div class="signal-history-filters" aria-label="Filtros do histórico de sinais">
+            <label>
+              <span>Ativo</span>
+              <select id="historyAssetFilter"><option value="">Todos</option></select>
+            </label>
+            <label>
+              <span>Estratégia</span>
+              <select id="historyStrategyFilter"><option value="">Todas</option></select>
+            </label>
+            <label>
+              <span>Resultado</span>
+              <select id="historyResultFilter">
+                <option value="">Todos</option>
+                <option value="pending">Pendente</option>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+              </select>
+            </label>
+          </div>
+          <div class="signal-history-table" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
+          <div class="signal-history-pagination" aria-label="Paginação do histórico de sinais">
+            <button id="historyPrevPage" type="button">Anterior</button>
+            <span id="historyPageInfo">Página 1 de 1</span>
+            <button id="historyNextPage" type="button">Próxima</button>
+          </div>
         </section>
 
         <section class="panel advanced-hub-panel secondary-details-panel">
