@@ -379,7 +379,8 @@ function safeEvaluateStrategy(strategy, payload) {
       direction: result?.direction || null,
       score: Number(result?.score || 0),
       context: result?.context || {},
-      explanation: result?.explanation || ""
+      explanation: result?.explanation || "",
+      eligibilityAudit: result?.eligibilityAudit || null
     };
   } catch (error) {
     return {
@@ -388,7 +389,8 @@ function safeEvaluateStrategy(strategy, payload) {
       direction: null,
       score: 0,
       context: {},
-      explanation: error?.message || "Erro ao executar estratégia."
+      explanation: error?.message || "Erro ao executar estratégia.",
+      eligibilityAudit: null
     };
   }
 }
@@ -523,7 +525,8 @@ function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinSco
     direction: item.direction ?? null,
     rawScore: item.rawScore,
     weightedScore: item.weightedScore,
-    explanation: item.explanation || null
+    explanation: item.explanation || null,
+    eligibilityAudit: item.eligibilityAudit || null
   }));
 
   return {
@@ -576,6 +579,86 @@ function emitDirectionAuditLog(payload) {
   console.log(JSON.stringify(payload));
 }
 
+function buildStrategyEligibilityReport(evaluated = []) {
+  const reportByStrategy = evaluated.map((item) => {
+    const audit = item.eligibilityAudit || {};
+    const activated = Boolean(item.valid && item.direction);
+    const blocked = !activated;
+
+    return {
+      strategyName: item.name,
+      activationRate: activated ? 100 : 0,
+      blockRate: blocked ? 100 : 0,
+      activated,
+      blocked,
+      direction: item.direction || null,
+      criteriaPassed: Number(audit.criteriaPassed || 0),
+      criteriaFailed: Number(audit.criteriaFailed || 0),
+      blockedBy: audit.blockedBy || item.explanation || null,
+      partialScore: Number(audit.score ?? item.rawScore ?? item.score ?? 0),
+      rawScore: Number(item.rawScore || item.score || 0),
+      weightedScore: Number(item.weightedScore || 0)
+    };
+  });
+
+  const closestToSignal = [...reportByStrategy]
+    .filter((item) => !item.activated)
+    .sort((left, right) => {
+      if (right.partialScore !== left.partialScore) {
+        return right.partialScore - left.partialScore;
+      }
+
+      return left.criteriaFailed - right.criteriaFailed;
+    })[0] || null;
+
+  return {
+    strategyCount: reportByStrategy.length,
+    activeStrategies: reportByStrategy.filter((item) => item.activated).length,
+    blockedStrategies: reportByStrategy.filter((item) => item.blocked).length,
+    byStrategy: reportByStrategy,
+    closestToSignal
+  };
+}
+
+function buildStrategyEligibilityAuditLog({ snapshot, mode, mtf, marketRegime, dynamicMinScore, evaluated, validStrategies, best }) {
+  const report = buildStrategyEligibilityReport(evaluated);
+
+  return {
+    scope: "aerix_strategy_eligibility_audit",
+    event: "strategyEligibilityAudit",
+    timestamp: new Date().toISOString(),
+    mode: normalizeMode(mode),
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    marketRegime,
+    dynamicMinScore,
+    bestStrategy: best?.name || null,
+    bestDirection: best?.direction || null,
+    bestScore: best ? getCandidateScore(best) : 0,
+    validStrategyCount: validStrategies.length,
+    trendDirection: {
+      h1: mtf?.h1?.direction || mtf?.h1?.trend || "neutral",
+      m15: mtf?.m15?.direction || mtf?.m15?.trend || "neutral",
+      m5: mtf?.m5?.direction || mtf?.m5?.trend || "neutral",
+      dominant: mtf?.dominantDirection || null,
+      alignment: Number(mtf?.alignment || 0)
+    },
+    strategies: evaluated.map((item) => ({
+      name: item.name,
+      valid: item.valid,
+      direction: item.direction || null,
+      score: Number(item.rawScore ?? item.score ?? 0),
+      weightedScore: Number(item.weightedScore || 0),
+      explanation: item.explanation || null,
+      audit: item.eligibilityAudit || null
+    })),
+    report
+  };
+}
+
+function emitStrategyEligibilityAuditLog(payload) {
+  console.log(JSON.stringify(payload));
+}
+
 function runStrategies({ snapshot, mode = "balanced" }) {
   const rules = getModeRules(mode);
   const mtf = buildMtfContext(snapshot);
@@ -608,6 +691,18 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     .sort((a, b) => b.weightedScore - a.weightedScore);
 
   const best = validStrategies[0] || null;
+
+  emitStrategyEligibilityAuditLog(buildStrategyEligibilityAuditLog({
+    snapshot,
+    mode,
+    mtf,
+    marketRegime,
+    dynamicMinScore,
+    evaluated,
+    validStrategies,
+    best
+  }));
+
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
 
 
@@ -660,6 +755,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
           ? marketValidation.blocks
           : ["Nenhuma estratégia válida encontrada."],
       strategies: evaluated,
+      strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
       mtf,
       marketRegime: effectiveMarketRegime,
       dynamicMinScore: effectiveDynamicMinScore,
@@ -726,6 +822,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       ]),
       blocks: [`Score ${confidence} abaixo do mínimo dinâmico crítico ${effectiveDynamicMinScore}.`],
       strategies: evaluated,
+      strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
       mtf,
       marketRegime: effectiveMarketRegime,
       dynamicMinScore: effectiveDynamicMinScore,
@@ -778,6 +875,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     ]),
     blocks: [],
     strategies: evaluated,
+    strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
     mtf,
     marketRegime: effectiveMarketRegime,
     dynamicMinScore: effectiveDynamicMinScore,
