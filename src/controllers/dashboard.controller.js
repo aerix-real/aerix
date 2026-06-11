@@ -1,7 +1,53 @@
 const engineRunnerService = require("../services/engine-runner.service");
 const analyticsService = require("../services/analytics.service");
 const filterAnalyticsService = require("../services/filter-analytics.service");
+const engineDebugService = require("../services/engine-debug.service");
 const { filterConfirmedOperationalSignals } = require("../utils/signal-history-filter");
+
+
+function isExecutionAllowedSignal(signal = {}) {
+  const direction = String(signal.signal || signal.direction || "").toUpperCase();
+  return (direction === "CALL" || direction === "PUT") &&
+    (signal.executionAllowed === true || signal.execution_allowed === true);
+}
+
+function normalizeApprovedDisplaySignal(signal = {}) {
+  if (!signal || typeof signal !== "object") return null;
+
+  const direction = String(signal.signal || signal.direction || "WAIT").toUpperCase();
+
+  return {
+    ...signal,
+    symbol: signal.symbol || signal.asset || "ENGINE",
+    asset: signal.asset || signal.symbol || "ENGINE",
+    signal: direction,
+    direction,
+    confidence: Number(signal.confidence || signal.score || signal.finalScore || 0),
+    finalScore: Number(signal.finalScore || signal.score || signal.confidence || 0),
+    score: Number(signal.score || signal.finalScore || signal.confidence || 0),
+    executionAllowed: true,
+    execution_allowed: true,
+    blocked: false,
+    timestamp: signal.timestamp || signal.created_at || signal.createdAt || new Date().toISOString(),
+    displaySource: signal.displaySource || signal.stage || signal.source || "after_execution_validation"
+  };
+}
+
+function findExecutionAllowedSignal(...collections) {
+  for (const collection of collections) {
+    const items = Array.isArray(collection) ? collection : [collection];
+    const approved = items.find(isExecutionAllowedSignal);
+
+    if (approved) return normalizeApprovedDisplaySignal(approved);
+  }
+
+  return null;
+}
+
+function findDebugApprovedSignal() {
+  const summary = engineDebugService.getDebugSummary();
+  return findExecutionAllowedSignal(summary.recentEvents || []);
+}
 
 async function getDashboard(req, res) {
   try {
@@ -13,6 +59,7 @@ async function getDashboard(req, res) {
     ]);
 
     const bestOpportunity = engineState.bestOpportunity || null;
+    const approvedDisplaySignal = findExecutionAllowedSignal(bestOpportunity, engineState.latestResults || []) || findDebugApprovedSignal();
     const confirmedLatestResults = filterConfirmedOperationalSignals(engineState.latestResults || []);
     const ranking = Array.isArray(confirmedLatestResults)
       ? confirmedLatestResults.slice(0, 8).map((item) => ({
@@ -36,7 +83,9 @@ async function getDashboard(req, res) {
       ok: true,
       data: {
         signalCenter: {
-          bestOpportunity
+          bestOpportunity: approvedDisplaySignal || bestOpportunity,
+          approvedSignal: approvedDisplaySignal,
+          displaySource: approvedDisplaySignal?.displaySource || (bestOpportunity ? "bestOpportunity" : null)
         },
         ranking,
         history: analytics.recentHistory,

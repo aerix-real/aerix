@@ -1249,7 +1249,7 @@ function normalizeSignalCollection(value) {
 
 function extractRuntimeSignals(runtimeData = {}) {
   const data = normalizeDashboardData(runtimeData);
-  const bestOpportunity = data.signalCenter?.bestOpportunity || data.bestOpportunity || data.lastSignal || data.currentSignal || null;
+  const bestOpportunity = resolvePrimaryDisplaySignal(data);
   const ranking = normalizeSignalCollection(data.ranking || data.latestResults);
   const history = normalizeSignalCollection(data.history || data.recentHistory);
   const blockedAnalyses = normalizeSignalCollection(data.blockedAnalyses || data.blocked_analyses);
@@ -1264,6 +1264,66 @@ function extractRuntimeSignals(runtimeData = {}) {
     analytics: data.analytics || {},
     operationalMonitor: data.operationalMonitor || data.runtime?.operationalMonitor || null
   };
+}
+
+
+function isExecutionAllowedSignal(signal = {}) {
+  const direction = String(signal.signal || signal.direction || "").toUpperCase();
+  return (direction === "CALL" || direction === "PUT") &&
+    (signal.executionAllowed === true || signal.execution_allowed === true);
+}
+
+function findExecutionAllowedSignal(...collections) {
+  for (const collection of collections) {
+    const items = normalizeSignalCollection(collection);
+    const approved = items.find(isExecutionAllowedSignal);
+
+    if (approved) return {
+      ...approved,
+      signal: String(approved.signal || approved.direction).toUpperCase(),
+      direction: String(approved.direction || approved.signal).toUpperCase(),
+      executionAllowed: true,
+      execution_allowed: true,
+      blocked: false
+    };
+  }
+
+  return null;
+}
+
+function resolvePrimaryDisplaySignal(data = {}) {
+  const signalCenter = data.signalCenter || {};
+  const directSignal = signalCenter.approvedSignal ||
+    signalCenter.finalApprovedSignal ||
+    signalCenter.displaySignal ||
+    signalCenter.bestOpportunity ||
+    data.approvedSignal ||
+    data.finalApprovedSignal ||
+    data.bestOpportunity ||
+    data.lastSignal ||
+    data.currentSignal ||
+    null;
+
+  if (isExecutionAllowedSignal(directSignal)) {
+    return {
+      ...directSignal,
+      signal: String(directSignal.signal || directSignal.direction).toUpperCase(),
+      direction: String(directSignal.direction || directSignal.signal).toUpperCase(),
+      executionAllowed: true,
+      execution_allowed: true,
+      blocked: false
+    };
+  }
+
+  return directSignal || findExecutionAllowedSignal(
+    signalCenter.candidates,
+    data.ranking,
+    data.latestResults,
+    data.history,
+    data.recentHistory,
+    data.blockedAnalyses,
+    data.blocked_analyses
+  );
 }
 
 function upsertBySignature(collection, item, limit = 12) {
@@ -2099,7 +2159,8 @@ async function loadRuntimeIntegrations() {
   syncRuntimeDashboard(dashboardData);
 
   const runtimeState = state.engineSnapshot || state.dashboardSnapshot || {};
-  const runtimeSignal = runtimeState.lastSignal || runtimeState.currentSignal || runtimeState.bestOpportunity || null;
+  const dashboardSignal = resolvePrimaryDisplaySignal(state.dashboardSnapshot || {});
+  const runtimeSignal = resolvePrimaryDisplaySignal(runtimeState) || dashboardSignal || null;
   updateInstitutionalCards(runtimeSignal || {});
   updateRealtimeMetrics(runtimeSignal || {});
   updateCompactOperations(runtimeSignal || {}, "runtime");
