@@ -6,6 +6,39 @@ function toWinRate(wins, losses) {
   return Number(((Number(wins || 0) / total) * 100).toFixed(2));
 }
 
+function mapOutcomeAnalytics(rows = []) {
+  const buckets = {
+    global: null,
+    byAsset: [],
+    byStrategy: [],
+    byRegime: []
+  };
+
+  for (const row of rows) {
+    const item = {
+      scopeKey: row.scope_key,
+      symbol: row.symbol,
+      strategyName: row.strategy_name,
+      marketRegime: row.market_regime,
+      total: Number(row.total || 0),
+      wins: Number(row.wins || 0),
+      losses: Number(row.losses || 0),
+      draws: Number(row.draws || 0),
+      winrate: Number(row.winrate || 0),
+      lossrate: Number(row.lossrate || 0),
+      drawrate: Number(row.drawrate || 0),
+      updatedAt: row.updated_at
+    };
+
+    if (row.scope_type === "global") buckets.global = item;
+    if (row.scope_type === "asset") buckets.byAsset.push(item);
+    if (row.scope_type === "strategy") buckets.byStrategy.push(item);
+    if (row.scope_type === "regime") buckets.byRegime.push(item);
+  }
+
+  return buckets;
+}
+
 function buildAdaptiveInsights(symbols = [], hours = []) {
   const bestSymbol = [...symbols]
     .map((item) => ({
@@ -48,19 +81,21 @@ async function getPerformanceDashboard() {
 }
 
 async function getGlobalAnalytics() {
-  const [stats, topSymbols, hourlyPerformance, directionalPerformance, recentHistory] =
+  const [stats, topSymbols, hourlyPerformance, directionalPerformance, recentHistory, outcomeRows] =
     await Promise.all([
       signalRepository.getStats(),
       signalRepository.getTopSymbols(8),
       signalRepository.getHourlyPerformance(24),
       signalRepository.getDirectionalPerformance(),
-      signalRepository.getLatestConfirmed(20)
+      signalRepository.getLatestConfirmed(20),
+      signalRepository.getOutcomeAnalytics()
     ]);
 
   const resolvedBuckets = Object.values(stats?.bySignal || {});
   const wins = resolvedBuckets.reduce((sum, item) => sum + Number(item.wins || 0), 0);
   const losses = resolvedBuckets.reduce((sum, item) => sum + Number(item.losses || 0), 0);
-  const totalResolved = wins + losses;
+  const draws = resolvedBuckets.reduce((sum, item) => sum + Number(item.draws || 0), 0);
+  const totalResolved = wins + losses + draws;
   const totalSignals = recentHistory.length;
   const callCount = Number(stats?.bySignal?.CALL?.total || 0);
   const putCount = Number(stats?.bySignal?.PUT?.total || 0);
@@ -75,6 +110,7 @@ async function getGlobalAnalytics() {
     totalSignals,
     wins,
     losses,
+    draws,
     totalResolved,
     winRate: toWinRate(wins, losses),
     avgConfidence: Number(avgConfidence.toFixed(2)),
@@ -88,6 +124,7 @@ async function getGlobalAnalytics() {
     total: Number(item.total || 0),
     wins: Number(item.wins || 0),
     losses: Number(item.losses || 0),
+    draws: Number(item.draws || 0),
     winRate: toWinRate(item.wins, item.losses),
     avgConfidence: Number(item.avg_confidence || 0),
     avgFinalScore: Number(item.avg_final_score || 0)
@@ -98,6 +135,7 @@ async function getGlobalAnalytics() {
     total: Number(item.total || 0),
     wins: Number(item.wins || 0),
     losses: Number(item.losses || 0),
+    draws: Number(item.draws || 0),
     winRate: toWinRate(item.wins, item.losses),
     avgFinalScore: Number(item.avg_final_score || 0)
   }));
@@ -107,14 +145,17 @@ async function getGlobalAnalytics() {
     total: Number(item.total || 0),
     wins: Number(item.wins || 0),
     losses: Number(item.losses || 0),
+    draws: Number(item.draws || 0),
     winRate: toWinRate(item.wins, item.losses),
     avgFinalScore: Number(item.avg_final_score || 0)
   }));
 
   const adaptiveInsights = buildAdaptiveInsights(symbols, hours);
+  const outcomeAnalytics = mapOutcomeAnalytics(outcomeRows);
 
   return {
     summary,
+    outcomeAnalytics,
     symbolPerformance: symbols,
     hourPerformance: hours,
     directionalPerformance: directions,

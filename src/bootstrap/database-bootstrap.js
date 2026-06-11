@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const db = require("../config/database");
 
 
@@ -281,6 +283,21 @@ async function ensureSignalHistoryTable() {
       ELSE FALSE
     END;
   `);
+}
+
+async function ensureOutcomeAnalyticsTable() {
+  const migrationPath = path.resolve(__dirname, "../db/migrations/014_outcome_tracking_analytics.sql");
+
+  try {
+    const sql = fs.readFileSync(migrationPath, "utf8");
+    await db.query(sql);
+  } catch (err) {
+    logSchemaWarning("outcome_analytics_bootstrap_failed", {
+      migrationPath,
+      error: err.message
+    });
+    throw err;
+  }
 }
 
 async function ensureUsersTable() {
@@ -685,6 +702,7 @@ async function bootstrapDatabase() {
   await ensureSessionsTable();
   await ensureUserSettingsTable();
   await ensureSignalHistoryTable();
+  await ensureOutcomeAnalyticsTable();
   await ensureBillingTable();
   await ensureAuditLogsTable();
   await ensureFilterBlockEventsTable();

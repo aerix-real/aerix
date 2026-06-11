@@ -46,6 +46,7 @@ async function getDashboard(req, res) {
             total: analytics.summary.totalSignals,
             wins: analytics.summary.wins,
             losses: analytics.summary.losses,
+            draws: analytics.summary.draws,
             winRate: analytics.summary.winRate,
             avgConfidence: analytics.summary.avgConfidence,
             avgFinalScore: analytics.summary.avgFinalScore,
@@ -55,6 +56,7 @@ async function getDashboard(req, res) {
           symbolPerformance: analytics.symbolPerformance,
           hourPerformance: analytics.hourPerformance,
           directionalPerformance: analytics.directionalPerformance,
+          outcomeAnalytics: analytics.outcomeAnalytics,
           adaptiveInsights: analytics.adaptiveInsights,
           performanceDashboard,
           filters: {
@@ -137,6 +139,7 @@ async function getHistory(req, res) {
         symbolPerformance: analytics.symbolPerformance,
         hourPerformance: analytics.hourPerformance,
         directionalPerformance: analytics.directionalPerformance,
+        outcomeAnalytics: analytics.outcomeAnalytics,
         adaptiveInsights: analytics.adaptiveInsights
       }
     });
