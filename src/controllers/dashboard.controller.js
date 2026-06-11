@@ -68,6 +68,7 @@ async function getDashboard(req, res) {
             topBlockingFilters: filterAnalytics.topBlockingFilters
           }
         },
+        operationalMonitor: engineState.operationalMonitor || null,
         connection: {
           engineRunning: engineState.isRunning,
           isProcessing: engineState.isProcessing,

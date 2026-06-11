@@ -12,6 +12,13 @@ router.get(
   runtimeController.getRuntimeState
 );
 
+router.get(
+  "/monitor",
+  authMiddleware,
+  roleMiddleware("admin"),
+  runtimeController.getOperationalMonitor
+);
+
 router.post(
   "/start",
   authMiddleware,

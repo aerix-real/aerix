@@ -99,6 +99,15 @@ const el = {
   topCurrentMode: document.getElementById("topCurrentMode"),
   rateLimitStatus: document.getElementById("rateLimitStatus"),
   websocketStatus: document.getElementById("websocketStatus"),
+  monitorUptime: document.getElementById("monitorUptime"),
+  monitorTwelveDataRequests: document.getElementById("monitorTwelveDataRequests"),
+  monitorTwelveDataBudget: document.getElementById("monitorTwelveDataBudget"),
+  monitorCacheHitRate: document.getElementById("monitorCacheHitRate"),
+  monitorCacheLookups: document.getElementById("monitorCacheLookups"),
+  monitorAnalyzedSignals: document.getElementById("monitorAnalyzedSignals"),
+  monitorApprovedSignals: document.getElementById("monitorApprovedSignals"),
+  monitorLastExecution: document.getElementById("monitorLastExecution"),
+  monitorLastStatus: document.getElementById("monitorLastStatus"),
 
   historyList: document.getElementById("historyList"),
   historyCount: document.getElementById("historyCount"),
@@ -532,6 +541,7 @@ function applyPlanLocks() {
 
   updateInstitutionalCards();
   updateRealtimeMetrics();
+  updateOperationalMonitor({});
   renderOperationalHeatmap();
 }
 
@@ -749,6 +759,41 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.lastCycleCompact, cycleTime);
   setTextContent(el.rateLimitStatus, rateLimit);
   setTextContent(el.websocketStatus, socket.connected ? "Online" : "Reconectando");
+}
+
+function formatDuration(ms = 0) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  return `${seconds}s`;
+}
+
+function updateOperationalMonitor(monitor = {}) {
+  const uptimeMs = Number(monitor.uptimeMs || 0);
+  const requestsToday = Number(monitor.twelveDataRequestsToday || 0);
+  const dailyBudget = monitor.twelveDataDailyBudget;
+  const cacheHitRate = Number(monitor.cacheHitRate || 0);
+  const cacheTotalLookups = Number(monitor.cacheTotalLookups || 0);
+  const cacheHits = Number(monitor.cacheHits || 0);
+  const analyzedSignals = Number(monitor.analyzedSignals || 0);
+  const approvedSignals = Number(monitor.approvedSignals || 0);
+
+  setTextContent(el.monitorUptime, monitor.isRunning ? formatDuration(uptimeMs) : "parada");
+  setTextContent(el.monitorTwelveDataRequests, String(requestsToday));
+  setTextContent(
+    el.monitorTwelveDataBudget,
+    dailyBudget ? `${requestsToday}/${dailyBudget} requests do dia` : "Budget diário não configurado"
+  );
+  setTextContent(el.monitorCacheHitRate, `${cacheHitRate.toFixed(1)}%`);
+  setTextContent(el.monitorCacheLookups, `${cacheHits}/${cacheTotalLookups} hits assistidos`);
+  setTextContent(el.monitorAnalyzedSignals, String(analyzedSignals));
+  setTextContent(el.monitorApprovedSignals, String(approvedSignals));
+  setTextContent(el.monitorLastExecution, monitor.lastExecutionAt ? formatTime(monitor.lastExecutionAt) : "--");
+  setTextContent(el.monitorLastStatus, `${monitor.status || "standby"} · ${monitor.day || "hoje"}`);
 }
 
 function renderAIInsights(signal = {}) {
@@ -1081,7 +1126,8 @@ function extractRuntimeSignals(runtimeData = {}) {
     blockedAnalyses,
     connection: data.connection || {},
     filters: data.filters || {},
-    analytics: data.analytics || {}
+    analytics: data.analytics || {},
+    operationalMonitor: data.operationalMonitor || data.runtime?.operationalMonitor || null
   };
 }
 
@@ -1282,6 +1328,10 @@ function renderFilterPerformance(data = {}) {
 function syncRuntimeDashboard(runtimePayload = {}) {
   const runtime = extractRuntimeSignals(runtimePayload);
   const latestSignal = runtime.bestOpportunity || runtime.ranking[0] || runtime.history[0] || null;
+
+  if (runtime.operationalMonitor) {
+    updateOperationalMonitor(runtime.operationalMonitor);
+  }
 
   if (runtime.bestOpportunity) {
     renderSignal(runtime.bestOpportunity);
@@ -1786,6 +1836,7 @@ async function bootPanel() {
   ensureFilterPerformancePanel();
   updateInstitutionalCards();
   updateRealtimeMetrics();
+  updateOperationalMonitor({});
   renderOperationalHeatmap();
   renderAIInsights();
   drawEquityCurve();
