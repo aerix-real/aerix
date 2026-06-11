@@ -28,8 +28,10 @@ function createStatsBucket() {
     total: 0,
     wins: 0,
     losses: 0,
+    draws: 0,
     winrate: 0,
-    lossrate: 0
+    lossrate: 0,
+    drawrate: 0
   };
 }
 
@@ -66,6 +68,7 @@ function updateBucket(bucket, result) {
 
   if (result === "win") bucket.wins += 1;
   if (result === "loss") bucket.losses += 1;
+  if (result === "draw") bucket.draws += 1;
 }
 
 function finalizeBucket(bucket) {
@@ -75,6 +78,10 @@ function finalizeBucket(bucket) {
 
   bucket.lossrate = bucket.total
     ? Math.round((bucket.losses / bucket.total) * 100)
+    : 0;
+
+  bucket.drawrate = bucket.total
+    ? Math.round((bucket.draws / bucket.total) * 100)
     : 0;
 }
 
@@ -208,7 +215,7 @@ async function getStats() {
       entry_quality,
       market_regime
     FROM public.signal_history
-    WHERE result IN ('win', 'loss')
+    WHERE result IN ('win', 'loss', 'draw')
       AND ${CONFIRMED_OPERATIONAL_WHERE}
     ORDER BY created_at DESC
     LIMIT 1000
@@ -329,6 +336,7 @@ async function getPerformanceBySymbol(symbol) {
       COUNT(*)::int as total,
       COUNT(*) FILTER (WHERE result = 'win')::int as wins,
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
+      COUNT(*) FILTER (WHERE result = 'draw')::int as draws,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
     WHERE symbol = $1
@@ -347,6 +355,7 @@ async function getPerformanceByHour() {
       COUNT(*)::int as total,
       COUNT(*) FILTER (WHERE result = 'win')::int as wins,
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
+      COUNT(*) FILTER (WHERE result = 'draw')::int as draws,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
     WHERE ${CONFIRMED_OPERATIONAL_WHERE}
@@ -367,11 +376,16 @@ function mapWinrateRow(row = {}, keyField = null) {
   const total = Number(row.total || 0);
   const wins = Number(row.wins || 0);
   const losses = Number(row.losses || 0);
+  const draws = Number(row.draws || 0);
+  const resolvedTotal = total || wins + losses + draws;
   const payload = {
     total,
     wins,
     losses,
-    winrate: calculateRate(wins, wins + losses)
+    draws,
+    winrate: calculateRate(wins, resolvedTotal),
+    lossrate: calculateRate(losses, resolvedTotal),
+    drawrate: calculateRate(draws, resolvedTotal)
   };
 
   if (keyField) payload[keyField] = row[keyField];
@@ -461,18 +475,20 @@ async function getOperationalOverview() {
 
     db.query(`
       SELECT
-        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss', 'draw'))::int AS total,
         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
-        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+        COUNT(*) FILTER (WHERE result = 'draw')::int AS draws
       FROM public.signal_history
       WHERE created_at >= NOW() - INTERVAL '24 hours'
         AND ${CONFIRMED_OPERATIONAL_WHERE}
     `),
     db.query(`
       SELECT
-        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss', 'draw'))::int AS total,
         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
-        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+        COUNT(*) FILTER (WHERE result = 'draw')::int AS draws
       FROM public.signal_history
       WHERE created_at >= NOW() - INTERVAL '7 days'
         AND ${CONFIRMED_OPERATIONAL_WHERE}
@@ -480,9 +496,10 @@ async function getOperationalOverview() {
     db.query(`
       SELECT
         symbol,
-        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss', 'draw'))::int AS total,
         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
-        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+        COUNT(*) FILTER (WHERE result = 'draw')::int AS draws
       FROM public.signal_history
       WHERE created_at >= NOW() - INTERVAL '7 days'
         AND ${CONFIRMED_OPERATIONAL_WHERE}
@@ -492,9 +509,10 @@ async function getOperationalOverview() {
     db.query(`
       SELECT
         COALESCE(strategy_name, 'unknown') AS strategy_name,
-        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss', 'draw'))::int AS total,
         COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
-        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+        COUNT(*) FILTER (WHERE result = 'draw')::int AS draws
       FROM public.signal_history
       WHERE created_at >= NOW() - INTERVAL '7 days'
         AND ${CONFIRMED_OPERATIONAL_WHERE}
@@ -597,12 +615,16 @@ async function getExpiredPendingSignals(limit = 50) {
   return result.rows;
 }
 
+async function refreshOutcomeAnalytics() {
+  await db.query("SELECT public.refresh_outcome_analytics()");
+}
+
 async function finalizeSignalResult(id, { result, resultPrice }) {
   const response = await db.query(
     `
     UPDATE public.signal_history
     SET
-      result = $1,
+      result = COALESCE($1, public.calculate_signal_outcome(signal, direction, entry_price, $2), result),
       result_price = $2,
       checked_at = NOW()
     WHERE id = $3
@@ -614,6 +636,50 @@ async function finalizeSignalResult(id, { result, resultPrice }) {
   return response.rows[0] || null;
 }
 
+async function getOutcomeAnalytics() {
+  try {
+    const result = await db.query(
+      `
+      SELECT
+        scope_type,
+        scope_key,
+        symbol,
+        strategy_name,
+        market_regime,
+        total,
+        wins,
+        losses,
+        draws,
+        winrate,
+        lossrate,
+        drawrate,
+        updated_at
+      FROM public.analytics
+      WHERE scope_type IN ('global', 'asset', 'strategy', 'regime')
+      ORDER BY
+        CASE scope_type
+          WHEN 'global' THEN 0
+          WHEN 'asset' THEN 1
+          WHEN 'strategy' THEN 2
+          WHEN 'regime' THEN 3
+          ELSE 4
+        END,
+        winrate DESC,
+        total DESC,
+        scope_key ASC
+      `
+    );
+
+    return result.rows;
+  } catch (error) {
+    if (error?.code === "42P01" || error?.code === "42883") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function getTopSymbols(limit = 8) {
   const result = await db.query(
     `
@@ -622,6 +688,7 @@ async function getTopSymbols(limit = 8) {
       COUNT(*)::int as total,
       COUNT(*) FILTER (WHERE result = 'win')::int as wins,
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
+      COUNT(*) FILTER (WHERE result = 'draw')::int as draws,
       COALESCE(AVG(confidence), 0)::numeric(10,2) as avg_confidence,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
@@ -648,6 +715,7 @@ async function getHourlyPerformance(limit = 24) {
       COUNT(*)::int as total,
       COUNT(*) FILTER (WHERE result = 'win')::int as wins,
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
+      COUNT(*) FILTER (WHERE result = 'draw')::int as draws,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
     WHERE ${CONFIRMED_OPERATIONAL_WHERE}
@@ -668,6 +736,7 @@ async function getDirectionalPerformance() {
       COUNT(*)::int as total,
       COUNT(*) FILTER (WHERE result = 'win')::int as wins,
       COUNT(*) FILTER (WHERE result = 'loss')::int as losses,
+      COUNT(*) FILTER (WHERE result = 'draw')::int as draws,
       COALESCE(AVG(final_score), 0)::numeric(10,2) as avg_final_score
     FROM public.signal_history
     WHERE ${CONFIRMED_OPERATIONAL_WHERE}
@@ -689,7 +758,9 @@ module.exports = {
   getOperationalOverview,
   updateSignalResult,
   getExpiredPendingSignals,
+  refreshOutcomeAnalytics,
   finalizeSignalResult,
+  getOutcomeAnalytics,
   getTopSymbols,
   getHourlyPerformance,
   getDirectionalPerformance

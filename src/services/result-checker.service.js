@@ -17,17 +17,21 @@ class ResultCheckerService {
   resolveSignalResult(signal, resultPrice) {
     const entryPrice = this.normalizePrice(signal.entry_price);
 
-    if (!entryPrice || !resultPrice) {
+    if (entryPrice === null || resultPrice === null) {
       return "loss";
+    }
+
+    if (resultPrice === entryPrice) {
+      return "draw";
     }
 
     const direction = String(signal.signal || signal.direction || "").toUpperCase();
 
-    if (direction === "CALL") {
+    if (["CALL", "BUY", "LONG"].includes(direction)) {
       return resultPrice > entryPrice ? "win" : "loss";
     }
 
-    if (direction === "PUT") {
+    if (["PUT", "SELL", "SHORT"].includes(direction)) {
       return resultPrice < entryPrice ? "win" : "loss";
     }
 

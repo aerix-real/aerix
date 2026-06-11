@@ -5,7 +5,7 @@ const path = require("path");
 
 const repoRoot = path.resolve(__dirname, "..");
 const sourceRoots = ["src"];
-const migrationPath = path.join(repoRoot, "src/db/migrations/012_complete_schema_audit_compatibility.sql");
+const migrationsDir = path.join(repoRoot, "src/db/migrations");
 
 const requiredSchema = {
   users: [
@@ -173,6 +173,24 @@ const requiredSchema = {
     "losses",
     "last_results",
     "updated_at"
+  ],
+  analytics: [
+    "id",
+    "scope_type",
+    "scope_key",
+    "symbol",
+    "strategy_name",
+    "market_regime",
+    "total",
+    "wins",
+    "losses",
+    "draws",
+    "winrate",
+    "lossrate",
+    "drawrate",
+    "metadata",
+    "updated_at",
+    "created_at"
   ]
 };
 
@@ -203,7 +221,9 @@ const requiredIndexes = [
   "idx_threshold_history_strategy_created",
   "idx_threshold_changes_scope_created",
   "idx_threshold_performance_scope_unique",
-  "idx_ai_loss_memory_key_unique"
+  "idx_ai_loss_memory_key_unique",
+  "idx_analytics_scope",
+  "idx_analytics_scope_winrate"
 ];
 
 function walk(dir) {
@@ -220,7 +240,13 @@ function normalizeTableName(name) {
   return name.replace(/^public\./, "");
 }
 
-const migration = fs.readFileSync(migrationPath, "utf8").toLowerCase();
+const migration = fs
+  .readdirSync(migrationsDir)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => fs.readFileSync(path.join(migrationsDir, file), "utf8"))
+  .join("\n")
+  .toLowerCase();
 const sourceFiles = sourceRoots.flatMap((root) => walk(path.join(repoRoot, root)));
 const sourceSql = sourceFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n").toLowerCase();
 
@@ -240,7 +266,12 @@ while ((match = tableRegex.exec(sourceSql))) {
     "pg_namespace",
     "users_id_type",
     "current_user_id_type",
-    "public"
+    "public",
+    "of",
+    "or",
+    "base",
+    "aggregated",
+    "metrics"
   ].includes(table)) referencedTables.add(table);
 }
 
@@ -289,4 +320,4 @@ if (failures.length) {
 }
 
 console.log("✅ Compatibilidade estática validada: tabelas, colunas e índices requeridos pelas queries estão cobertos.");
-console.log("✅ Alvos de erro 42703/42P01 cobertos pelas migrations de compatibilidade 012/013.");
+console.log("✅ Alvos de erro 42703/42P01 cobertos pelas migrations de compatibilidade 012/013/014.");
