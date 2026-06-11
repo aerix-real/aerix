@@ -225,14 +225,17 @@ function trackTwelveDataRequest(symbol, interval) {
 }
 
 function trackCacheHit() {
+  resetDailyProviderBudgetIfNeeded();
   twelveDataMetrics.cacheHits += 1;
 }
 
 function trackInFlightHit() {
+  resetDailyProviderBudgetIfNeeded();
   twelveDataMetrics.inFlightHits += 1;
 }
 
 function trackFallbackRequest() {
+  resetDailyProviderBudgetIfNeeded();
   twelveDataMetrics.fallbackRequests += 1;
 }
 
@@ -259,6 +262,31 @@ function estimatePostCacheRequestsPerDay({ symbols, intervalMs, maxSymbolsPerCyc
 
     return total + timeframeTotal;
   }, 0);
+}
+
+function buildTwelveDataOperationalMetrics() {
+  resetDailyProviderBudgetIfNeeded();
+
+  const requestsToday = Number(twelveDataMetrics.providerRequests || 0);
+  const cacheHits = Number(twelveDataMetrics.cacheHits || 0);
+  const inFlightHits = Number(twelveDataMetrics.inFlightHits || 0);
+  const fallbackRequests = Number(twelveDataMetrics.fallbackRequests || 0);
+  const totalLookups = requestsToday + cacheHits + inFlightHits + fallbackRequests;
+  const cacheAssistedHits = cacheHits + inFlightHits;
+  const cacheHitRate = totalLookups
+    ? Number(((cacheAssistedHits / totalLookups) * 100).toFixed(2))
+    : 0;
+
+  return {
+    day: twelveDataMetrics.budgetDay,
+    requestsToday,
+    cacheHits,
+    inFlightHits,
+    fallbackRequests,
+    totalLookups,
+    cacheHitRate,
+    dailyBudget: MAX_PROVIDER_REQUESTS_PER_DAY
+  };
 }
 
 function buildTwelveDataConsumptionReport(options = {}) {
@@ -902,6 +930,7 @@ module.exports = {
   getMarketSnapshot,
   getMarketStatus,
   buildTwelveDataConsumptionReport,
+  buildTwelveDataOperationalMetrics,
   _internals: {
     CANDLE_EXPECTED_FIELDS,
     describeCandleFields,

@@ -14,6 +14,20 @@ async function getRuntimeState(req, res) {
   }
 }
 
+async function getOperationalMonitor(req, res) {
+  try {
+    return res.status(200).json({
+      ok: true,
+      data: engineRunnerService.getOperationalMonitor()
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: error.message || "Erro ao buscar monitor operacional."
+    });
+  }
+}
+
 async function startEngine(req, res) {
   try {
     const state = engineRunnerService.start();
@@ -67,6 +81,7 @@ async function runCycleNow(req, res) {
 
 module.exports = {
   getRuntimeState,
+  getOperationalMonitor,
   startEngine,
   stopEngine,
   runCycleNow

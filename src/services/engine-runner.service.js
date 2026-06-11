@@ -106,6 +106,13 @@ class EngineRunnerService {
     this.historyStats = {};
     this.lastCycleAt = null;
     this.lastStatus = "standby";
+    this.startedAt = null;
+    this.operationalStats = {
+      day: new Date().toISOString().slice(0, 10),
+      analyzedSignals: 0,
+      approvedSignals: 0,
+      lastExecutionAt: null
+    };
 
     this.rateLimiter = new RateLimiterService({
       maxPerMinute: Number(process.env.MAX_REQUESTS_PER_MINUTE || 3)
@@ -120,6 +127,7 @@ class EngineRunnerService {
     console.log("🚀 Engine institucional iniciada...");
     this.running = true;
     this.lastStatus = "running";
+    this.startedAt = new Date().toISOString();
 
     this.runCycle();
 
@@ -136,6 +144,65 @@ class EngineRunnerService {
       clearInterval(this.interval);
       this.interval = null;
     }
+  }
+
+  resetOperationalStatsIfNeeded() {
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (this.operationalStats.day === today) return;
+
+    this.operationalStats = {
+      day: today,
+      analyzedSignals: 0,
+      approvedSignals: 0,
+      lastExecutionAt: null
+    };
+  }
+
+  recordOperationalAnalysis(result = {}) {
+    this.resetOperationalStatsIfNeeded();
+    this.operationalStats.analyzedSignals += 1;
+    this.operationalStats.lastExecutionAt = new Date().toISOString();
+
+    if (isConfirmedOperationalSignal(result)) {
+      this.operationalStats.approvedSignals += 1;
+    }
+  }
+
+  getEngineUptimeMs() {
+    if (!this.running || !this.startedAt) return 0;
+
+    const startedAtMs = new Date(this.startedAt).getTime();
+    if (!Number.isFinite(startedAtMs)) return 0;
+
+    return Math.max(0, Date.now() - startedAtMs);
+  }
+
+  getOperationalMonitor() {
+    this.resetOperationalStatsIfNeeded();
+
+    const twelveData = typeof marketData.buildTwelveDataOperationalMetrics === "function"
+      ? marketData.buildTwelveDataOperationalMetrics()
+      : null;
+
+    return {
+      status: this.lastStatus,
+      isRunning: this.running,
+      isProcessing: this.isProcessing,
+      startedAt: this.startedAt,
+      uptimeMs: this.getEngineUptimeMs(),
+      uptimeSeconds: Math.floor(this.getEngineUptimeMs() / 1000),
+      twelveDataRequestsToday: twelveData?.requestsToday || 0,
+      twelveDataDailyBudget: twelveData?.dailyBudget || null,
+      cacheHitRate: twelveData?.cacheHitRate || 0,
+      cacheHits: twelveData?.cacheHits || 0,
+      cacheTotalLookups: twelveData?.totalLookups || 0,
+      analyzedSignals: this.operationalStats.analyzedSignals,
+      approvedSignals: this.operationalStats.approvedSignals,
+      lastExecutionAt: this.operationalStats.lastExecutionAt || this.lastCycleAt,
+      lastCycleAt: this.lastCycleAt,
+      day: this.operationalStats.day
+    };
   }
 
   getState() {
@@ -157,6 +224,7 @@ class EngineRunnerService {
         maxConcurrentAnalyses: this.maxConcurrentAnalyses,
         relevantPriceChangePercent: RELEVANT_PRICE_CHANGE_PERCENT
       },
+      operationalMonitor: this.getOperationalMonitor(),
       twelveDataConsumption: typeof marketData.buildTwelveDataConsumptionReport === "function"
         ? marketData.buildTwelveDataConsumptionReport({
             symbols: this.symbols,
@@ -492,6 +560,7 @@ class EngineRunnerService {
 
             if (cachedResult) {
               cycleResults.push(cachedResult);
+              this.recordOperationalAnalysis(cachedResult);
               continue;
             }
           }
@@ -527,6 +596,7 @@ class EngineRunnerService {
                 signature: nextSignature
               });
               cycleResults.push(cachedResult);
+              this.recordOperationalAnalysis(cachedResult);
               continue;
             }
           }
@@ -547,6 +617,7 @@ class EngineRunnerService {
             });
 
             cycleResults.push(blockedSignal);
+            this.recordOperationalAnalysis(blockedSignal);
             this.rememberAnalysis(symbol, snapshot, blockedSignal);
             engineDebugService.recordAnalyzed(blockedSignal, {
               source: "engine_runner",
@@ -589,6 +660,7 @@ class EngineRunnerService {
           signal = this.normalizeForDatabase(signal);
 
           cycleResults.push(signal);
+          this.recordOperationalAnalysis(signal);
           this.rememberAnalysis(symbol, snapshot, signal);
           engineDebugService.recordFinalDecision(signal, {
             source: "engine_runner",
