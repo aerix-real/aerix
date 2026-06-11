@@ -712,6 +712,7 @@ class EngineRunnerService {
       institutionalQuality: strategyResult.entryQuality || "weak",
       institutional_quality: strategyResult.entryQuality || "weak",
       reasons: Array.isArray(strategyResult.reasons) ? strategyResult.reasons : [],
+      activationReason: strategyResult.activationReason || null,
       blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
       strategies: strategyResult.strategies || [],
       mtf: strategyResult.mtf || {},
@@ -957,6 +958,7 @@ class EngineRunnerService {
       minimum_score: Number(signal.minimumScore || signal.minimum_score || 0),
 
       explanation: signal.explanation || "",
+      activationReason: signal.activationReason || null,
       timing: signal.timing || "AGUARDANDO",
       entry_in_seconds: Number(signal.entry_in_seconds || signal.entryInSeconds || 0),
       entryInSeconds: Number(signal.entryInSeconds || signal.entry_in_seconds || 0),

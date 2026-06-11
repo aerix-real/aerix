@@ -357,6 +357,215 @@ async function getPerformanceByHour() {
   return result.rows;
 }
 
+function calculateRate(part, total) {
+  const numerator = Number(part || 0);
+  const denominator = Number(total || 0);
+  return denominator ? Number(((numerator / denominator) * 100).toFixed(2)) : 0;
+}
+
+function mapWinrateRow(row = {}, keyField = null) {
+  const total = Number(row.total || 0);
+  const wins = Number(row.wins || 0);
+  const losses = Number(row.losses || 0);
+  const payload = {
+    total,
+    wins,
+    losses,
+    winrate: calculateRate(wins, wins + losses)
+  };
+
+  if (keyField) payload[keyField] = row[keyField];
+  return payload;
+}
+
+function mapApprovedSignal(row = null) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    signal: row.signal || row.direction,
+    direction: row.direction || row.signal,
+    strategyName: row.strategy_name,
+    score: normalizeNumber(row.adjusted_score || row.final_score || row.confidence, 0),
+    confidence: normalizeNumber(row.confidence, 0),
+    finalScore: normalizeNumber(row.final_score, 0),
+    entryPrice: row.entry_price === null || row.entry_price === undefined ? null : Number(row.entry_price),
+    resultPrice: row.result_price === null || row.result_price === undefined ? null : Number(row.result_price),
+    result: row.result,
+    marketRegime: row.market_regime,
+    executionAllowed: row.execution_allowed,
+    blockReason: row.block_reason,
+    createdAt: row.created_at,
+    checkedAt: row.checked_at
+  };
+}
+
+async function getOperationalOverview() {
+  const [todayResult, outcome24hResult, outcome7dResult, bySymbolResult, byStrategyResult, blockReasonResult, lastApprovedResult] = await Promise.all([
+    db.query(`
+      SELECT
+        GREATEST(
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.audit_logs
+            WHERE created_at >= CURRENT_DATE
+              AND event_type IN (
+                'signal_generated',
+                'signal_blocked',
+                'signal_discarded_unconfirmed',
+                'predictive_ai_pre_block',
+                'symbol_cycle_error'
+              )
+          ), 0),
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.signal_history
+            WHERE created_at >= CURRENT_DATE
+          ), 0)
+        )::int AS analyzed,
+        GREATEST(
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.audit_logs
+            WHERE created_at >= CURRENT_DATE
+              AND event_type = 'signal_generated'
+          ), 0),
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.signal_history
+            WHERE created_at >= CURRENT_DATE
+              AND ${CONFIRMED_OPERATIONAL_WHERE}
+          ), 0)
+        )::int AS approved,
+        GREATEST(
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.audit_logs
+            WHERE created_at >= CURRENT_DATE
+              AND event_type IN (
+                'signal_blocked',
+                'signal_discarded_unconfirmed',
+                'predictive_ai_pre_block',
+                'symbol_cycle_error'
+              )
+          ), 0),
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM public.signal_history
+            WHERE created_at >= CURRENT_DATE
+              AND NOT (${CONFIRMED_OPERATIONAL_WHERE})
+          ), 0)
+        )::int AS blocked
+    `),
+
+    db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+      FROM public.signal_history
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+    `),
+    db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+      FROM public.signal_history
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+    `),
+    db.query(`
+      SELECT
+        symbol,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+      FROM public.signal_history
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+      GROUP BY symbol
+      ORDER BY total DESC, wins DESC, symbol ASC
+    `),
+    db.query(`
+      SELECT
+        COALESCE(strategy_name, 'unknown') AS strategy_name,
+        COUNT(*) FILTER (WHERE result IN ('win', 'loss'))::int AS total,
+        COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+        COUNT(*) FILTER (WHERE result = 'loss')::int AS losses
+      FROM public.signal_history
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+      GROUP BY COALESCE(strategy_name, 'unknown')
+      ORDER BY total DESC, wins DESC, strategy_name ASC
+    `),
+    db.query(`
+      SELECT reason, COUNT(*)::int AS total
+      FROM (
+        SELECT COALESCE(
+          NULLIF(meta->>'blockReason', ''),
+          NULLIF(meta->>'block_reason', ''),
+          NULLIF(meta #>> '{execution,reason}', ''),
+          NULLIF(meta->>'error', ''),
+          event_type
+        ) AS reason
+        FROM public.audit_logs
+        WHERE created_at >= CURRENT_DATE
+          AND event_type IN (
+            'signal_blocked',
+            'signal_discarded_unconfirmed',
+            'predictive_ai_pre_block',
+            'symbol_cycle_error'
+          )
+        UNION ALL
+        SELECT COALESCE(NULLIF(block_reason, ''), 'Sinal bloqueado sem motivo explícito.') AS reason
+        FROM public.signal_history
+        WHERE created_at >= CURRENT_DATE
+          AND NOT (${CONFIRMED_OPERATIONAL_WHERE})
+      ) reasons
+      GROUP BY reason
+      ORDER BY total DESC, reason ASC
+      LIMIT 1
+    `),
+    db.query(`
+      SELECT *
+      FROM public.signal_history
+      WHERE ${CONFIRMED_OPERATIONAL_WHERE}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `)
+  ]);
+
+  const today = todayResult.rows[0] || { analyzed: 0, approved: 0, blocked: 0 };
+  const analyzedToday = Number(today.analyzed || 0);
+  const approvedToday = Number(today.approved || 0);
+  const blockedToday = Number(today.blocked || 0);
+
+  return {
+    analyzedToday,
+    approvedToday,
+    blockedToday,
+    approvalRate: calculateRate(approvedToday, analyzedToday),
+    winrate24h: mapWinrateRow(outcome24hResult.rows[0] || {}),
+    winrate7d: mapWinrateRow(outcome7dResult.rows[0] || {}),
+    winrateBySymbol: bySymbolResult.rows.map((row) => mapWinrateRow(row, 'symbol')),
+    winrateByStrategy: byStrategyResult.rows.map((row) => ({
+      strategyName: row.strategy_name,
+      ...mapWinrateRow(row)
+    })),
+    topBlockReason: blockReasonResult.rows[0]
+      ? {
+          reason: blockReasonResult.rows[0].reason,
+          total: Number(blockReasonResult.rows[0].total || 0)
+        }
+      : null,
+    lastApprovedSignal: mapApprovedSignal(lastApprovedResult.rows[0] || null),
+    generatedAt: new Date().toISOString()
+  };
+}
+
 async function updateSignalResult(id, result) {
   const response = await db.query(
     `
@@ -477,6 +686,7 @@ module.exports = {
   getStats,
   getPerformanceBySymbol,
   getPerformanceByHour,
+  getOperationalOverview,
   updateSignalResult,
   getExpiredPendingSignals,
   finalizeSignalResult,

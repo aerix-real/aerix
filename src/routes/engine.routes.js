@@ -4,6 +4,7 @@ const engineController = require("../controllers/engine.controller");
 
 const router = express.Router();
 
+router.get("/overview", authMiddleware, engineController.getOverview);
 router.get("/debug", authMiddleware, engineController.getDebugSummary);
 router.get("/analyze/:symbol", authMiddleware, engineController.analyzeSymbol);
 router.get("/analyze", authMiddleware, engineController.analyzePreferredSymbols);
