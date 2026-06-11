@@ -668,7 +668,57 @@ function getModePartialScoreMinimum(mode = "balanced") {
   if (normalizedMode === "conservative") return 100;
   if (normalizedMode === "aggressive") return 60;
 
-  return 70;
+  return 65;
+}
+
+function isBalancedPartialScoreReleased({ mode, partialScore }) {
+  return normalizeMode(mode) === "balanced" && partialScore >= 65 && partialScore < 70;
+}
+
+function buildBalancedCandidateOutcome({ item, best, systemOutcome }) {
+  const partialScore = Number(item?.eligibilityAudit?.score ?? item?.rawScore ?? item?.score ?? 0);
+  const auditContext = item?.eligibilityAudit?.context || {};
+  const mode = auditContext.mode;
+  const blocker = item?.eligibilityAudit?.blockedBy || item?.explanation || null;
+  const calibratedBalancedThreshold = Number(auditContext.minPartialScore) === 65;
+
+  if (
+    !calibratedBalancedThreshold ||
+    !isBalancedPartialScoreReleased({ mode, partialScore }) ||
+    blocker === "partialScoreBelowModeMinimum"
+  ) {
+    return null;
+  }
+
+  const finalOutcome = item?.valid && best?.name === item.name
+    ? systemOutcome
+    : item?.valid
+      ? "released_not_selected"
+      : blocker || "strategy_rejected_after_partial_release";
+
+  return {
+    strategy: item.name,
+    partialScore,
+    finalOutcome
+  };
+}
+
+function buildBalancedCandidatesReleasedMetric({ mode, evaluated, best, systemOutcome }) {
+  if (normalizeMode(mode) !== "balanced") {
+    return {
+      count: 0,
+      candidates: []
+    };
+  }
+
+  const candidates = (Array.isArray(evaluated) ? evaluated : [])
+    .map((item) => buildBalancedCandidateOutcome({ item, best, systemOutcome }))
+    .filter(Boolean);
+
+  return {
+    count: candidates.length,
+    candidates
+  };
 }
 
 function buildSignalNearActivationAuditLog({ snapshot, mode, evaluated, report }) {
@@ -713,6 +763,10 @@ function buildSignalNearActivationAuditLog({ snapshot, mode, evaluated, report }
 }
 
 function emitSignalNearActivationAuditLog(payload) {
+  console.log(JSON.stringify(payload));
+}
+
+function emitBalancedCandidatesReleasedMetric(payload) {
   console.log(JSON.stringify(payload));
 }
 
@@ -785,6 +839,20 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     ? dynamicMinScore
     : getDynamicMinScore(rules, effectiveMarketRegime, mode);
 
+  const createBalancedCandidatesReleasedMetric = (finalOutcome) => ({
+    scope: "aerix_balanced_candidates_released",
+    event: "balancedCandidatesReleased",
+    timestamp: new Date().toISOString(),
+    mode: normalizeMode(mode),
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    ...buildBalancedCandidatesReleasedMetric({
+      mode,
+      evaluated,
+      best,
+      systemOutcome: finalOutcome
+    })
+  });
+
   emitVolatilityAuditLog({
     mode: normalizeMode(mode),
     symbol: snapshot?.symbol || snapshot?.asset || null,
@@ -834,8 +902,18 @@ function runStrategies({ snapshot, mode = "balanced" }) {
           ? ["Fallback sem confluência mínima para FALLBACK_SIGNAL."]
           : marketValidation.blocks,
         fallbackSignal
+      },
+      metrics: {
+        balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
+          mode,
+          evaluated,
+          best,
+          systemOutcome: "blocked_before_signal"
+        })
       }
     };
+
+    emitBalancedCandidatesReleasedMetric(createBalancedCandidatesReleasedMetric("blocked_before_signal"));
 
     emitDirectionAuditLog(buildStrategyAuditSnapshot({
       snapshot,
@@ -898,8 +976,18 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         penaltyScore: marketValidation.penaltyScore,
         penaltyReasons: marketValidation.penaltyReasons,
         hardBlocks: []
+      },
+      metrics: {
+        balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
+          mode,
+          evaluated,
+          best,
+          systemOutcome: "blocked_by_dynamic_score"
+        })
       }
     };
+
+    emitBalancedCandidatesReleasedMetric(createBalancedCandidatesReleasedMetric("blocked_by_dynamic_score"));
 
     emitDirectionAuditLog(buildStrategyAuditSnapshot({
       snapshot,
@@ -952,8 +1040,18 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       penaltyReasons: [...marketValidation.penaltyReasons, ...dynamicPenaltyReasons],
       hardBlocks: [],
       fallbackSignal
+    },
+    metrics: {
+      balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
+        mode,
+        evaluated,
+        best,
+        systemOutcome: "released_to_signal"
+      })
     }
   };
+
+  emitBalancedCandidatesReleasedMetric(createBalancedCandidatesReleasedMetric("released_to_signal"));
 
   emitDirectionAuditLog(buildStrategyAuditSnapshot({
     snapshot,
