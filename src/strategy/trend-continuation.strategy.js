@@ -4,7 +4,7 @@ const { getLastATR, classifyATR } = require("../indicators/atr.indicator");
 const { buildEligibilityAudit, createCriterion, invalidEligibilityAudit } = require("./eligibility-audit");
 
 function createTrendContinuationStrategy() {
-  function evaluate({ m5, m15, h1, mtf }) {
+  function evaluate({ m5, m15, h1, mtf, mode = "balanced" }) {
     if (!Array.isArray(m5) || !Array.isArray(m15) || !Array.isArray(h1) || !mtf) {
       return invalidResult("invalid_input");
     }
@@ -49,7 +49,8 @@ function createTrendContinuationStrategy() {
       ema21M15,
       ema9H1,
       ema21H1,
-      mtf
+      mtf,
+      mode
     });
     const direction = directionAudit.direction;
 
@@ -72,7 +73,13 @@ function createTrendContinuationStrategy() {
       ema21H1
     });
 
-    const valid = score >= 70;
+    const modeRules = getOperationalModeRules(mode);
+    const partialScore = Number(directionAudit.audit?.score || 0);
+    const valid = Boolean(
+      direction &&
+      partialScore >= modeRules.minPartialScore &&
+      score >= modeRules.minPartialScore
+    );
 
     return {
       name: "trend_continuation",
@@ -98,10 +105,81 @@ function createTrendContinuationStrategy() {
         ...directionAudit.audit,
         valid,
         direction,
-        score,
-        blockedBy: valid ? directionAudit.audit.blockedBy : "strategyScoreBelowThreshold"
+        strategyScore: score,
+        blockedBy: valid
+          ? null
+          : directionAudit.audit.blockedBy || "strategyScoreBelowThreshold"
       }
     };
+  }
+
+  function normalizeMode(mode = "balanced") {
+    const normalized = String(mode || "balanced").toLowerCase();
+
+    if (["conservador", "conservative"].includes(normalized)) return "conservative";
+    if (["agressivo", "aggressive"].includes(normalized)) return "aggressive";
+
+    return "balanced";
+  }
+
+  function getOperationalModeRules(mode = "balanced") {
+    const rules = {
+      conservative: {
+        minAlignment: 3,
+        minPartialScore: 100,
+        requireM5M15Aligned: true,
+        requireAllCriteria: true
+      },
+      balanced: {
+        minAlignment: 2,
+        minPartialScore: 70,
+        requireM5M15Aligned: true,
+        requireAllCriteria: false
+      },
+      aggressive: {
+        minAlignment: 2,
+        minPartialScore: 60,
+        requireM5M15Aligned: false,
+        requireAllCriteria: false
+      }
+    };
+
+    return rules[normalizeMode(mode)];
+  }
+
+  function trendToDirection(trend) {
+    if (trend === "up") return "CALL";
+    if (trend === "down") return "PUT";
+    return null;
+  }
+
+  function getCandidatePartialScore(criteria = []) {
+    const safeCriteria = Array.isArray(criteria) ? criteria : [];
+    if (!safeCriteria.length) return 0;
+
+    const passed = safeCriteria.filter((criterion) => criterion.passed).length;
+    return Number(((passed / safeCriteria.length) * 100).toFixed(2));
+  }
+
+  function isM5M15AlignedForDirection(mtf = {}, direction = null) {
+    const expectedTrend = direction === "CALL" ? "up" : direction === "PUT" ? "down" : null;
+
+    return Boolean(
+      expectedTrend &&
+      mtf.m5?.trend === expectedTrend &&
+      mtf.m15?.trend === expectedTrend
+    );
+  }
+
+  function getOperationalBlocker({ criteria, mtf, direction, rules }) {
+    const partialScore = getCandidatePartialScore(criteria);
+
+    if (Number(mtf?.alignment || 0) < rules.minAlignment) return "timeframeAlignmentBelowModeMinimum";
+    if (rules.requireM5M15Aligned && !isM5M15AlignedForDirection(mtf, direction)) return "m5M15AlignmentRequired";
+    if (rules.requireAllCriteria && criteria.some((criterion) => !criterion.passed)) return "trendAlignment";
+    if (partialScore < rules.minPartialScore) return "partialScoreBelowModeMinimum";
+
+    return null;
   }
 
   function buildDirectionAudit(input) {
@@ -115,7 +193,8 @@ function createTrendContinuationStrategy() {
       ema21M15,
       ema9H1,
       ema21H1,
-      mtf
+      mtf,
+      mode = "balanced"
     } = input;
 
     const bullishCriteria = [
@@ -142,25 +221,61 @@ function createTrendContinuationStrategy() {
       createCriterion("priceBelowM5Ema", lastM5.close < ema9M5, { close: lastM5.close, ema9M5 })
     ];
 
-    const bullish = bullishCriteria.every((criterion) => criterion.passed);
-    const bearish = bearishCriteria.every((criterion) => criterion.passed);
-    const direction = bullish ? "CALL" : bearish ? "PUT" : null;
-    const criteria = direction === "CALL" ? bullishCriteria : direction === "PUT" ? bearishCriteria : [];
+    const rules = getOperationalModeRules(mode);
+    const candidates = [
+      { direction: "CALL", criteria: bullishCriteria },
+      { direction: "PUT", criteria: bearishCriteria }
+    ].map((candidate) => ({
+      ...candidate,
+      partialScore: getCandidatePartialScore(candidate.criteria),
+      blockedBy: getOperationalBlocker({
+        criteria: candidate.criteria,
+        mtf,
+        direction: candidate.direction,
+        rules
+      })
+    }));
+
+    const preferredDirection = trendToDirection(mtf.dominantDirection);
+    const eligibleCandidates = candidates
+      .filter((candidate) => !candidate.blockedBy)
+      .sort((left, right) => {
+        if (left.direction === preferredDirection && right.direction !== preferredDirection) return -1;
+        if (right.direction === preferredDirection && left.direction !== preferredDirection) return 1;
+        return right.partialScore - left.partialScore;
+      });
+    const selectedCandidate = eligibleCandidates[0] || null;
+    const closestCandidate = [...candidates].sort((left, right) => {
+      if (right.partialScore !== left.partialScore) return right.partialScore - left.partialScore;
+      if (left.direction === preferredDirection && right.direction !== preferredDirection) return -1;
+      if (right.direction === preferredDirection && left.direction !== preferredDirection) return 1;
+      return 0;
+    })[0] || null;
+    const direction = selectedCandidate?.direction || null;
+    const criteria = selectedCandidate?.criteria || closestCandidate?.criteria || [];
+    const audit = buildEligibilityAudit({
+      strategyName: "trend_continuation",
+      direction,
+      valid: Boolean(direction),
+      criteria,
+      candidates,
+      blockedBy: selectedCandidate?.blockedBy || closestCandidate?.blockedBy || null,
+      context: {
+        alignment: mtf.alignment,
+        dominantDirection: mtf.dominantDirection,
+        mode: normalizeMode(mode),
+        minAlignment: rules.minAlignment,
+        minPartialScore: rules.minPartialScore,
+        requireM5M15Aligned: rules.requireM5M15Aligned
+      }
+    });
 
     return {
       direction,
-      audit: buildEligibilityAudit({
-        strategyName: "trend_continuation",
-        direction,
-        valid: Boolean(direction),
-        criteria,
-        candidates: [
-          { direction: "CALL", criteria: bullishCriteria, blockedBy: "trendAlignment" },
-          { direction: "PUT", criteria: bearishCriteria, blockedBy: "trendAlignment" }
-        ],
-        blockedBy: direction ? null : "trendAlignment",
-        context: { alignment: mtf.alignment, dominantDirection: mtf.dominantDirection }
-      })
+      audit: {
+        ...audit,
+        blockedBy: direction ? audit.blockedBy : closestCandidate?.blockedBy || audit.blockedBy
+      }
     };
   }
 
