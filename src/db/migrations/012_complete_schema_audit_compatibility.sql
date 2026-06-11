@@ -92,7 +92,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_user_settings_user_id_unique
 
 CREATE TABLE IF NOT EXISTS public.user_preferences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id TEXT,
   trading_mode TEXT DEFAULT 'balanced',
   preferred_symbols JSONB DEFAULT '[]'::jsonb,
   ai_explanations_enabled BOOLEAN DEFAULT TRUE,
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS public.user_preferences (
 );
 
 ALTER TABLE public.user_preferences
-  ADD COLUMN IF NOT EXISTS user_id UUID,
+  ADD COLUMN IF NOT EXISTS user_id TEXT,
   ADD COLUMN IF NOT EXISTS trading_mode TEXT DEFAULT 'balanced',
   ADD COLUMN IF NOT EXISTS preferred_symbols JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS ai_explanations_enabled BOOLEAN DEFAULT TRUE,
@@ -120,6 +120,74 @@ ALTER TABLE public.user_preferences
     WHEN preferred_symbols IS NULL THEN '[]'::jsonb
     ELSE to_jsonb(preferred_symbols)
   END;
+
+DO $$
+DECLARE
+  users_id_type TEXT;
+  current_user_id_type TEXT;
+  legacy_column TEXT;
+BEGIN
+  SELECT format_type(a.atttypid, a.atttypmod)
+    INTO users_id_type
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'users'
+    AND a.attname = 'id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped;
+
+  IF users_id_type IS NULL THEN
+    RAISE WARNING 'user_preferences_user_id_fkey not created: public.users.id type not found';
+    RETURN;
+  END IF;
+
+  SELECT format_type(a.atttypid, a.atttypmod)
+    INTO current_user_id_type
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relname = 'user_preferences'
+    AND a.attname = 'user_id'
+    AND a.attnum > 0
+    AND NOT a.attisdropped;
+
+  IF current_user_id_type IS DISTINCT FROM users_id_type THEN
+    ALTER TABLE public.user_preferences
+      DROP CONSTRAINT IF EXISTS user_preferences_user_id_fkey;
+
+    BEGIN
+      EXECUTE format(
+        'ALTER TABLE public.user_preferences ALTER COLUMN user_id DROP NOT NULL, ALTER COLUMN user_id TYPE %s USING user_id::text::%s',
+        users_id_type,
+        users_id_type
+      );
+    EXCEPTION WHEN OTHERS THEN
+      legacy_column := left('user_id_legacy_' || regexp_replace(current_user_id_type, '[^a-zA-Z0-9_]', '_', 'g'), 55);
+      EXECUTE format('ALTER TABLE public.user_preferences ADD COLUMN IF NOT EXISTS %I TEXT', legacy_column);
+      EXECUTE format(
+        'UPDATE public.user_preferences SET %I = user_id::text WHERE user_id IS NOT NULL AND %I IS NULL',
+        legacy_column,
+        legacy_column
+      );
+      ALTER TABLE public.user_preferences DROP COLUMN user_id;
+      EXECUTE format('ALTER TABLE public.user_preferences ADD COLUMN user_id %s', users_id_type);
+      RAISE WARNING 'user_preferences.user_id recreated as %, legacy values preserved in %. Manual remap may be required.', users_id_type, legacy_column;
+    END;
+  END IF;
+
+  BEGIN
+    ALTER TABLE public.user_preferences
+      DROP CONSTRAINT IF EXISTS user_preferences_user_id_fkey;
+    ALTER TABLE public.user_preferences
+      ADD CONSTRAINT user_preferences_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'user_preferences_user_id_fkey not created: %', SQLERRM;
+  END;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preferences_user_id_unique
   ON public.user_preferences (user_id);

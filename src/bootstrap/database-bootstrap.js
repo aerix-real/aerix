@@ -1,6 +1,159 @@
 const db = require("../config/database");
 
 
+function logSchemaWarning(event, details = {}) {
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      component: "database-bootstrap",
+      event,
+      ...details
+    })
+  );
+}
+
+function quoteIdent(identifier) {
+  return `"${String(identifier).replace(/"/g, '""')}"`;
+}
+
+async function getColumnDataType(table, column) {
+  const result = await db.query(
+    `
+    SELECT format_type(a.atttypid, a.atttypmod) AS data_type
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname = $1
+      AND a.attname = $2
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+    `,
+    [table, column]
+  );
+
+  return result.rows[0]?.data_type || null;
+}
+
+async function dropConstraintIfExists(table, constraintName) {
+  await db.query(
+    `ALTER TABLE public.${quoteIdent(table)} DROP CONSTRAINT IF EXISTS ${quoteIdent(constraintName)}`
+  );
+}
+
+async function ensureForeignKeyConstraint({ table, column, constraintName, referencesTable, referencesColumn, onDelete }) {
+  try {
+    await dropConstraintIfExists(table, constraintName);
+    await db.query(
+      `ALTER TABLE public.${quoteIdent(table)}
+       ADD CONSTRAINT ${quoteIdent(constraintName)}
+       FOREIGN KEY (${quoteIdent(column)})
+       REFERENCES public.${quoteIdent(referencesTable)}(${quoteIdent(referencesColumn)})
+       ON DELETE ${onDelete}`
+    );
+  } catch (err) {
+    logSchemaWarning("foreign_key_not_created", {
+      table,
+      column,
+      constraint: constraintName,
+      references: `public.${referencesTable}(${referencesColumn})`,
+      error: err.message
+    });
+  }
+}
+
+async function ensureUserScopedColumnType(table, column, options = {}) {
+  const { preserveLegacyValues = false, legacyColumnPrefix = `${column}_legacy` } = options;
+  const usersIdType = await getColumnDataType("users", "id");
+
+  if (!usersIdType) {
+    logSchemaWarning("users_id_type_not_found", { table, column });
+    return null;
+  }
+
+  const currentType = await getColumnDataType(table, column);
+
+  if (!currentType) {
+    await db.query(
+      `ALTER TABLE public.${quoteIdent(table)} ADD COLUMN ${quoteIdent(column)} ${usersIdType}`
+    );
+    return usersIdType;
+  }
+
+  if (currentType === usersIdType) {
+    return usersIdType;
+  }
+
+  await dropConstraintIfExists(table, `${table}_${column}_fkey`);
+
+  try {
+    await db.query(
+      `ALTER TABLE public.${quoteIdent(table)}
+       ALTER COLUMN ${quoteIdent(column)} DROP NOT NULL,
+       ALTER COLUMN ${quoteIdent(column)} TYPE ${usersIdType}
+       USING ${quoteIdent(column)}::text::${usersIdType}`
+    );
+    logSchemaWarning("user_scoped_column_type_corrected", {
+      table,
+      column,
+      previousType: currentType,
+      expectedType: usersIdType
+    });
+    return usersIdType;
+  } catch (err) {
+    if (!preserveLegacyValues) {
+      logSchemaWarning("user_scoped_column_type_not_corrected", {
+        table,
+        column,
+        previousType: currentType,
+        expectedType: usersIdType,
+        error: err.message
+      });
+      return null;
+    }
+
+    const legacyColumn = `${legacyColumnPrefix}_${currentType.replace(/[^a-zA-Z0-9_]/g, "_")}`.slice(0, 55);
+
+    try {
+      await db.query(
+        `ALTER TABLE public.${quoteIdent(table)} ADD COLUMN IF NOT EXISTS ${quoteIdent(legacyColumn)} TEXT`
+      );
+      await db.query(
+        `UPDATE public.${quoteIdent(table)}
+         SET ${quoteIdent(legacyColumn)} = ${quoteIdent(column)}::text
+         WHERE ${quoteIdent(column)} IS NOT NULL
+           AND ${quoteIdent(legacyColumn)} IS NULL`
+      );
+      await db.query(
+        `ALTER TABLE public.${quoteIdent(table)} DROP COLUMN ${quoteIdent(column)}`
+      );
+      await db.query(
+        `ALTER TABLE public.${quoteIdent(table)} ADD COLUMN ${quoteIdent(column)} ${usersIdType}`
+      );
+      logSchemaWarning("user_scoped_column_recreated_with_legacy_backup", {
+        table,
+        column,
+        legacyColumn,
+        previousType: currentType,
+        expectedType: usersIdType,
+        conversionError: err.message
+      });
+      return usersIdType;
+    } catch (recoveryErr) {
+      logSchemaWarning("user_scoped_column_recovery_failed", {
+        table,
+        column,
+        previousType: currentType,
+        expectedType: usersIdType,
+        conversionError: err.message,
+        recoveryError: recoveryErr.message
+      });
+      return null;
+    }
+  }
+}
+
+
 async function ensureNumericColumn(table, column, defaultValue = null) {
   try {
     const setDefault = defaultValue === null ? "" : `, ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`;
@@ -159,10 +312,13 @@ async function ensureUsersTable() {
 }
 
 async function ensurePreferencesTable() {
+  const usersIdType = await getColumnDataType("users", "id");
+  const userIdDefinition = usersIdType || "INTEGER";
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.user_preferences (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+      user_id ${userIdDefinition},
       trading_mode TEXT DEFAULT 'balanced',
       preferred_symbols TEXT[],
       ai_explanations_enabled BOOLEAN DEFAULT TRUE,
@@ -172,35 +328,61 @@ async function ensurePreferencesTable() {
     );
   `);
 
-  await ensureColumn("user_preferences", "user_id", "INTEGER");
+  await ensureUserScopedColumnType("user_preferences", "user_id", {
+    preserveLegacyValues: true
+  });
   await ensureColumn("user_preferences", "trading_mode", "TEXT DEFAULT 'balanced'");
   await ensureColumn("user_preferences", "preferred_symbols", "TEXT[]");
   await ensureColumn("user_preferences", "ai_explanations_enabled", "BOOLEAN DEFAULT TRUE");
   await ensureColumn("user_preferences", "notifications_enabled", "BOOLEAN DEFAULT TRUE");
   await ensureColumn("user_preferences", "panel_layout", "TEXT DEFAULT 'default'");
   await ensureColumn("user_preferences", "theme", "TEXT DEFAULT 'dark'");
+
+  await ensureForeignKeyConstraint({
+    table: "user_preferences",
+    column: "user_id",
+    constraintName: "user_preferences_user_id_fkey",
+    referencesTable: "users",
+    referencesColumn: "id",
+    onDelete: "CASCADE"
+  });
 }
 
 async function ensureSessionsTable() {
+  const usersIdType = await getColumnDataType("users", "id");
+  const userIdDefinition = usersIdType || "INTEGER";
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.user_sessions (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+      user_id ${userIdDefinition},
       refresh_token TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
 
-  await ensureColumn("user_sessions", "user_id", "INTEGER");
+  await ensureUserScopedColumnType("user_sessions", "user_id");
   await ensureColumn("user_sessions", "refresh_token", "TEXT");
   await ensureColumn("user_sessions", "created_at", "TIMESTAMP DEFAULT NOW()");
+
+  await ensureForeignKeyConstraint({
+    table: "user_sessions",
+    column: "user_id",
+    constraintName: "user_sessions_user_id_fkey",
+    referencesTable: "users",
+    referencesColumn: "id",
+    onDelete: "CASCADE"
+  });
 }
 
 async function ensureBillingTable() {
+  const usersIdType = await getColumnDataType("users", "id");
+  const userIdDefinition = usersIdType || "INTEGER";
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.billing_subscriptions (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+      user_id ${userIdDefinition},
       plan TEXT,
       status TEXT,
       stripe_customer_id TEXT,
@@ -210,13 +392,22 @@ async function ensureBillingTable() {
     );
   `);
 
-  await ensureColumn("billing_subscriptions", "user_id", "INTEGER");
+  await ensureUserScopedColumnType("billing_subscriptions", "user_id");
   await ensureColumn("billing_subscriptions", "plan", "TEXT");
   await ensureColumn("billing_subscriptions", "status", "TEXT");
   await ensureColumn("billing_subscriptions", "stripe_customer_id", "TEXT");
   await ensureColumn("billing_subscriptions", "stripe_subscription_id", "TEXT");
   await ensureColumn("billing_subscriptions", "current_period_end", "TIMESTAMP");
   await ensureColumn("billing_subscriptions", "created_at", "TIMESTAMP DEFAULT NOW()");
+
+  await ensureForeignKeyConstraint({
+    table: "billing_subscriptions",
+    column: "user_id",
+    constraintName: "billing_subscriptions_user_id_fkey",
+    referencesTable: "users",
+    referencesColumn: "id",
+    onDelete: "CASCADE"
+  });
 }
 
 async function ensureAuditLogsTable() {
@@ -233,10 +424,13 @@ async function ensureAuditLogsTable() {
 }
 
 async function ensureUserSettingsTable() {
+  const usersIdType = await getColumnDataType("users", "id");
+  const userIdDefinition = usersIdType || "INTEGER";
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.user_settings (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
+      user_id ${userIdDefinition} UNIQUE,
       mode TEXT DEFAULT 'equilibrado',
       preferred_timeframe TEXT DEFAULT 'M5',
       premium_unlocked BOOLEAN DEFAULT FALSE,
@@ -244,6 +438,17 @@ async function ensureUserSettingsTable() {
       updated_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  await ensureUserScopedColumnType("user_settings", "user_id");
+
+  await ensureForeignKeyConstraint({
+    table: "user_settings",
+    column: "user_id",
+    constraintName: "user_settings_user_id_fkey",
+    referencesTable: "users",
+    referencesColumn: "id",
+    onDelete: "CASCADE"
+  });
 }
 
 async function ensureFilterBlockEventsTable() {
