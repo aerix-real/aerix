@@ -99,32 +99,109 @@ router.get("/market/status", authMiddleware, async (req, res) => {
   }
 });
 
+function normalizePositiveInteger(value, fallback, max = 200) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(1, Math.trunc(num)));
+}
+
+function normalizeOffset(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.trunc(num));
+}
+
+function normalizeOptionalFilter(value) {
+  const text = String(value || "").trim();
+  return text || null;
+}
+
+function normalizeModeAliases(value) {
+  const mode = normalizeOptionalFilter(value)?.toLowerCase();
+
+  if (["conservador", "conservative"].includes(mode)) return ["conservador", "conservative"];
+  if (["agressivo", "aggressive"].includes(mode)) return ["agressivo", "aggressive"];
+  if (["equilibrado", "balanced", "balanceado"].includes(mode)) return ["equilibrado", "balanced", "balanceado"];
+
+  return mode ? [mode] : [];
+}
+
+function filterStateSignals(signals = [], filters = {}) {
+  const direction = normalizeOptionalFilter(filters.direction || filters.signal)?.toUpperCase();
+  const result = normalizeOptionalFilter(filters.result)?.toLowerCase();
+  const modeAliases = normalizeModeAliases(filters.mode);
+  const symbol = normalizeOptionalFilter(filters.symbol || filters.asset)?.toLowerCase();
+
+  return filterConfirmedOperationalSignals(signals).filter((signal) => {
+    const signalDirection = String(signal.signal || signal.direction || signal.action || "").toUpperCase();
+    const signalResult = String(signal.result || "pending").toLowerCase();
+    const signalMode = String(signal.mode || "").toLowerCase();
+    const signalSymbol = String(signal.symbol || signal.asset || "").toLowerCase();
+
+    return (!direction || signalDirection === direction)
+      && (!result || signalResult === result)
+      && (!modeAliases.length || modeAliases.includes(signalMode))
+      && (!symbol || signalSymbol.includes(symbol));
+  });
+}
+
 router.get("/signals/recent", authMiddleware, async (req, res) => {
+  const limit = normalizePositiveInteger(req.query.limit, 20, 50);
+  const page = normalizePositiveInteger(req.query.page, 1, 10000);
+  const offset = normalizeOffset(req.query.offset, (page - 1) * limit);
+  const filters = {
+    direction: normalizeOptionalFilter(req.query.direction || req.query.signal),
+    result: normalizeOptionalFilter(req.query.result),
+    mode: normalizeOptionalFilter(req.query.mode),
+    symbol: normalizeOptionalFilter(req.query.symbol || req.query.asset)
+  };
+
   try {
-    const state = typeof engineRunner.getState === "function"
-      ? engineRunner.getState()
-      : {};
-
-    let signals =
-      state.recentSignals ||
-      state.history ||
-      state.signals ||
-      state.latestResults ||
-      [];
-
-    if (!Array.isArray(signals) || signals.length === 0) {
-      signals = await signalRepository.getLatestConfirmed(200);
-    }
+    const history = typeof signalRepository.getConfirmedHistory === "function"
+      ? await signalRepository.getConfirmedHistory({ limit, offset, ...filters })
+      : { rows: await signalRepository.getLatestConfirmed(limit, filters), total: 0, limit, offset };
 
     return res.json({
       ok: true,
-      signals: filterConfirmedOperationalSignals(signals).slice(0, 50)
+      signals: filterConfirmedOperationalSignals(history.rows).slice(0, limit),
+      pagination: {
+        limit: history.limit || limit,
+        offset: history.offset || offset,
+        page: Math.floor((history.offset || offset) / (history.limit || limit)) + 1,
+        total: history.total || 0,
+        hasMore: (history.offset || offset) + (history.rows?.length || 0) < (history.total || 0)
+      },
+      filters
     });
   } catch (error) {
-    return res.json({
-      ok: true,
-      signals: []
-    });
+    try {
+      const state = typeof engineRunner.getState === "function"
+        ? engineRunner.getState()
+        : {};
+
+      const stateSignals = state.recentSignals || state.history || state.signals || state.latestResults || [];
+      const filtered = filterStateSignals(Array.isArray(stateSignals) ? stateSignals : [], filters);
+
+      return res.json({
+        ok: true,
+        signals: filtered.slice(offset, offset + limit),
+        pagination: {
+          limit,
+          offset,
+          page,
+          total: filtered.length,
+          hasMore: offset + limit < filtered.length
+        },
+        filters
+      });
+    } catch (fallbackError) {
+      return res.json({
+        ok: true,
+        signals: [],
+        pagination: { limit, offset, page, total: 0, hasMore: false },
+        filters
+      });
+    }
   }
 });
 
