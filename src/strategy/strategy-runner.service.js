@@ -774,31 +774,96 @@ function isBalancedPartialScoreReleased({ mode, partialScore }) {
   return normalizeMode(mode) === "balanced" && partialScore >= 65 && partialScore < 70;
 }
 
-function buildBalancedCandidateOutcome({ item, best, systemOutcome }) {
+function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) {
   const partialScore = Number(item?.eligibilityAudit?.score ?? item?.rawScore ?? item?.score ?? 0);
+  const weightedScore = Number(item?.weightedScore ?? 0);
   const auditContext = item?.eligibilityAudit?.context || {};
-  const mode = auditContext.mode;
+  const mode = normalizeMode(auditContext.mode);
   const blocker = item?.eligibilityAudit?.blockedBy || item?.explanation || null;
-  const calibratedBalancedThreshold = Number(auditContext.minPartialScore) === 65;
+  const minPartialScore = Number(auditContext.minPartialScore ?? getModePartialScoreMinimum(mode));
+  const calibratedBalancedThreshold = minPartialScore === 65;
+  const partialScoreWindowReleased = Boolean(
+    calibratedBalancedThreshold &&
+    isBalancedPartialScoreReleased({ mode, partialScore }) &&
+    blocker !== "partialScoreBelowModeMinimum"
+  );
+  const approvedCandidate = Boolean(item?.valid && item?.direction);
+  const selectedCandidate = Boolean(approvedCandidate && best?.name === item.name);
+  const candidateBeforeRelease = {
+    strategy: item?.name || null,
+    direction: item?.direction || null,
+    valid: Boolean(item?.valid),
+    partialScore,
+    weightedScore,
+    mode,
+    minPartialScore,
+    blocker,
+    selectedCandidate,
+    calibratedBalancedThreshold,
+    partialScoreWindowReleased
+  };
 
-  if (
-    !calibratedBalancedThreshold ||
-    !isBalancedPartialScoreReleased({ mode, partialScore }) ||
-    blocker === "partialScoreBelowModeMinimum"
-  ) {
-    return null;
+  let releaseReason = null;
+  let discardReason = null;
+
+  if (approvedCandidate) {
+    releaseReason = selectedCandidate
+      ? "approved_best_candidate"
+      : "approved_valid_candidate";
+  } else if (partialScoreWindowReleased) {
+    releaseReason = "balanced_partial_score_release";
+  } else if (!calibratedBalancedThreshold) {
+    discardReason = `balanced_threshold_not_calibrated:${minPartialScore}`;
+  } else if (blocker === "partialScoreBelowModeMinimum") {
+    discardReason = "partial_score_below_mode_minimum";
+  } else if (partialScore < 65) {
+    discardReason = "partial_score_below_balanced_release_floor";
+  } else if (partialScore >= 70 && !approvedCandidate) {
+    discardReason = blocker || "candidate_rejected_after_reaching_activation_score";
+  } else if (!item?.direction) {
+    discardReason = blocker || "candidate_without_direction";
+  } else {
+    discardReason = blocker || "candidate_not_released";
   }
 
-  const finalOutcome = item?.valid && best?.name === item.name
-    ? systemOutcome
-    : item?.valid
-      ? "released_not_selected"
-      : blocker || "strategy_rejected_after_partial_release";
+  const finalOutcome = releaseReason
+    ? selectedCandidate
+      ? systemOutcome
+      : approvedCandidate
+        ? "released_not_selected"
+        : blocker || "strategy_rejected_after_partial_release"
+    : null;
+
+  const candidateAfterRelease = releaseReason
+    ? {
+        strategy: item.name,
+        direction: item.direction || null,
+        partialScore,
+        weightedScore,
+        finalOutcome,
+        releaseReason
+      }
+    : null;
 
   return {
-    strategy: item.name,
-    partialScore,
-    finalOutcome
+    candidateBeforeRelease,
+    candidateAfterRelease,
+    releaseReason,
+    discardReason
+  };
+}
+
+function buildBalancedCandidateOutcome({ item, best, systemOutcome }) {
+  const diagnostic = buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome });
+
+  if (!diagnostic.candidateAfterRelease) return null;
+
+  return {
+    ...diagnostic.candidateAfterRelease,
+    candidateBeforeRelease: diagnostic.candidateBeforeRelease,
+    candidateAfterRelease: diagnostic.candidateAfterRelease,
+    releaseReason: diagnostic.releaseReason,
+    discardReason: diagnostic.discardReason
   };
 }
 
@@ -806,17 +871,29 @@ function buildBalancedCandidatesReleasedMetric({ mode, evaluated, best, systemOu
   if (normalizeMode(mode) !== "balanced") {
     return {
       count: 0,
-      candidates: []
+      candidates: [],
+      releaseDiagnostics: []
     };
   }
 
-  const candidates = (Array.isArray(evaluated) ? evaluated : [])
-    .map((item) => buildBalancedCandidateOutcome({ item, best, systemOutcome }))
+  const releaseDiagnostics = (Array.isArray(evaluated) ? evaluated : [])
+    .map((item) => buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }));
+  const candidates = releaseDiagnostics
+    .map((diagnostic) => diagnostic.candidateAfterRelease
+      ? {
+          ...diagnostic.candidateAfterRelease,
+          candidateBeforeRelease: diagnostic.candidateBeforeRelease,
+          candidateAfterRelease: diagnostic.candidateAfterRelease,
+          releaseReason: diagnostic.releaseReason,
+          discardReason: diagnostic.discardReason
+        }
+      : null)
     .filter(Boolean);
 
   return {
     count: candidates.length,
-    candidates
+    candidates,
+    releaseDiagnostics
   };
 }
 
@@ -1179,5 +1256,6 @@ module.exports = {
   classifyMarketRegime,
   validateMarketConditions,
   getLowVolatilityReleaseThreshold,
-  buildVolatilityAudit
+  buildVolatilityAudit,
+  buildBalancedCandidatesReleasedMetric
 };
