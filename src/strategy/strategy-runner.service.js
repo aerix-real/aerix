@@ -774,6 +774,24 @@ function isBalancedPartialScoreReleased({ mode, partialScore }) {
   return normalizeMode(mode) === "balanced" && partialScore >= 65 && partialScore < 70;
 }
 
+function normalizeCandidateDirection(direction) {
+  const normalized = String(direction || "").trim().toUpperCase();
+
+  return ["CALL", "PUT"].includes(normalized) ? normalized : null;
+}
+
+function getAuditClosestDirection(item = {}) {
+  return normalizeCandidateDirection(item?.eligibilityAudit?.closestDirection);
+}
+
+function getBalancedCandidateReleaseDirection(item = {}, releaseReason = null) {
+  if (releaseReason === "balanced_partial_score_release") {
+    return getAuditClosestDirection(item);
+  }
+
+  return normalizeCandidateDirection(item?.direction) || getAuditClosestDirection(item);
+}
+
 function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) {
   const partialScore = Number(item?.eligibilityAudit?.score ?? item?.rawScore ?? item?.score ?? 0);
   const weightedScore = Number(item?.weightedScore ?? 0);
@@ -782,16 +800,19 @@ function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) 
   const blocker = item?.eligibilityAudit?.blockedBy || item?.explanation || null;
   const minPartialScore = Number(auditContext.minPartialScore ?? getModePartialScoreMinimum(mode));
   const calibratedBalancedThreshold = minPartialScore === 65;
-  const partialScoreWindowReleased = Boolean(
+  const closestDirection = getAuditClosestDirection(item);
+  const partialScoreWindowEligible = Boolean(
     calibratedBalancedThreshold &&
     isBalancedPartialScoreReleased({ mode, partialScore }) &&
     blocker !== "partialScoreBelowModeMinimum"
   );
-  const approvedCandidate = Boolean(item?.valid && item?.direction);
+  const partialScoreWindowReleased = Boolean(partialScoreWindowEligible && closestDirection);
+  const approvedCandidate = Boolean(item?.valid && normalizeCandidateDirection(item?.direction));
   const selectedCandidate = Boolean(approvedCandidate && best?.name === item.name);
   const candidateBeforeRelease = {
     strategy: item?.name || null,
-    direction: item?.direction || null,
+    direction: normalizeCandidateDirection(item?.direction),
+    closestDirection,
     valid: Boolean(item?.valid),
     partialScore,
     weightedScore,
@@ -800,6 +821,7 @@ function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) 
     blocker,
     selectedCandidate,
     calibratedBalancedThreshold,
+    partialScoreWindowEligible,
     partialScoreWindowReleased
   };
 
@@ -814,6 +836,8 @@ function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) 
     releaseReason = "balanced_partial_score_release";
   } else if (!calibratedBalancedThreshold) {
     discardReason = `balanced_threshold_not_calibrated:${minPartialScore}`;
+  } else if (partialScoreWindowEligible && !closestDirection) {
+    discardReason = "partial_release_without_closest_direction";
   } else if (blocker === "partialScoreBelowModeMinimum") {
     discardReason = "partial_score_below_mode_minimum";
   } else if (partialScore < 65) {
@@ -834,10 +858,14 @@ function buildBalancedCandidateReleaseDiagnostic({ item, best, systemOutcome }) 
         : blocker || "strategy_rejected_after_partial_release"
     : null;
 
-  const candidateAfterRelease = releaseReason
+  const releaseDirection = getBalancedCandidateReleaseDirection(item, releaseReason);
+  const candidateAfterRelease = releaseReason && releaseDirection
     ? {
         strategy: item.name,
-        direction: item.direction || null,
+        direction: releaseDirection,
+        directionSource: releaseReason === "balanced_partial_score_release"
+          ? "eligibilityAudit.closestDirection"
+          : "strategy.direction",
         partialScore,
         weightedScore,
         finalOutcome,
