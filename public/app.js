@@ -111,8 +111,13 @@ const el = {
   topCurrentMode: document.getElementById("topCurrentMode"),
   summaryWinrate24h: document.getElementById("summaryWinrate24h"),
   summaryWinrate7d: document.getElementById("summaryWinrate7d"),
+  summaryWinrate30d: document.getElementById("summaryWinrate30d"),
   summarySignalsToday: document.getElementById("summarySignalsToday"),
   summaryApprovalRate: document.getElementById("summaryApprovalRate"),
+  summaryHealthScore: document.getElementById("summaryHealthScore"),
+  signalReasonList: document.getElementById("signalReasonList"),
+  assetRankingList: document.getElementById("assetRankingList"),
+  commercialHourHeatmap: document.getElementById("commercialHourHeatmap"),
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
@@ -782,10 +787,12 @@ function getRiskLabel(signal = {}) {
 }
 
 function getStrategyLabel(signal = {}) {
-  return signal.strategy ||
+  const strategy = signal.strategy;
+  if (strategy && typeof strategy === "object") return strategy.name || strategy.label || strategy.id || "--";
+
+  return strategy ||
     signal.strategyName ||
     signal.strategy_name ||
-    signal.strategy?.name ||
     signal.context?.strategy ||
     signal.execution?.strategy ||
     "--";
@@ -834,11 +841,12 @@ function updateCompactOperations(signal = {}, source = "engine") {
   if (el.bestDirection) {
     el.bestDirection.className = `signal-direction ${direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
   }
-  setTextContent(el.bestConfidence, `${Math.round(score || Number(signal.confidence || 0))}%`);
+  setTextContent(el.bestConfidence, `${Math.round(getSignalConfidence(signal))}%`);
   setTextContent(el.bestExpiry, signal.expiry || signal.expiration || signal.countdown || "--");
   setTextContent(el.bestStrategy, strategyLabel);
-  setTextContent(el.bestAiStatus, release);
-  setTextContent(el.bestEntryStatus, entryStatus);
+  setTextContent(el.bestAiStatus, isSignalApproved(signal) && !blocked ? "IA aprovou" : release);
+  updateEntryApprovalPill(signal, blocked);
+  renderSignalReasons(signal);
   setTextContent(el.marketRegime, marketRegime);
   setTextContent(el.techStrategy, strategyLabel);
   setTextContent(el.techVolatility, getVolatilityLabel(signal));
@@ -1558,6 +1566,9 @@ function syncRuntimeDashboard(runtimePayload = {}) {
     renderPerformanceDashboard(runtime.analytics.performanceDashboard);
   }
 
+  renderAssetRanking(runtime.analytics?.symbolPerformance || runtime.analytics?.symbolStats || []);
+  renderCommercialHourHeatmap(runtime.analytics?.hourPerformance || runtime.analytics?.hourStats || []);
+
   if (Object.keys(stats).length) {
     if (el.statTotal) el.statTotal.textContent = stats.total ?? stats.totalSignals ?? el.statTotal.textContent;
     if (el.statWins) el.statWins.textContent = stats.wins ?? el.statWins.textContent;
@@ -1571,6 +1582,138 @@ function syncRuntimeDashboard(runtimePayload = {}) {
 function formatPercent(value) {
   const numeric = Number(value || 0);
   return `${Number.isFinite(numeric) ? numeric.toFixed(1) : "0.0"}%`;
+}
+
+function getSignalConfidence(signal = {}) {
+  const confidence = Number(signal.confidence ?? signal.aiConfidence ?? signal.ai_confidence ?? getOperationalScore(signal));
+  return Number.isFinite(confidence) ? confidence : 0;
+}
+
+function isSignalApproved(signal = {}) {
+  return signal.executionAllowed === true || signal.execution_allowed === true || signal.execution?.allowed === true;
+}
+
+function updateEntryApprovalPill(signal = {}, blocked = false) {
+  const node = el.bestEntryStatus;
+  if (!node) return;
+
+  node.classList.remove("is-approved", "is-blocked", "is-waiting");
+
+  if (isSignalApproved(signal) && !blocked) {
+    node.textContent = "Entrada aprovada";
+    node.classList.add("is-approved");
+    return;
+  }
+
+  if (blocked) {
+    node.textContent = "Aguardando nova confluência";
+    node.classList.add("is-blocked");
+    return;
+  }
+
+  node.textContent = "Aguardando aprovação";
+  node.classList.add("is-waiting");
+}
+
+function renderSignalReasons(signal = {}) {
+  const list = el.signalReasonList;
+  if (!list) return;
+
+  const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
+  const score = getOperationalScore(signal);
+  const minimumScore = getMinimumValidatedScore(signal);
+  const strategy = getStrategyLabel(signal);
+  const volatility = getVolatilityLabel(signal);
+  const approved = isSignalApproved(signal);
+  const reasons = [];
+
+  if (direction === "CALL" || direction === "PUT") reasons.push(["Tendência alinhada", `${direction} confirmado pela leitura operacional.`]);
+  if (score >= minimumScore) reasons.push(["Score acima do mínimo", `${Math.round(score)}% vs mínimo ${Math.round(minimumScore)}%.`]);
+  if (approved) reasons.push(["IA aprovou", "Entrada liberada após validação de execução."]);
+  if (volatility && volatility !== "--") reasons.push(["Volatilidade aceitável", `Volatilidade atual: ${volatility}.`]);
+  if (strategy && strategy !== "--") reasons.push(["Estratégia usada", strategy]);
+
+  if (!reasons.length) {
+    list.innerHTML = `<div class="reason-item muted">Aguardando sinal aprovado pela IA.</div>`;
+    return;
+  }
+
+  list.innerHTML = reasons.slice(0, 4).map(([title, text]) => `
+    <div class="reason-item">
+      <span>✓</span>
+      <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(text)}</small></div>
+    </div>
+  `).join("");
+}
+
+function getAssetStatus(winrate = 0, total = 0) {
+  if (!total) return "sem amostra";
+  if (winrate >= 70) return "premium";
+  if (winrate >= 55) return "operável";
+  return "observação";
+}
+
+function renderAssetRanking(items = []) {
+  if (!el.assetRankingList) return;
+
+  if (!Array.isArray(items) || !items.length) {
+    el.assetRankingList.innerHTML = `<div class="history-empty">Sem estatísticas por ativo</div>`;
+    return;
+  }
+
+  el.assetRankingList.innerHTML = items.slice(0, 6).map((item, index) => {
+    const symbol = item.symbol || item.asset || "---";
+    const total = Number(item.total || item.totalSignals || 0);
+    const winrate = getWinrateValue(item);
+    const status = getAssetStatus(winrate, total);
+
+    return `
+      <div class="asset-rank-row">
+        <span class="rank-position">#${index + 1}</span>
+        <strong>${escapeHtml(symbol)}</strong>
+        <span>${formatPercent(winrate)}</span>
+        <small>${total} sinais</small>
+        <em class="asset-status ${status === "premium" ? "good" : status === "operável" ? "stable" : "watch"}">${escapeHtml(status)}</em>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderCommercialHourHeatmap(items = []) {
+  if (!el.commercialHourHeatmap) return;
+
+  if (!Array.isArray(items) || !items.length) {
+    el.commercialHourHeatmap.innerHTML = `<div class="history-empty">Aguardando histórico por horário</div>`;
+    return;
+  }
+
+  const ranked = [...items]
+    .map((item) => ({
+      hour: Number(item.hour),
+      total: Number(item.total || 0),
+      winrate: getWinrateValue(item),
+      score: Number(item.avgFinalScore || item.avg_final_score || 0)
+    }))
+    .filter((item) => Number.isFinite(item.hour))
+    .sort((a, b) => b.winrate - a.winrate || b.total - a.total || b.score - a.score)
+    .slice(0, 8);
+
+  el.commercialHourHeatmap.innerHTML = ranked.map((item) => {
+    const intensity = Math.max(0.12, Math.min(1, item.winrate / 100));
+    return `
+      <div class="commercial-hour-cell" style="--heat:${intensity.toFixed(2)}">
+        <strong>${String(item.hour).padStart(2, "0")}:00</strong>
+        <span>${formatPercent(item.winrate)}</span>
+        <small>${item.total} sinais</small>
+      </div>
+    `;
+  }).join("");
+}
+
+function calculateHealthScore({ winrate24h = 0, winrate7d = 0, winrate30d = 0, approvalRate = 0, signalsToday = 0 } = {}) {
+  const activityScore = Math.min(100, Number(signalsToday || 0) * 10);
+  const weighted = (winrate24h * 0.24) + (winrate7d * 0.28) + (winrate30d * 0.22) + (approvalRate * 0.16) + (activityScore * 0.1);
+  return Math.max(0, Math.min(100, Math.round(weighted || 0)));
 }
 
 function getWinrateValue(bucket = {}) {
@@ -1616,20 +1759,28 @@ function renderPerformanceDashboard(data = {}) {
   const winrate7d = getWinrateValue(data.winrate7d);
   const winrate30d = getWinrateValue(data.winrate30d);
   const lastApproved = data.lastApprovedSignal;
+  const signalsToday = data.signalsToday ?? data.analyzedToday ?? 0;
+  const approvalRate = Number(data.approvalRate || 0);
+  const healthScore = calculateHealthScore({ winrate24h, winrate7d, winrate30d, approvalRate, signalsToday });
 
-  if (el.perfSignalsToday) el.perfSignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
+  if (el.perfSignalsToday) el.perfSignalsToday.textContent = signalsToday;
   if (el.perfApprovedToday) el.perfApprovedToday.textContent = data.approvedSignalsToday ?? data.approvedToday ?? 0;
   if (el.perfBlockedToday) el.perfBlockedToday.textContent = data.blockedSignalsToday ?? data.blockedToday ?? 0;
-  if (el.perfApprovalRate) el.perfApprovalRate.textContent = formatPercent(data.approvalRate);
-  if (el.summaryApprovalRate) el.summaryApprovalRate.textContent = formatPercent(data.approvalRate);
+  if (el.perfApprovalRate) el.perfApprovalRate.textContent = formatPercent(approvalRate);
+  if (el.summaryApprovalRate) el.summaryApprovalRate.textContent = formatPercent(approvalRate);
   if (el.perfWinrate24h) el.perfWinrate24h.textContent = formatPercent(winrate24h);
   if (el.summaryWinrate24h) el.summaryWinrate24h.textContent = formatPercent(winrate24h);
   if (el.summaryWinrate7d) el.summaryWinrate7d.textContent = formatPercent(winrate7d);
-  if (el.summarySignalsToday) el.summarySignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
+  if (el.summaryWinrate30d) el.summaryWinrate30d.textContent = formatPercent(winrate30d);
+  if (el.summarySignalsToday) el.summarySignalsToday.textContent = signalsToday;
+  if (el.summaryHealthScore) el.summaryHealthScore.textContent = String(healthScore);
   if (el.perfWinrate7d) el.perfWinrate7d.textContent = formatPercent(winrate7d);
   if (el.perfWinrate30d) el.perfWinrate30d.textContent = formatPercent(winrate30d);
   if (el.perfLastApproved) el.perfLastApproved.textContent = lastApproved?.symbol || "--";
   if (el.performanceUpdated) el.performanceUpdated.textContent = data.generatedAt ? `Atualizado ${formatTime(data.generatedAt)}` : "sem dados";
+
+  renderAssetRanking(data.symbolStats || data.winrateBySymbol || []);
+  renderCommercialHourHeatmap(data.hourStats || data.hourPerformance || []);
 
   if (el.perfWinrateByAsset) {
     el.perfWinrateByAsset.innerHTML = renderWinrateBreakdown(data.winrateBySymbol, {
@@ -1828,12 +1979,12 @@ function renderHistory() {
   const header = document.createElement("div");
   header.className = "history-table-row history-table-header";
   header.innerHTML = `
+    <span>Horário</span>
     <span>Ativo</span>
-    <span>Direção</span>
-    <span>Resultado</span>
+    <span>Sinal</span>
     <span>Score</span>
+    <span>Resultado</span>
     <span>Estratégia</span>
-    <span>Hora</span>
     <span>Ações</span>
   `;
   el.historyList.appendChild(header);
@@ -1852,12 +2003,12 @@ function renderHistory() {
     const strategy = getStrategyLabel(signal);
 
     row.innerHTML = `
+      <time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time>
       <strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong>
       <span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span>
-      <span class="badge result-badge ${normalizedResult}">${escapeHtml(result)}</span>
       <span class="history-score">${score}%</span>
+      <span class="badge result-badge ${normalizedResult}">${escapeHtml(result)}</span>
       <span class="history-strategy">${escapeHtml(strategy)}</span>
-      <time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time>
       ${canSetResult ? `<div class="action-buttons"><button onclick="setResult(${signalId}, 'WIN')">WIN</button><button onclick="setResult(${signalId}, 'LOSS')">LOSS</button></div>` : `<span class="history-muted">--</span>`}
     `;
 
