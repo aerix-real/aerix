@@ -445,10 +445,12 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     mode: strategyMode
   };
 
+  const scoreBeforeAdaptiveAdjustment = Number(strategyResult.finalScore || 0) + Number(preCheckMetrics.scoreAdjustment || 0);
   const adaptive = await adaptiveService.applyAdaptiveScore(
-    Number(strategyResult.finalScore || 0) + Number(preCheckMetrics.scoreAdjustment || 0),
+    scoreBeforeAdaptiveAdjustment,
     adaptiveContext
   );
+  const scoreAfterAdaptiveAdjustment = Number(adaptive.finalScore || 0);
   const hardBlock = await adaptiveService.shouldHardBlock(adaptiveContext);
   const dynamicThresholds = adaptive.dynamicThresholds || null;
   const dynamicMinimumScore = Number(dynamicThresholds?.minimumScore || strategyResult.dynamicMinScore || 0);
@@ -586,6 +588,14 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     blockReason: forceWait ? finalBlocks.join(" ") : null,
     adaptiveAdjustment: Number(adaptive.adaptiveAdjustment || 0),
     adaptive_adjustment: Number(adaptive.adaptiveAdjustment || 0),
+    scoreBeforeAdaptiveAdjustment,
+    scoreAfterAdaptiveAdjustment,
+    scoreUsedForApproval: forceWait && preCheckBlocked
+      ? Math.min(Number(adaptive.finalScore || 0), preCheckMetrics.preScore)
+      : Number(adaptive.finalScore || 0),
+    executionAllowedReason: forceWait
+      ? finalBlocks.join(" ")
+      : "Entrada aprovada pelos critérios operacionais.",
     adaptiveReasons: adaptive.adaptiveReasons || [],
     dynamicThresholds,
     thresholdHistory: dynamicThresholds?.thresholdHistory || null,
@@ -676,6 +686,10 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     mtf: finalResult.mtf,
     adaptiveAdjustment: finalResult.adaptiveAdjustment,
     adaptive_adjustment: finalResult.adaptiveAdjustment,
+    scoreBeforeAdaptiveAdjustment: finalResult.scoreBeforeAdaptiveAdjustment,
+    scoreAfterAdaptiveAdjustment: finalResult.scoreAfterAdaptiveAdjustment,
+    scoreUsedForApproval: finalResult.scoreUsedForApproval,
+    executionAllowedReason: finalResult.executionAllowedReason,
     adaptiveReasons: finalResult.adaptiveReasons,
     adaptiveAdjustments: finalResult.adaptiveAdjustments,
     learningProfile: finalResult.learningProfile,
@@ -705,6 +719,10 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
       thresholdChanges: finalResult.thresholdChanges || [],
       thresholdPerformance: finalResult.thresholdPerformance || null,
       adaptiveAdjustment: finalResult.adaptiveAdjustment,
+      scoreBeforeAdaptiveAdjustment: finalResult.scoreBeforeAdaptiveAdjustment,
+      scoreAfterAdaptiveAdjustment: finalResult.scoreAfterAdaptiveAdjustment,
+      scoreUsedForApproval: finalResult.scoreUsedForApproval,
+      executionAllowedReason: finalResult.executionAllowedReason,
       adaptiveReasons: finalResult.adaptiveReasons,
       adaptiveAdjustments: finalResult.adaptiveAdjustments,
       learningProfile: finalResult.learningProfile,

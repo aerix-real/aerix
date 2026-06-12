@@ -71,6 +71,11 @@ function emitEngineDirectionAudit(stage, signal = {}) {
     volatility: signal.volatility ?? null,
     marketRegime: signal.marketRegime || signal.market_regime || "NORMAL",
     finalScore: Number(signal.finalScore ?? signal.final_score ?? signal.score ?? 0),
+    scoreBeforeAdaptiveAdjustment: signal.scoreBeforeAdaptiveAdjustment ?? signal.score_before_adaptive_adjustment ?? null,
+    scoreAfterAdaptiveAdjustment: signal.scoreAfterAdaptiveAdjustment ?? signal.score_after_adaptive_adjustment ?? null,
+    scoreUsedForApproval: signal.scoreUsedForApproval ?? signal.score_used_for_approval ?? signal.adjustedScore ?? signal.adjusted_score ?? null,
+    minimumScore: signal.dynamicThresholds?.minimumScore ?? signal.dynamic_thresholds?.minimumScore ?? signal.minimumScore ?? signal.minimum_score ?? null,
+    executionAllowedReason: signal.executionAllowedReason ?? signal.execution_allowed_reason ?? signal.execution?.reason ?? null,
     confidence: Number(signal.confidence ?? 0),
     calculatedDirection: signal.direction ?? signal.signal ?? null,
     signal: signal.signal ?? null,
@@ -512,6 +517,7 @@ class EngineRunnerService {
       ...signal,
       finalScore,
       final_score: finalScore,
+      scoreBeforeAdaptiveAdjustment: finalScore,
       predictiveAi: predictiveDecision,
       predictive_ai: predictiveDecision,
       preSignalScore: predictiveDecision.preScore || 0,
@@ -842,11 +848,17 @@ class EngineRunnerService {
   }
 
   async applyAdaptiveLayers(signal) {
+    const scoreBeforeAdaptiveAdjustment = Number(signal.finalScore || signal.confidence || 0);
+    signal.scoreBeforeAdaptiveAdjustment = Number(
+      signal.scoreBeforeAdaptiveAdjustment ?? scoreBeforeAdaptiveAdjustment
+    );
+
     const adaptive = await adaptiveService.applyAdaptiveScore(
-      signal.finalScore || signal.confidence,
+      scoreBeforeAdaptiveAdjustment,
       signal
     );
 
+    signal.scoreAfterAdaptiveAdjustment = Number(adaptive.finalScore || signal.finalScore || 0);
     signal.finalScore = Number(adaptive.finalScore || signal.finalScore || 0);
     signal.final_score = signal.finalScore;
     signal.adaptiveAdjustment = Number(adaptive.adaptiveAdjustment || 0);
@@ -931,6 +943,8 @@ class EngineRunnerService {
     signal.minimum_score = signal.minimumScore;
     signal.adjustedScore = validation.adjustedScore ?? signal.finalScore;
     signal.adjusted_score = signal.adjustedScore;
+    signal.scoreUsedForApproval = Number(signal.adjustedScore ?? signal.finalScore ?? 0);
+    signal.executionAllowedReason = validation.reason || null;
     signal.aiAdjustments = validation.aiAdjustments || signal.aiAdjustments || null;
     signal.aiBlock = validation.aiBlock || signal.aiBlock || null;
 
@@ -1029,6 +1043,10 @@ class EngineRunnerService {
       execution_allowed: signal.executionAllowed === true || signal.execution_allowed === true,
       minimumScore: Number(signal.minimumScore || signal.minimum_score || 0),
       minimum_score: Number(signal.minimumScore || signal.minimum_score || 0),
+      scoreBeforeAdaptiveAdjustment: Number(signal.scoreBeforeAdaptiveAdjustment ?? finalScore),
+      scoreAfterAdaptiveAdjustment: Number(signal.scoreAfterAdaptiveAdjustment ?? finalScore),
+      scoreUsedForApproval: Number(signal.scoreUsedForApproval ?? signal.adjustedScore ?? signal.adjusted_score ?? finalScore),
+      executionAllowedReason: signal.executionAllowedReason || signal.execution?.reason || blockReason,
 
       explanation: signal.explanation || "",
       activationReason: signal.activationReason || null,
