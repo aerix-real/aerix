@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=performance-dashboard-1" />
+  <link rel="stylesheet" href="/style.css?v=commercial-dashboard-v2" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -130,29 +130,26 @@
             </div>
             <div class="current-signal-head">
               <div>
-                <span class="micro-label">Ativo</span>
+                <span class="micro-label">Ativo atual</span>
                 <strong id="bestAsset" class="current-asset">---</strong>
               </div>
               <div class="signal-direction neutral" id="bestDirection">WAIT</div>
             </div>
-            <div class="current-signal-scoreline">
+            <div class="current-signal-scoreline commercial-primary-metrics">
               <div><span>Score</span><strong id="bestScore">0%</strong></div>
               <div><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
-              <div><span>Expiração</span><strong id="bestExpiry">--</strong></div>
             </div>
-            <div class="current-signal-meta">
+            <div class="current-signal-meta commercial-primary-meta">
               <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
-              <div><span>Status da IA</span><strong id="bestAiStatus">Aguardando</strong></div>
-              <div><span>Status</span><strong id="bestEntryStatus">Aguardando</strong></div>
+              <div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div>
             </div>
-            <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
           </article>
 
-          <aside class="summary-card-grid" aria-label="Indicadores resumidos">
+          <aside class="summary-card-grid" aria-label="Indicadores comerciais resumidos">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
+            <article class="stat-card commercial-summary-card"><span>Winrate 7 dias</span><strong id="summaryWinrate7d">0%</strong><small>consistência semanal</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
-            <article class="stat-card commercial-summary-card"><span>Status da Engine</span><strong id="summaryEngineStatus">Sincronizando</strong><small id="summarySocketStatus">WebSocket</small></article>
-            <article class="stat-card commercial-summary-card"><span>Última análise</span><strong id="summaryLastAnalysis">--</strong><small id="statsUpdated">sincronizando</small></article>
+            <article class="stat-card commercial-summary-card"><span>Taxa de aprovação</span><strong id="summaryApprovalRate">0%</strong><small>qualidade dos sinais</small></article>
           </aside>
         </section>
 
@@ -374,6 +371,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=performance-dashboard-1"></script>
+  <script src="/app.js?v=commercial-dashboard-v2"></script>
 </body>
 </html>
