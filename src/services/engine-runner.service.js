@@ -787,6 +787,7 @@ class EngineRunnerService {
       activationReason: strategyResult.activationReason || null,
       blocks: Array.isArray(strategyResult.blocks) ? strategyResult.blocks : [],
       strategies: strategyResult.strategies || [],
+      metrics: strategyResult.metrics || {},
       mtf: strategyResult.mtf || {},
       market: snapshot?.timeframes || {},
       dataQuality: snapshot?.dataQuality || {

@@ -299,6 +299,7 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     activationReason: strategyResult.activationReason || null,
     strategies: Array.isArray(strategyResult.strategies) ? strategyResult.strategies : [],
     strategyEligibilityReport: strategyResult.strategyEligibilityReport || null,
+    metrics: strategyResult.metrics || {},
     mtf: strategyResult.mtf || {},
     operationalTuning: strategyResult.operationalTuning || {},
     marketRegime: strategyResult.marketRegime || "NORMAL",
@@ -691,6 +692,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     userSummary: finalResult.userSummary,
     filterBlocks: finalResult.filterBlocks,
     filterPenalties: finalResult.filterPenalties,
+    metrics: finalResult.metrics || {},
     finalResult: {
       signal: finalResult.signal,
       finalScore: finalResult.finalScore,
@@ -716,7 +718,8 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
       risk: finalResult.risk,
       userSummary: finalResult.userSummary,
       filterBlocks: finalResult.filterBlocks,
-      filterPenalties: finalResult.filterPenalties
+      filterPenalties: finalResult.filterPenalties,
+      metrics: finalResult.metrics || {}
     },
     mode: modeConfig,
     strategyMode,
