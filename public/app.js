@@ -110,9 +110,7 @@ const el = {
   engineTopStatus: document.getElementById("engineTopStatus"),
   topCurrentMode: document.getElementById("topCurrentMode"),
   summaryWinrate24h: document.getElementById("summaryWinrate24h"),
-  summaryWinrate7d: document.getElementById("summaryWinrate7d"),
   summarySignalsToday: document.getElementById("summarySignalsToday"),
-  summaryApprovalRate: document.getElementById("summaryApprovalRate"),
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
@@ -1621,10 +1619,8 @@ function renderPerformanceDashboard(data = {}) {
   if (el.perfApprovedToday) el.perfApprovedToday.textContent = data.approvedSignalsToday ?? data.approvedToday ?? 0;
   if (el.perfBlockedToday) el.perfBlockedToday.textContent = data.blockedSignalsToday ?? data.blockedToday ?? 0;
   if (el.perfApprovalRate) el.perfApprovalRate.textContent = formatPercent(data.approvalRate);
-  if (el.summaryApprovalRate) el.summaryApprovalRate.textContent = formatPercent(data.approvalRate);
   if (el.perfWinrate24h) el.perfWinrate24h.textContent = formatPercent(winrate24h);
   if (el.summaryWinrate24h) el.summaryWinrate24h.textContent = formatPercent(winrate24h);
-  if (el.summaryWinrate7d) el.summaryWinrate7d.textContent = formatPercent(winrate7d);
   if (el.summarySignalsToday) el.summarySignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
   if (el.perfWinrate7d) el.perfWinrate7d.textContent = formatPercent(winrate7d);
   if (el.perfWinrate30d) el.perfWinrate30d.textContent = formatPercent(winrate30d);

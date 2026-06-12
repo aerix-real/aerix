@@ -1825,19 +1825,3 @@ body.design-system-institutional {
   .commercial-summary-card { min-height: 112px; }
   .current-signal-card { padding: 16px; }
 }
-
-/* Commercial dashboard v2: keep the main desk strictly business-facing. */
-.commercial-primary-metrics,
-.current-signal-meta.commercial-primary-meta {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-@media (min-width: 761px) and (max-width: 1180px) {
-  .commercial-dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-card-grid {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
-  }
-}
