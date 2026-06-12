@@ -28,6 +28,46 @@ function emitStructuredLog(event, payload = {}) {
   console.log(JSON.stringify(log));
 }
 
+
+function normalizeOptionalNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function getLoggedMinimumScore(signal = {}) {
+  return normalizeOptionalNumber(
+    signal.dynamicThresholds?.minimumScore ??
+    signal.dynamic_thresholds?.minimumScore ??
+    signal.minimumScore ??
+    signal.minimum_score ??
+    getMinimumValidatedScore(signal)
+  );
+}
+
+function getScoreUsedForApproval(signal = {}, fallbackScore = 0) {
+  return normalizeOptionalNumber(
+    signal.scoreUsedForApproval ??
+    signal.score_used_for_approval ??
+    signal.execution?.scoreUsedForApproval ??
+    signal.execution?.adjustedScore ??
+    signal.adjustedScore ??
+    signal.adjusted_score ??
+    fallbackScore
+  );
+}
+
+function getExecutionAllowedReason(signal = {}) {
+  return (
+    signal.executionAllowedReason ||
+    signal.execution_allowed_reason ||
+    signal.execution?.reason ||
+    signal.activationReason ||
+    signal.blockReason ||
+    signal.block_reason ||
+    null
+  );
+}
+
 function getMarketRegime(signal = {}, fallback = "NORMAL") {
   return signal.marketRegime || signal.market_regime || signal.marketContext?.marketRegime || fallback;
 }
@@ -97,10 +137,21 @@ function buildDebugEvent(signal = {}, options = {}) {
   const score = getSignalScore(signal);
   const blockReason = getBlockReason(signal, options.blockReason);
   const filterName = getPrimaryFilter(signal, options.filterName);
+  const scoreUsedForApproval = getScoreUsedForApproval(signal, score);
+  const minimumScore = getLoggedMinimumScore(signal);
 
   return {
     symbol: signal.symbol || signal.asset || options.symbol || "UNKNOWN",
     score,
+    scoreBeforeAdaptiveAdjustment: normalizeOptionalNumber(
+      signal.scoreBeforeAdaptiveAdjustment ?? signal.score_before_adaptive_adjustment
+    ),
+    scoreAfterAdaptiveAdjustment: normalizeOptionalNumber(
+      signal.scoreAfterAdaptiveAdjustment ?? signal.score_after_adaptive_adjustment
+    ),
+    scoreUsedForApproval,
+    minimumScore,
+    executionAllowedReason: getExecutionAllowedReason(signal),
     confidence: Number(signal.confidence ?? score ?? 0),
     marketRegime: getMarketRegime(signal, options.marketRegime),
     executionAllowed: getExecutionAllowed(signal),
