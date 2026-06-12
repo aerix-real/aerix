@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=commercial-dashboard-v3" />
+  <link rel="stylesheet" href="/style.css?v=commercial-dashboard-v2" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -143,16 +143,13 @@
               <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
               <div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div>
             </div>
-            <div class="entry-approval-pill is-waiting" id="bestEntryStatus">Aguardando aprovação</div>
           </article>
 
           <aside class="summary-card-grid" aria-label="Indicadores comerciais resumidos">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
             <article class="stat-card commercial-summary-card"><span>Winrate 7 dias</span><strong id="summaryWinrate7d">0%</strong><small>consistência semanal</small></article>
-            <article class="stat-card commercial-summary-card"><span>Winrate 30 dias</span><strong id="summaryWinrate30d">0%</strong><small>janela mensal</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
             <article class="stat-card commercial-summary-card"><span>Taxa de aprovação</span><strong id="summaryApprovalRate">0%</strong><small>qualidade dos sinais</small></article>
-            <article class="stat-card commercial-summary-card health-card"><span>AERIX Health Score</span><strong id="summaryHealthScore">0</strong><small>estabilidade comercial</small></article>
           </aside>
         </section>
 
@@ -164,13 +161,6 @@
 
         <section class="dashboard-tab-panel active" data-tab-panel="operation">
           <section class="operation-fast-grid" aria-label="Dados essenciais para decisão">
-            <article class="panel why-signal-panel premium-card">
-              <div class="panel-header"><h3>Por que este sinal?</h3><span>4 motivos</span></div>
-              <div class="reason-list" id="signalReasonList">
-                <div class="reason-item muted">Aguardando sinal aprovado pela IA.</div>
-              </div>
-            </article>
-
             <article class="panel stats-panel premium-card essential-metrics-panel">
               <div class="panel-header"><h3>Decisão rápida</h3><span>essencial</span></div>
               <div class="stats-grid essential-stats-grid">
@@ -179,16 +169,6 @@
                 <div class="stat-card"><span>Aprovados</span><strong id="perfApprovedToday">0</strong></div>
                 <div class="stat-card"><span>Último aprovado</span><strong id="perfLastApproved">--</strong></div>
               </div>
-            </article>
-
-            <article class="panel asset-ranking-panel premium-card">
-              <div class="panel-header"><h3>Ranking de Ativos</h3><span>assertividade</span></div>
-              <div class="asset-ranking-list" id="assetRankingList"><div class="history-empty">Sem estatísticas por ativo</div></div>
-            </article>
-
-            <article class="panel hour-heatmap-panel premium-card">
-              <div class="panel-header"><h3>Melhores Horários</h3><span>UTC</span></div>
-              <div class="commercial-hour-heatmap" id="commercialHourHeatmap"><div class="history-empty">Aguardando histórico por horário</div></div>
             </article>
 
             <article class="panel signal-card compact-signal-details premium-card operation-signal-details">
@@ -343,43 +323,54 @@
               </div>
             </div>
           </section>
-
-          <section class="panel filter-analytics-panel premium-card secondary-details-panel">
-            <div class="panel-header"><h3>Filter Analytics</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
-            <details class="technical-details filter-details">
-              <summary>Ver bloqueios, ranking, reasons e auditoria de filtros</summary>
-              <div class="filter-summary-grid">
-                <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
-                <div class="stat-card"><span>Sinais analisados</span><strong id="filterTotalSignals">0</strong></div>
-                <div class="stat-card"><span>Sinais confirmados</span><strong id="filterApprovedSignals">0</strong></div>
-                <div class="stat-card"><span>Sinais bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
-                <div class="stat-card"><span>Watchlist</span><strong id="filterWatchlistRate">0%</strong></div>
-                <div class="stat-card"><span>Alta confiança</span><strong id="filterHighConfidenceRate">0%</strong></div>
-                <div class="stat-card"><span>Média confiança</span><strong id="filterMediumConfidenceRate">0%</strong></div>
-                <div class="stat-card"><span>Penalizações</span><strong id="filterPenaltySignals">0</strong></div>
-              </div>
-              <div class="filter-analytics-grid">
-                <div class="institutional-subpanel"><div class="subpanel-title"><strong>Top filtros bloqueadores</strong><span>ranking</span></div><div class="filter-ranking-list" id="filterRankingList"><div class="history-empty">Nenhum bloqueio registrado</div></div></div>
-                <div class="institutional-subpanel"><div class="subpanel-title"><strong>Ativos mais bloqueados</strong><span>assets</span></div><div class="filter-ranking-list" id="filterAssetList"><div class="history-empty">Nenhum ativo bloqueado</div></div></div>
-                <div class="institutional-subpanel"><div class="subpanel-title"><strong>Horários mais bloqueados</strong><span>UTC</span></div><div class="filter-ranking-list" id="filterHourList"><div class="history-empty">Nenhum horário mapeado</div></div></div>
-                <div class="institutional-subpanel"><div class="subpanel-title"><strong>Últimos bloqueios</strong><span>auditoria</span></div><div class="filter-block-list" id="filterBlockList"><div class="history-empty">Aguardando bloqueios da engine</div></div></div>
-              </div>
-            </details>
-          </section>
-
-          <section class="panel pro-audit-panel secondary-details-panel">
-            <details class="technical-details audit-details">
-              <summary>Ver logs profissionais</summary>
-              <div class="pro-logs" id="proLogs"></div>
-            </details>
-          </section>
         </section>
 
+        <section class="panel filter-analytics-panel premium-card secondary-details-panel">
+          <div class="panel-header"><h3>Filter Analytics</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
+          <details class="technical-details filter-details">
+            <summary>Ver bloqueios, ranking, reasons e auditoria de filtros</summary>
+            <div class="filter-summary-grid">
+              <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
+              <div class="stat-card"><span>Sinais analisados</span><strong id="filterTotalSignals">0</strong></div>
+              <div class="stat-card"><span>Sinais confirmados</span><strong id="filterApprovedSignals">0</strong></div>
+              <div class="stat-card"><span>Sinais bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
+              <div class="stat-card"><span>Watchlist</span><strong id="filterWatchlistRate">0%</strong></div>
+              <div class="stat-card"><span>Alta confiança</span><strong id="filterHighConfidenceRate">0%</strong></div>
+              <div class="stat-card"><span>Média confiança</span><strong id="filterMediumConfidenceRate">0%</strong></div>
+              <div class="stat-card"><span>Penalizações</span><strong id="filterPenaltySignals">0</strong></div>
+            </div>
+            <div class="filter-analytics-grid">
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Top filtros bloqueadores</strong><span>ranking</span></div>
+                <div class="filter-ranking-list" id="filterRankingList"><div class="history-empty">Nenhum bloqueio registrado</div></div>
+              </div>
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Ativos mais bloqueados</strong><span>assets</span></div>
+                <div class="filter-ranking-list" id="filterAssetList"><div class="history-empty">Nenhum ativo bloqueado</div></div>
+              </div>
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Horários mais bloqueados</strong><span>UTC</span></div>
+                <div class="filter-ranking-list" id="filterHourList"><div class="history-empty">Nenhum horário mapeado</div></div>
+              </div>
+              <div class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Últimos bloqueios</strong><span>auditoria</span></div>
+                <div class="filter-block-list" id="filterBlockList"><div class="history-empty">Aguardando bloqueios da engine</div></div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="panel pro-audit-panel secondary-details-panel">
+          <details class="technical-details audit-details">
+            <summary>Ver logs profissionais</summary>
+            <div class="pro-logs" id="proLogs"></div>
+          </details>
+        </section>
       </section>
     </main>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=commercial-dashboard-v3"></script>
+  <script src="/app.js?v=commercial-dashboard-v2"></script>
 </body>
 </html>
