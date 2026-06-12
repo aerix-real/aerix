@@ -1,29 +1,31 @@
 :root {
   color-scheme: dark;
-  --bg: #020203;
-  --bg-2: #060708;
-  --bg-elev: #0b0b0a;
-  --panel: rgba(10, 11, 12, 0.74);
-  --panel-strong: rgba(18, 18, 16, 0.92);
-  --glass: rgba(255, 255, 255, 0.055);
-  --glass-strong: rgba(255, 255, 255, 0.085);
-  --line: rgba(222, 184, 105, 0.18);
-  --line-strong: rgba(246, 213, 142, 0.42);
-  --text: #fbf4e6;
-  --text-soft: #d8cbb4;
-  --muted: #9d917a;
-  --muted-2: #6f6759;
-  --gold: #d7aa4d;
-  --gold-2: #f0cf82;
-  --gold-strong: #ffe4a3;
-  --gold-dark: #7b5a20;
-  --buy: #41e6a7;
-  --buy-soft: rgba(65, 230, 167, 0.14);
-  --sell: #ff647f;
-  --sell-soft: rgba(255, 100, 127, 0.14);
+  --bg: #0D0D0D;
+  --bg-2: #101010;
+  --bg-elev: #171717;
+  --panel: rgba(23, 23, 23, 0.82);
+  --panel-strong: rgba(23, 23, 23, 0.96);
+  --glass: rgba(255, 255, 255, 0.045);
+  --glass-strong: rgba(255, 255, 255, 0.07);
+  --line: rgba(212, 175, 55, 0.12);
+  --line-strong: rgba(212, 175, 55, 0.3);
+  --text: #f7f7f2;
+  --text-soft: #deded6;
+  --muted: #A1A1AA;
+  --muted-2: #71717a;
+  --gold: #D4AF37;
+  --gold-2: #e6c75b;
+  --gold-strong: #f3dc86;
+  --gold-dark: #8b6b18;
+  --buy: #22C55E;
+  --buy-soft: rgba(34, 197, 94, 0.14);
+  --sell: #EF4444;
+  --sell-soft: rgba(239, 68, 68, 0.14);
+  --font-sans: "Manrope", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-terminal: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --pending: #ffd166;
-  --online: #41e6a7;
-  --offline: #ff647f;
+  --online: #22C55E;
+  --offline: #EF4444;
   --ice: #9ec8ff;
   --radius-sm: 12px;
   --radius: 18px;
@@ -51,13 +53,13 @@ html {
 body {
   min-height: 100vh;
   color: var(--text);
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-feature-settings: "cv02" 1, "cv03" 1, "cv04" 1, "tnum" 1, "zero" 1;
   background:
-    radial-gradient(circle at 12% -12%, rgba(246, 213, 142, 0.22), transparent 28%),
-    radial-gradient(circle at 86% 0%, rgba(117, 88, 34, 0.26), transparent 25%),
-    radial-gradient(circle at 52% 118%, rgba(65, 230, 167, 0.07), transparent 34%),
-    linear-gradient(135deg, #010101 0%, #070807 45%, #020203 100%);
+    radial-gradient(circle at 12% -12%, rgba(212, 175, 55, 0.16), transparent 28%),
+    radial-gradient(circle at 86% 0%, rgba(212, 175, 55, 0.08), transparent 25%),
+    radial-gradient(circle at 52% 118%, rgba(34, 197, 94, 0.055), transparent 34%),
+    linear-gradient(135deg, #0D0D0D 0%, #111111 45%, #0D0D0D 100%);
   overflow-x: hidden;
 }
 body::before,
@@ -70,8 +72,8 @@ body::after {
 }
 body::before {
   background-image:
-    linear-gradient(rgba(246, 213, 142, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(246, 213, 142, 0.026) 1px, transparent 1px);
+    linear-gradient(rgba(212, 175, 55, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 175, 55, 0.02) 1px, transparent 1px);
   background-size: 54px 54px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.74), transparent 78%);
 }
@@ -1526,7 +1528,7 @@ body.design-system-institutional .app-shell {
 
 /* Commercial dashboard UX refresh */
 body.design-system-institutional {
-  font-family: "Inter", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 .content-panel.compact-commercial-panel {
@@ -1840,4 +1842,199 @@ body.design-system-institutional {
   .summary-card-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
+}
+
+
+/* Visual identity refresh: quieter borders, deeper spacing, stronger terminal contrast. */
+body.design-system-institutional {
+  --panel: rgba(23, 23, 23, 0.88);
+  --panel-strong: rgba(23, 23, 23, 0.98);
+  --line: rgba(212, 175, 55, 0.09);
+  --line-strong: rgba(212, 175, 55, 0.26);
+  --shadow: 0 24px 72px rgba(0, 0, 0, 0.54);
+  --shadow-soft: 0 16px 42px rgba(0, 0, 0, 0.38);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(212, 175, 55, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 4%, rgba(212, 175, 55, 0.08), transparent 24%),
+    radial-gradient(circle at 54% 118%, rgba(34, 197, 94, 0.045), transparent 32%),
+    linear-gradient(135deg, #0D0D0D 0%, #111111 48%, #0D0D0D 100%);
+  letter-spacing: -0.01em;
+}
+
+body.design-system-institutional::before {
+  opacity: 0.42;
+  background-size: 72px 72px;
+}
+
+body.design-system-institutional .panel,
+body.design-system-institutional .glass-card,
+body.design-system-institutional .current-signal-card,
+body.design-system-institutional .decision-focus-card,
+body.design-system-institutional .recent-signals-panel,
+body.design-system-institutional .performance-dashboard-panel {
+  border-color: rgba(212, 175, 55, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    var(--panel-strong);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+body.design-system-institutional .panel {
+  padding: clamp(20px, 1.8vw, 28px);
+}
+
+body.design-system-institutional .side-panel .panel {
+  padding: 18px;
+}
+
+body.design-system-institutional .panel:hover,
+body.design-system-institutional .premium-card:hover {
+  border-color: rgba(212, 175, 55, 0.18);
+  transform: translateY(-1px);
+}
+
+body.design-system-institutional .panel-header,
+body.design-system-institutional .current-signal-head,
+body.design-system-institutional .history-toolbar,
+body.design-system-institutional .topbar {
+  margin-bottom: clamp(16px, 1.5vw, 22px);
+}
+
+body.design-system-institutional .panel-header h3,
+body.design-system-institutional .subpanel-title strong,
+body.design-system-institutional .section-kicker,
+body.design-system-institutional .headline-kicker {
+  color: var(--gold);
+  font-family: var(--font-terminal);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+body.design-system-institutional .compact-status-strip .top-status-card,
+body.design-system-institutional .compact-status-strip .live-clock-card,
+body.design-system-institutional .current-signal-scoreline > div,
+body.design-system-institutional .current-signal-meta > div,
+body.design-system-institutional .commercial-summary-card,
+body.design-system-institutional .technical-snapshot-grid .compact-status-item,
+body.design-system-institutional .signal-meta-card,
+body.design-system-institutional .stat-card,
+body.design-system-institutional .institutional-metric-card,
+body.design-system-institutional .realtime-metric-card,
+body.design-system-institutional .opportunity-essential-item,
+body.design-system-institutional .compact-status-item,
+body.design-system-institutional .history-table-row,
+body.design-system-institutional .compact-history-item,
+body.design-system-institutional .performance-row,
+body.design-system-institutional .filter-rank-item,
+body.design-system-institutional .filter-block-item,
+body.design-system-institutional .metric {
+  border-color: rgba(212, 175, 55, 0.07);
+  background: rgba(255, 255, 255, 0.032);
+  padding: clamp(14px, 1.2vw, 18px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.032);
+}
+
+body.design-system-institutional .compact-status-strip .top-status-card strong,
+body.design-system-institutional .compact-status-strip .live-clock-card strong,
+body.design-system-institutional .current-asset,
+body.design-system-institutional .current-signal-scoreline strong,
+body.design-system-institutional .commercial-summary-card strong,
+body.design-system-institutional .decision-asset-row strong,
+body.design-system-institutional .history-table-row strong,
+body.design-system-institutional .history-score {
+  color: #ffffff;
+}
+
+body.design-system-institutional .current-signal-meta strong,
+body.design-system-institutional .technical-snapshot-grid strong,
+body.design-system-institutional .decision-direction-row strong,
+body.design-system-institutional .opportunity-essential-item strong,
+body.design-system-institutional .compact-status-item strong,
+body.design-system-institutional .live-clock-card b {
+  color: var(--gold-strong);
+}
+
+body.design-system-institutional .compact-status-strip .top-status-card span:not(.connection-badge),
+body.design-system-institutional .compact-status-strip .live-clock-card span,
+body.design-system-institutional .current-signal-scoreline span,
+body.design-system-institutional .current-signal-meta span,
+body.design-system-institutional .commercial-summary-card span,
+body.design-system-institutional .technical-snapshot-grid span,
+body.design-system-institutional .history-table-header,
+body.design-system-institutional .history-strategy,
+body.design-system-institutional .history-table-row time,
+body.design-system-institutional .history-muted,
+body.design-system-institutional .panel-header span {
+  color: var(--muted);
+}
+
+body.design-system-institutional .top-status-card strong,
+body.design-system-institutional .live-clock-card strong,
+body.design-system-institutional .current-signal-scoreline strong,
+body.design-system-institutional .current-signal-meta strong,
+body.design-system-institutional .technical-snapshot-grid strong,
+body.design-system-institutional .history-score,
+body.design-system-institutional .performance-rate,
+body.design-system-institutional .score-badge,
+body.design-system-institutional .result-badge {
+  font-family: var(--font-terminal);
+  letter-spacing: -0.02em;
+}
+
+body.design-system-institutional .signal-direction.call,
+body.design-system-institutional .signal-direction.buy,
+body.design-system-institutional .direction-badge.call,
+body.design-system-institutional .badge.call,
+body.design-system-institutional .result-badge.win,
+body.design-system-institutional .current-signal-head .signal-direction.buy,
+body.design-system-institutional .signal-direction.buy {
+  color: var(--buy);
+  border-color: rgba(34, 197, 94, 0.26);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+body.design-system-institutional .signal-direction.put,
+body.design-system-institutional .signal-direction.sell,
+body.design-system-institutional .direction-badge.put,
+body.design-system-institutional .badge.put,
+body.design-system-institutional .result-badge.loss,
+body.design-system-institutional .current-signal-head .signal-direction.sell,
+body.design-system-institutional .signal-direction.sell {
+  color: var(--sell);
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+body.design-system-institutional .dashboard-tabs,
+body.design-system-institutional .history-toolbar,
+body.design-system-institutional .technical-details,
+body.design-system-institutional .compact-decision-text {
+  border-color: rgba(212, 175, 55, 0.08);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+body.design-system-institutional .dashboard-tab {
+  color: #d4d4d8;
+}
+
+body.design-system-institutional .dashboard-tab.active,
+body.design-system-institutional .history-pagination button,
+body.design-system-institutional .plan-badge.premium,
+body.design-system-institutional .login-btn,
+body.design-system-institutional .logout-btn {
+  background: linear-gradient(135deg, #f0d878, var(--gold) 62%, #9b741f);
+  color: #0D0D0D;
+}
+
+body.design-system-institutional .history-toolbar select,
+body.design-system-institutional .history-toolbar input,
+body.design-system-institutional .field input {
+  border-color: rgba(212, 175, 55, 0.12);
+  background: #121212;
+  color: #ffffff;
+}
+
+@media (max-width: 1400px) {
+  body.design-system-institutional .panel { padding: 18px; }
+  body.design-system-institutional .brand-terminal { padding: 14px 18px; }
 }
