@@ -293,23 +293,31 @@ async function getLatestConfirmed(limit = 20, filters = {}) {
 
 async function getStats() {
   try {
-    const result = await db.query(`
-    SELECT
-      symbol,
-      signal,
-      strategy_name,
-      result,
-      created_at,
-      volatility,
-      final_score,
-      entry_quality,
-      market_regime
-    FROM public.signal_history
-    WHERE result IN ('win', 'loss', 'draw')
-      AND ${CONFIRMED_OPERATIONAL_WHERE}
-    ORDER BY created_at DESC
-    LIMIT 1000
-  `);
+    const [result, totalResult] = await Promise.all([
+      db.query(`
+      SELECT
+        symbol,
+        signal,
+        strategy_name,
+        result,
+        created_at,
+        volatility,
+        final_score,
+        entry_quality,
+        market_regime
+      FROM public.signal_history
+      WHERE result IN ('win', 'loss', 'draw')
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+      ORDER BY created_at DESC
+      LIMIT 1000
+    `),
+      db.query(`
+      SELECT COUNT(*)::int AS total
+      FROM public.signal_history
+      WHERE result IN ('win', 'loss', 'draw')
+        AND ${CONFIRMED_OPERATIONAL_WHERE}
+    `)
+    ]);
 
   const stats = {
     bySymbol: {},
@@ -319,8 +327,11 @@ async function getStats() {
     bySymbolSignal: {},
     byMarketRegime: {},
     lossPatterns: {},
-    global: createStatsBucket()
+    global: createStatsBucket(),
+    totalHistoricalSignals: 0
   };
+
+  stats.totalHistoricalSignals = Number(totalResult.rows[0]?.total || 0);
 
   for (const row of result.rows) {
     const symbol = row.symbol || "unknown";
@@ -403,6 +414,7 @@ async function getStats() {
   finalizeGroup(stats.byMarketRegime);
   finalizeGroup(stats.lossPatterns);
   finalizeBucket(stats.global);
+  stats.global.totalHistoricalSignals = stats.totalHistoricalSignals;
 
     return stats;
   } catch (error) {
