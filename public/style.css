@@ -2130,3 +2130,66 @@ body.design-system-institutional {
     padding-inline: 12px;
   }
 }
+
+.entry-window-timer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 218, 149, 0.16);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.entry-window-timer span,
+.entry-window-timer small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.entry-window-timer strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff7db;
+  font-size: clamp(1.15rem, 2.1vw, 1.75rem);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.entry-window-timer small {
+  grid-column: 1 / -1;
+  color: var(--text-soft);
+  opacity: 0.82;
+}
+
+.entry-window-classification {
+  justify-self: end;
+  border-radius: 999px;
+  padding: 9px 12px;
+  border: 1px solid rgba(214, 189, 120, 0.28);
+  color: #d6bd78;
+  background: rgba(214, 189, 120, 0.08);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.entry-window-timer.ideal { border-color: rgba(50, 230, 165, 0.34); background: rgba(50, 230, 165, 0.075); }
+.entry-window-classification.ideal { color: #32e6a5; border-color: rgba(50, 230, 165, 0.42); background: rgba(50, 230, 165, 0.12); }
+.entry-window-timer.acceptable { border-color: rgba(255, 209, 102, 0.34); background: rgba(255, 209, 102, 0.07); }
+.entry-window-classification.acceptable { color: #ffd166; border-color: rgba(255, 209, 102, 0.42); background: rgba(255, 209, 102, 0.12); }
+.entry-window-timer.late { border-color: rgba(255, 100, 127, 0.34); background: rgba(255, 100, 127, 0.075); }
+.entry-window-classification.late { color: #ff7b8d; border-color: rgba(255, 100, 127, 0.42); background: rgba(255, 100, 127, 0.12); }
+
+@media (max-width: 720px) {
+  .entry-window-timer { grid-template-columns: 1fr; }
+  .entry-window-classification { justify-self: start; }
+}
