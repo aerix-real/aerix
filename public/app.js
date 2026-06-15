@@ -51,7 +51,12 @@ const state = {
     lastUpdated: null
   },
   filterAnalyticsTimer: null,
-  performanceDashboardTimer: null
+  performanceDashboardTimer: null,
+  entryWindow: {
+    signalKey: null,
+    approvedAt: null,
+    timer: null
+  }
 };
 
 const el = {
@@ -94,6 +99,10 @@ const el = {
   bestStrategy: document.getElementById("bestStrategy"),
   bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
+  entryWindowTimer: document.getElementById("entryWindowTimer"),
+  entryWindowCountdown: document.getElementById("entryWindowCountdown"),
+  entryWindowClassification: document.getElementById("entryWindowClassification"),
+  entryWindowTimestamp: document.getElementById("entryWindowTimestamp"),
   marketRegime: document.getElementById("marketRegime"),
   techStrategy: document.getElementById("techStrategy"),
   techVolatility: document.getElementById("techVolatility"),
@@ -860,11 +869,86 @@ function getActivationReason(signal = {}) {
 }
 
 
+function getSignalApprovedTimestamp(signal = {}) {
+  const raw = signal.approvedAt ||
+    signal.approved_at ||
+    signal.created_at ||
+    signal.createdAt ||
+    signal.timestamp ||
+    signal.updated_at ||
+    signal.updatedAt;
+  const parsed = raw ? new Date(raw) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function getEntryWindowSignalKey(signal = {}) {
+  return String(signal.id || [
+    signal.symbol || signal.asset || "ENGINE",
+    signal.signal || signal.direction || "WAIT",
+    signal.created_at || signal.createdAt || signal.timestamp || "live"
+  ].join(":"));
+}
+
+function classifyEntryWindow(elapsedSeconds = 0) {
+  if (elapsedSeconds <= 60) return { label: "Entrada Ideal", tone: "ideal", remaining: Math.max(0, 60 - elapsedSeconds) };
+  if (elapsedSeconds <= 120) return { label: "Entrada Aceitável", tone: "acceptable", remaining: Math.max(0, 120 - elapsedSeconds) };
+  return { label: "Entrada Tardia", tone: "late", remaining: 0 };
+}
+
+function renderEntryWindowTimer() {
+  const approvedAt = state.entryWindow.approvedAt;
+
+  if (!approvedAt) {
+    setTextContent(el.entryWindowCountdown, "--");
+    setTextContent(el.entryWindowClassification, "Aguardando sinal");
+    setTextContent(el.entryWindowTimestamp, "Timestamp pendente");
+    if (el.entryWindowClassification) el.entryWindowClassification.className = "entry-window-classification neutral";
+    if (el.entryWindowTimer) el.entryWindowTimer.className = "entry-window-timer neutral";
+    return;
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - approvedAt.getTime()) / 1000));
+  const classification = classifyEntryWindow(elapsedSeconds);
+  const countdownText = classification.remaining > 0
+    ? `${classification.remaining}s restantes`
+    : `${elapsedSeconds}s decorridos`;
+
+  setTextContent(el.entryWindowCountdown, countdownText);
+  setTextContent(el.entryWindowClassification, classification.label);
+  setTextContent(el.entryWindowTimestamp, `Aprovado ${formatTime(approvedAt)}`);
+
+  if (el.entryWindowClassification) {
+    el.entryWindowClassification.className = `entry-window-classification ${classification.tone}`;
+  }
+
+  if (el.entryWindowTimer) {
+    el.entryWindowTimer.className = `entry-window-timer ${classification.tone}`;
+  }
+}
+
+function registerEntryWindow(signal = {}) {
+  if (!isConfirmedOperationalSignal(signal)) return;
+
+  const signalKey = getEntryWindowSignalKey(signal);
+
+  if (state.entryWindow.signalKey !== signalKey) {
+    state.entryWindow.signalKey = signalKey;
+    state.entryWindow.approvedAt = getSignalApprovedTimestamp(signal);
+  }
+
+  renderEntryWindowTimer();
+
+  if (!state.entryWindow.timer) {
+    state.entryWindow.timer = setInterval(renderEntryWindowTimer, 1000);
+  }
+}
+
 function updateCompactOperations(signal = {}, source = "engine") {
   const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
   const score = getOperationalScore(signal);
   const blocked = Boolean(signal.blocked || direction === "WAIT" || signal.executionAllowed === false || signal.execution_allowed === false);
   const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Liberada" : "Aguardando";
+  if (!blocked && isConfirmedOperationalSignal(signal)) registerEntryWindow(signal);
   const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
   const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
   const release = entryStatus === "Liberada" ? "Sinal liberado" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
@@ -1118,6 +1202,7 @@ function setPremiumPlaceholders() {
   if (el.signalExpiry) el.signalExpiry.textContent = "--";
   if (el.signalConfidence) el.signalConfidence.textContent = "0%";
   if (el.signalCountdown) el.signalCountdown.textContent = "--";
+  renderEntryWindowTimer();
   if (el.signalTime) el.signalTime.textContent = "Aguardando dados";
 
   if (el.aiExplanation) {
