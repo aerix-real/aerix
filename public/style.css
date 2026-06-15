@@ -1982,3 +1982,151 @@ body.design-system-institutional {
   .premium-history-row { grid-template-columns: 48px minmax(62px, 1fr) 60px 42px 64px; }
   .hour-heatmap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+
+/* Dashboard visual bugfix layer: keep decorations behind content and prevent green overlays. */
+.panel,
+.glass-card,
+.premium-card,
+.current-signal-card,
+.signal-card,
+.brand-terminal,
+.institutional-center-panel {
+  isolation: isolate;
+}
+
+.panel > *,
+.glass-card > *,
+.premium-card > *,
+.current-signal-card > *,
+.signal-card > *,
+.brand-terminal > *,
+.institutional-center-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.brand-terminal::after,
+.signal-card::before,
+.institutional-center-panel::before,
+.decision-focus-card::after {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.current-signal-card.execution-allowed {
+  border-color: rgba(65, 230, 167, 0.26);
+  background:
+    radial-gradient(circle at 82% 0%, rgba(65, 230, 167, 0.08), transparent 26%),
+    radial-gradient(circle at 18% 0%, rgba(245, 218, 149, 0.14), transparent 30%),
+    linear-gradient(135deg, rgba(22, 18, 10, 0.96), rgba(6, 7, 9, 0.96));
+}
+
+.current-signal-card.execution-allowed::after {
+  content: none !important;
+  display: none !important;
+}
+
+.current-signal-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.035) 48%, transparent 60%);
+  opacity: 0.18;
+}
+
+.current-signal-head,
+.signal-main,
+.panel-header {
+  min-width: 0;
+}
+
+.current-signal-head > div:first-child,
+.signal-main > div:first-child {
+  min-width: 0;
+}
+
+.current-asset,
+.signal-asset,
+.panel-header h3,
+.panel-header span,
+.current-signal-scoreline strong,
+.current-signal-meta strong,
+.commercial-summary-card strong,
+.commercial-summary-card small,
+.top-status-card strong,
+.live-clock-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.current-asset,
+.signal-asset {
+  font-size: clamp(1.9rem, 4.2vw, 4.2rem);
+  line-height: 1;
+}
+
+.current-signal-scoreline span,
+.current-signal-meta span,
+.commercial-summary-card span {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.current-signal-scoreline > div,
+.current-signal-meta > div,
+.commercial-summary-card,
+.stat-card,
+.signal-meta-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.current-signal-scoreline strong,
+.commercial-summary-card strong,
+.stat-card strong,
+.signal-meta-card strong {
+  font-size: clamp(1.12rem, 2.2vw, 2rem);
+  line-height: 1.08;
+}
+
+.current-signal-meta strong,
+.signal-meta-card strong {
+  white-space: normal;
+  line-height: 1.32;
+  word-break: break-word;
+}
+
+.commercial-dashboard-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.9fr);
+  max-width: 100%;
+}
+
+.dashboard-tabs,
+.history-table-shell {
+  max-width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .summary-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .current-asset,
+  .signal-asset {
+    font-size: clamp(1.8rem, 12vw, 3.3rem);
+  }
+
+  .dashboard-tab {
+    flex: 1 0 auto;
+    text-align: center;
+    padding-inline: 12px;
+  }
+}

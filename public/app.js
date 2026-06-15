@@ -219,10 +219,41 @@ function getCachedElement(id) {
   return node;
 }
 
-function setTextContent(node, value) {
+function normalizeDisplayValue(value, fallback = "--") {
+  if (value === null || value === undefined || value === "") return fallback;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : fallback;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? fallback : value.toLocaleString("pt-BR");
+  }
+
+  if (typeof value === "object") {
+    return formatCompactObject(value);
+  }
+
+  const text = String(value).trim();
+  if (!text || ["undefined", "null", "nan", "[object object]"].includes(text.toLowerCase())) return fallback;
+
+  const isoDate = /^\d{4}-\d{2}-\d{2}T/.test(text) ? new Date(text) : null;
+  if (isoDate && !Number.isNaN(isoDate.getTime())) {
+    return isoDate.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  return text;
+}
+
+function setTextContent(node, value, fallback = "--") {
   if (!node) return;
 
-  const nextValue = String(value ?? "");
+  const nextValue = normalizeDisplayValue(value, fallback);
   if (node.textContent !== nextValue) {
     node.textContent = nextValue;
   }
@@ -812,11 +843,11 @@ function getVolatilityLabel(signal = {}) {
 
 function formatCompactObject(value) {
   if (value === null || value === undefined || value === "") return "--";
-  if (typeof value !== "object") return String(value).slice(0, 44);
+  if (typeof value !== "object") return normalizeDisplayValue(String(value).slice(0, 44));
 
   return Object.entries(value)
     .slice(0, 3)
-    .map(([key, item]) => `${key}:${typeof item === "number" ? Math.round(item * 100) / 100 : item}`)
+    .map(([key, item]) => `${key}:${typeof item === "number" && Number.isFinite(item) ? Math.round(item * 100) / 100 : normalizeDisplayValue(item)}`)
     .join(" · ") || "--";
 }
 
@@ -847,7 +878,7 @@ function updateCompactOperations(signal = {}, source = "engine") {
     el.bestDirection.className = `signal-direction ${direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
   }
   setTextContent(el.bestConfidence, `${Math.round(score || Number(signal.confidence || 0))}%`);
-  setTextContent(el.bestExpiry, signal.expiry || signal.expiration || signal.countdown || "--");
+  setTextContent(el.bestExpiry, formatPanelDate(signal.expiry || signal.expiration || signal.countdown));
   setTextContent(el.bestStrategy, strategyLabel);
   setTextContent(el.bestAiStatus, release);
   setTextContent(el.bestEntryStatus, entryStatus);
@@ -2107,7 +2138,7 @@ function renderSignal(signal) {
   }
 
   setTextContent(el.signalEntry, blocked ? "--" : signal.entry || signal.entryTime || "--");
-  setTextContent(el.signalExpiry, blocked ? "--" : signal.expiry || signal.expiration || "--");
+  setTextContent(el.signalExpiry, blocked ? "--" : formatPanelDate(signal.expiry || signal.expiration));
   setTextContent(el.signalConfidence, `${confidence}%`);
   setTextContent(el.signalCountdown, blocked ? "Bloqueado" : signal.countdown || "--");
   setTextContent(el.signalTime, formatTime(signal.created_at || new Date()));
@@ -2329,6 +2360,21 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function formatPanelDate(value) {
+  if (!value) return "--";
+  if (typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)) return normalizeDisplayValue(value);
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return normalizeDisplayValue(value);
+
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function formatTime(value) {
