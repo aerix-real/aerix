@@ -58,12 +58,24 @@ function getScopeKey(context = {}) {
 }
 
 function getStatsBucketImpact(label, bucket, weight, reasons) {
+  const auditBase = {
+    component: label,
+    weightPercent: round(weight * 100),
+    sampleSize: Number(bucket?.total || 0),
+    winrate: bucket ? Number(bucket.winrate || 0) : null,
+    pressure: 0,
+    confidenceMultiplier: 0,
+    adaptiveAdjustment: 0,
+    reason: "Amostra insuficiente para Dynamic Threshold Learning."
+  };
+
   if (!bucket || Number(bucket.total || 0) < MIN_SAMPLE_SIZE) {
     return {
       minimumScore: 0,
       confidence: 0,
       sniperTiming: 0,
-      adaptiveAdjustment: 0
+      adaptiveAdjustment: 0,
+      audit: auditBase
     };
   }
 
@@ -83,18 +95,32 @@ function getStatsBucketImpact(label, bucket, weight, reasons) {
       minimumScore: 0,
       confidence: 0,
       sniperTiming: 0,
-      adaptiveAdjustment: 0
+      adaptiveAdjustment: 0,
+      audit: {
+        ...auditBase,
+        confidenceMultiplier,
+        reason: `Sem pressão adaptativa: winrate ${winrate}% em ${total} sinais.`
+      }
     };
   }
 
   const direction = pressure > 0 ? "defensivo" : "oportunista";
-  reasons.push(`${label} ${direction}: winrate ${winrate}% em ${total} sinais.`);
+  const reason = `${label} ${direction}: winrate ${winrate}% em ${total} sinais.`;
+  reasons.push(reason);
+  const adaptiveAdjustment = -pressure * weight * 1.15 * confidenceMultiplier;
 
   return {
     minimumScore: pressure * weight * confidenceMultiplier,
     confidence: pressure * weight * 0.85 * confidenceMultiplier,
     sniperTiming: pressure * weight * 0.55 * confidenceMultiplier,
-    adaptiveAdjustment: -pressure * weight * 1.15 * confidenceMultiplier
+    adaptiveAdjustment,
+    audit: {
+      ...auditBase,
+      pressure,
+      confidenceMultiplier,
+      adaptiveAdjustment: round(adaptiveAdjustment),
+      reason
+    }
   };
 }
 
@@ -190,12 +216,22 @@ class DynamicThresholdService {
       }),
       { minimumScore: 0, confidence: 0, sniperTiming: 0, adaptiveAdjustment: 0 }
     );
+    const rawAdaptiveAdjustment = round(base.adaptiveAdjustment + totalImpact.adaptiveAdjustment);
 
     const learned = {
       minimumScore: round(clamp(base.minimumScore + totalImpact.minimumScore, 58, 88)),
       confidence: round(clamp(base.confidence + totalImpact.confidence, 58, 90)),
       sniperTiming: round(clamp(base.sniperTiming + totalImpact.sniperTiming, 78, 94)),
-      adaptiveAdjustment: round(clamp(base.adaptiveAdjustment + totalImpact.adaptiveAdjustment, -18, 14))
+      adaptiveAdjustment: round(clamp(rawAdaptiveAdjustment, -18, 14))
+    };
+    const adaptiveAdjustmentAudit = {
+      source: "dynamicThreshold",
+      maxPenaltyAllowed: -18,
+      maxBonusAllowed: 14,
+      rawAdjustment: rawAdaptiveAdjustment,
+      appliedAdjustment: learned.adaptiveAdjustment,
+      clampApplied: rawAdaptiveAdjustment !== learned.adaptiveAdjustment,
+      components: impacts.map((impact) => impact.audit)
     };
 
     const thresholdPerformance = aggregatePerformance([
@@ -222,6 +258,7 @@ class DynamicThresholdService {
         marketRegime: profile.marketRegimeStats,
         global: profile.globalStats
       },
+      adaptiveAdjustmentAudit,
       reasons
     };
 
@@ -229,6 +266,7 @@ class DynamicThresholdService {
       ...learned,
       reasons,
       profile,
+      adaptiveAdjustmentAudit,
       thresholdHistory,
       thresholdChanges,
       thresholdPerformance

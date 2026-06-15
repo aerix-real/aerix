@@ -604,6 +604,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     adaptiveAdjustments: {
       adjustment: adaptive.adaptiveAdjustment,
       reasons: adaptive.adaptiveReasons,
+      audit: adaptive.adaptiveAdjustmentAudit,
       profile: adaptive.learningProfile
     },
     learningProfile: adaptive.learningProfile,
