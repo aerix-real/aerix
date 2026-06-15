@@ -5,6 +5,16 @@ function clamp(value, min = -30, max = 30) {
   return Math.max(min, Math.min(max, Number(value || 0)));
 }
 
+function getAdaptiveRampUpLimit(totalSignals = 0) {
+  const total = Number(totalSignals || 0);
+
+  if (total <= 100) return 5;
+  if (total <= 300) return 10;
+  if (total <= 1000) return 15;
+
+  return 20;
+}
+
 function winRate(wins, total) {
   if (!total) return 0;
   return Number(((Number(wins || 0) / Number(total || 0)) * 100).toFixed(2));
@@ -31,7 +41,8 @@ class AdaptiveService {
       strategyStats,
       marketRegimeStats,
       symbolSignalStats,
-      lossPattern
+      lossPattern,
+      totalHistoricalSignals: Number(stats.totalHistoricalSignals || stats.global?.totalHistoricalSignals || stats.global?.total || 0)
     };
   }
 
@@ -181,9 +192,10 @@ class AdaptiveService {
       marketRegime: profile.marketRegime
     });
 
-    const adaptiveAdjustment = clamp(
-      Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0)
-    );
+    const rawAdaptiveAdjustment =
+      Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0);
+    const rampUpLimit = getAdaptiveRampUpLimit(profile.totalHistoricalSignals);
+    const adaptiveAdjustment = clamp(rawAdaptiveAdjustment, -rampUpLimit, rampUpLimit);
 
     const finalScore = Math.max(
       0,
@@ -196,12 +208,16 @@ class AdaptiveService {
       adaptiveReasons: [...learning.reasons, ...(thresholdLearning.reasons || [])],
       dynamicThresholds: thresholdLearning,
       adaptiveAdjustmentAudit: {
-        maxPenaltyAllowed: -30,
-        maxBonusAllowed: 30,
-        rawAdjustment: Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0),
+        maxPenaltyAllowed: -rampUpLimit,
+        maxBonusAllowed: rampUpLimit,
+        rawAdjustment: rawAdaptiveAdjustment,
         appliedAdjustment: adaptiveAdjustment,
-        clampApplied:
-          Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0) !== adaptiveAdjustment,
+        clampApplied: rawAdaptiveAdjustment !== adaptiveAdjustment,
+        rampUp: {
+          source: "adaptiveLearningRampUp",
+          totalSignals: profile.totalHistoricalSignals,
+          maxAbsAdjustment: rampUpLimit
+        },
         components: [
           learning.audit,
           thresholdLearning.adaptiveAdjustmentAudit
@@ -215,7 +231,9 @@ class AdaptiveService {
         strategy: profile.strategyStats || null,
         marketRegimeStats: profile.marketRegimeStats || null,
         lossPattern: profile.lossPattern || null,
-        thresholdPerformance: thresholdLearning.thresholdPerformance || null
+        thresholdPerformance: thresholdLearning.thresholdPerformance || null,
+        totalHistoricalSignals: profile.totalHistoricalSignals,
+        adaptiveRampUpLimit: rampUpLimit
       }
     };
   }
@@ -284,3 +302,4 @@ class AdaptiveService {
 }
 
 module.exports = new AdaptiveService();
+module.exports.getAdaptiveRampUpLimit = getAdaptiveRampUpLimit;
