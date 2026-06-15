@@ -864,6 +864,12 @@ class EngineRunnerService {
     signal.adaptiveAdjustment = Number(adaptive.adaptiveAdjustment || 0);
     signal.adaptive_adjustment = signal.adaptiveAdjustment;
     signal.adaptiveReasons = adaptive.adaptiveReasons || [];
+    signal.adaptiveAdjustments = {
+      adjustment: signal.adaptiveAdjustment,
+      reasons: signal.adaptiveReasons,
+      audit: adaptive.adaptiveAdjustmentAudit,
+      profile: adaptive.learningProfile
+    };
     signal.dynamicThresholds = adaptive.dynamicThresholds || signal.dynamicThresholds || null;
     signal.thresholdHistory = signal.dynamicThresholds?.thresholdHistory || null;
     signal.thresholdChanges = signal.dynamicThresholds?.thresholdChanges || [];

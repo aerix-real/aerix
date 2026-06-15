@@ -38,57 +38,130 @@ class AdaptiveService {
   calculateAdjustment(profile = {}) {
     let adjustment = 0;
     const reasons = [];
+    const components = [];
+
+    const addComponent = ({
+      component,
+      adjustment: componentAdjustment,
+      reason,
+      stats = null,
+      maxPenaltyAllowed = null
+    }) => {
+      adjustment += componentAdjustment;
+      reasons.push(reason);
+      components.push({
+        component,
+        adjustment: componentAdjustment,
+        maxPenaltyAllowed,
+        weightPercent: null,
+        reason,
+        stats
+      });
+    };
 
     const { symbolStats, hourStats, strategyStats, symbolSignalStats, lossPattern } = profile;
 
     if (symbolStats?.total >= 8) {
       if (symbolStats.winrate >= 70) {
-        adjustment += 8;
-        reasons.push("Ativo com histórico forte.");
+        addComponent({
+          component: "Ativo",
+          adjustment: 8,
+          reason: "Ativo com histórico forte.",
+          stats: symbolStats
+        });
       } else if (symbolStats.winrate <= 40) {
-        adjustment -= 10;
-        reasons.push("Ativo com histórico fraco.");
+        addComponent({
+          component: "Ativo",
+          adjustment: -10,
+          maxPenaltyAllowed: -10,
+          reason: "Ativo com histórico fraco.",
+          stats: symbolStats
+        });
       }
     }
 
     if (hourStats?.total >= 6) {
       if (hourStats.winrate >= 68) {
-        adjustment += 5;
-        reasons.push("Horário favorável.");
+        addComponent({
+          component: "Horário",
+          adjustment: 5,
+          reason: "Horário favorável.",
+          stats: hourStats
+        });
       } else if (hourStats.winrate <= 42) {
-        adjustment -= 7;
-        reasons.push("Horário com desempenho ruim.");
+        addComponent({
+          component: "Horário",
+          adjustment: -7,
+          maxPenaltyAllowed: -7,
+          reason: "Horário com desempenho ruim.",
+          stats: hourStats
+        });
       }
     }
 
     if (strategyStats?.total >= 6) {
       if (strategyStats.winrate >= 68) {
-        adjustment += 6;
-        reasons.push("Estratégia performando bem.");
+        addComponent({
+          component: "Estratégia",
+          adjustment: 6,
+          reason: "Estratégia performando bem.",
+          stats: strategyStats
+        });
       } else if (strategyStats.winrate <= 42) {
-        adjustment -= 8;
-        reasons.push("Estratégia com baixa performance.");
+        addComponent({
+          component: "Estratégia",
+          adjustment: -8,
+          maxPenaltyAllowed: -8,
+          reason: "Estratégia com baixa performance.",
+          stats: strategyStats
+        });
       }
     }
 
     if (symbolSignalStats?.total >= 6 && symbolSignalStats.lossrate >= 65) {
-      adjustment -= 10;
-      reasons.push("Direção do ativo com muitos losses.");
+      addComponent({
+        component: "Direção do ativo",
+        adjustment: -10,
+        maxPenaltyAllowed: -10,
+        reason: "Direção do ativo com muitos losses.",
+        stats: symbolSignalStats
+      });
     }
 
     if (lossPattern?.total >= 4 && lossPattern.lossrate >= 70) {
-      adjustment -= 15;
-      reasons.push("Padrão específico com alto índice de loss.");
+      addComponent({
+        component: "Padrão de loss",
+        adjustment: -15,
+        maxPenaltyAllowed: -15,
+        reason: "Padrão específico com alto índice de loss.",
+        stats: lossPattern
+      });
     }
 
     if (lossPattern?.total >= 6 && lossPattern.lossrate >= 80) {
-      adjustment -= 22;
-      reasons.push("IA bloqueando padrão crítico de loss.");
+      addComponent({
+        component: "Padrão crítico de loss",
+        adjustment: -22,
+        maxPenaltyAllowed: -22,
+        reason: "IA bloqueando padrão crítico de loss.",
+        stats: lossPattern
+      });
     }
 
+    const rawAdjustment = adjustment;
+
     return {
-      adjustment: clamp(adjustment),
-      reasons
+      adjustment: clamp(rawAdjustment),
+      reasons,
+      audit: {
+        source: "adaptiveLearning",
+        maxPenaltyAllowed: -30,
+        maxBonusAllowed: 30,
+        rawAdjustment,
+        appliedAdjustment: clamp(rawAdjustment),
+        clampApplied: rawAdjustment !== clamp(rawAdjustment),
+        components
+      }
     };
   }
 
@@ -122,6 +195,18 @@ class AdaptiveService {
       adaptiveAdjustment,
       adaptiveReasons: [...learning.reasons, ...(thresholdLearning.reasons || [])],
       dynamicThresholds: thresholdLearning,
+      adaptiveAdjustmentAudit: {
+        maxPenaltyAllowed: -30,
+        maxBonusAllowed: 30,
+        rawAdjustment: Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0),
+        appliedAdjustment: adaptiveAdjustment,
+        clampApplied:
+          Number(learning.adjustment || 0) + Number(thresholdLearning.adaptiveAdjustment || 0) !== adaptiveAdjustment,
+        components: [
+          learning.audit,
+          thresholdLearning.adaptiveAdjustmentAudit
+        ].filter(Boolean)
+      },
       learningProfile: {
         hour: profile.hour,
         marketRegime: profile.marketRegime,
