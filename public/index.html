@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=performance-dashboard-1" />
+  <link rel="stylesheet" href="/style.css?v=premium-dashboard-final" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -145,14 +145,17 @@
               <div><span>Status da IA</span><strong id="bestAiStatus">Aguardando</strong></div>
               <div><span>Status</span><strong id="bestEntryStatus">Aguardando</strong></div>
             </div>
+            <div class="why-signal-mini" id="whySignalMini"><span>Aguardando confluência institucional.</span></div>
             <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
           </article>
 
           <aside class="summary-card-grid" aria-label="Indicadores resumidos">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
+            <article class="stat-card commercial-summary-card"><span>Winrate 7 dias</span><strong id="summaryWinrate7d">0%</strong><small>consistência semanal</small></article>
+            <article class="stat-card commercial-summary-card"><span>Winrate 30 dias</span><strong id="summaryWinrate30d">0%</strong><small>track record</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
-            <article class="stat-card commercial-summary-card"><span>Status da Engine</span><strong id="summaryEngineStatus">Sincronizando</strong><small id="summarySocketStatus">WebSocket</small></article>
-            <article class="stat-card commercial-summary-card"><span>Última análise</span><strong id="summaryLastAnalysis">--</strong><small id="statsUpdated">sincronizando</small></article>
+            <article class="stat-card commercial-summary-card"><span>Aprovação</span><strong id="summaryApprovalRate">0%</strong><small>filtro institucional</small></article>
+            <article class="stat-card commercial-summary-card"><span>AERIX Health</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
           </aside>
         </section>
 
@@ -192,6 +195,39 @@
                 <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
                 <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
               </div>
+            </article>
+          </section>
+
+          <section class="premium-operation-grid" aria-label="Camada comercial premium">
+            <article class="panel premium-card health-panel">
+              <div class="panel-header"><h3>AERIX Health</h3><span id="healthUpdated">live</span></div>
+              <div class="health-score-ring"><strong id="healthScoreDetail">0%</strong><span>saúde operacional</span></div>
+              <div class="health-checklist" id="healthChecklist"></div>
+            </article>
+
+            <article class="panel premium-card ranking-panel">
+              <div class="panel-header"><h3>Ranking de Ativos</h3><span>winrate</span></div>
+              <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
+            </article>
+
+            <article class="panel premium-card operation-history-card">
+              <div class="panel-header"><h3>Histórico Premium</h3><span>compacto</span></div>
+              <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
+            </article>
+
+            <article class="panel premium-card why-signal-panel">
+              <div class="panel-header"><h3>Por que este sinal?</h3><span>máx. 4 razões</span></div>
+              <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
+            </article>
+
+            <article class="panel premium-card heatmap-hours-panel">
+              <div class="panel-header"><h3>Heatmap de Horários</h3><span>UTC</span></div>
+              <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
+            </article>
+
+            <article class="panel premium-card strategy-ranking-panel">
+              <div class="panel-header"><h3>Ranking de Estratégias</h3><span>assertividade</span></div>
+              <div class="premium-list-table" id="strategyRankingList"><div class="history-empty">Sem ranking de estratégias disponível.</div></div>
             </article>
           </section>
         </section>
@@ -374,6 +410,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=performance-dashboard-1"></script>
+  <script src="/app.js?v=premium-dashboard-final"></script>
 </body>
 </html>

@@ -110,7 +110,21 @@ const el = {
   engineTopStatus: document.getElementById("engineTopStatus"),
   topCurrentMode: document.getElementById("topCurrentMode"),
   summaryWinrate24h: document.getElementById("summaryWinrate24h"),
+  summaryWinrate7d: document.getElementById("summaryWinrate7d"),
+  summaryWinrate30d: document.getElementById("summaryWinrate30d"),
   summarySignalsToday: document.getElementById("summarySignalsToday"),
+  summaryApprovalRate: document.getElementById("summaryApprovalRate"),
+  healthScore: document.getElementById("healthScore"),
+  healthScoreDetail: document.getElementById("healthScoreDetail"),
+  healthSummary: document.getElementById("healthSummary"),
+  healthUpdated: document.getElementById("healthUpdated"),
+  healthChecklist: document.getElementById("healthChecklist"),
+  assetRankingList: document.getElementById("assetRankingList"),
+  premiumHistoryList: document.getElementById("premiumHistoryList"),
+  whySignalList: document.getElementById("whySignalList"),
+  whySignalMini: document.getElementById("whySignalMini"),
+  hourHeatmap: document.getElementById("hourHeatmap"),
+  strategyRankingList: document.getElementById("strategyRankingList"),
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
@@ -857,6 +871,10 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.lastCycleCompact, cycleTime);
   setTextContent(el.rateLimitStatus, rateLimit);
   setTextContent(el.websocketStatus, socket.connected ? "Online" : "Reconectando");
+  const card = document.getElementById("currentSignalCard");
+  if (card) card.classList.toggle("execution-allowed", entryStatus === "Liberada");
+  renderWhySignal(signal);
+  renderHealthScore(signal, state.engineSnapshot?.monitor || {});
 }
 
 function formatDuration(ms = 0) {
@@ -1605,6 +1623,84 @@ function renderWinrateBreakdown(items = [], options = {}) {
   }).join("");
 }
 
+function isRecentAnalysis(value) {
+  const date = value ? new Date(value) : null;
+  return Boolean(date && !Number.isNaN(date.getTime()) && Date.now() - date.getTime() < 5 * 60 * 1000);
+}
+
+function renderHealthScore(signal = {}, monitor = state.engineSnapshot?.monitor || {}) {
+  const lastValue = signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || monitor.lastExecutionAt;
+  const checks = [
+    ["Engine online", Boolean(monitor.isRunning || socket.connected)],
+    ["TwelveData online", !(monitor.twelveDataStatus === "offline" || monitor.twelveDataOnline === false)],
+    ["Cache ativo", Number(monitor.cacheTotalLookups || monitor.cacheHits || 0) > 0 || Number(monitor.cacheHitRate || 0) > 0],
+    ["IA ativa", !(signal.aiStatus === "offline" || signal.ai === false) && Boolean(signal.aiApproved !== false)],
+    ["Última análise recente", isRecentAnalysis(lastValue)]
+  ];
+  const online = checks.filter(([, ok]) => ok).length;
+  const score = Math.round((online / checks.length) * 100);
+  const label = score >= 80 ? "saudável" : score >= 60 ? "atenção" : "sincronizando";
+
+  setTextContent(el.healthScore, `${score}%`);
+  setTextContent(el.healthScoreDetail, `${score}%`);
+  setTextContent(el.healthSummary, `${online}/${checks.length} checks · ${label}`);
+  setTextContent(el.healthUpdated, lastValue ? `Atualizado ${formatTime(lastValue)}` : "live");
+  if (el.healthChecklist) {
+    el.healthChecklist.innerHTML = checks.map(([name, ok]) => `<div class="health-check ${ok ? "ok" : "warn"}"><span></span>${escapeHtml(name)}</div>`).join("");
+  }
+}
+
+function buildWhySignal(signal = {}) {
+  const direction = getOperationalDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
+  const score = getOperationalScore(signal);
+  const strategy = getStrategyLabel(signal);
+  const reasons = [];
+  if (direction !== "WAIT") reasons.push("Tendência alinhada");
+  if (signal.aiApproved !== false && !signal.blocked) reasons.push("IA aprovou");
+  if (score >= 70) reasons.push("Score acima do mínimo");
+  if (strategy && strategy !== "--") reasons.push(`Estratégia utilizada: ${strategy}`);
+  if (!String(getVolatilityLabel(signal)).toLowerCase().includes("high")) reasons.push("Volatilidade aceitável");
+  return reasons.slice(0, 4);
+}
+
+function renderWhySignal(signal = {}) {
+  const reasons = buildWhySignal(signal);
+  const html = reasons.length
+    ? reasons.map((reason) => `<span class="why-chip">${escapeHtml(reason)}</span>`).join("")
+    : `<div class="history-empty">Aguardando sinal com confluência suficiente.</div>`;
+  if (el.whySignalList) el.whySignalList.innerHTML = html;
+  if (el.whySignalMini) el.whySignalMini.innerHTML = reasons.length ? reasons.slice(0, 2).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("") : `<span>Aguardando confluência institucional.</span>`;
+}
+
+function renderPremiumHistory() {
+  if (!el.premiumHistoryList) return;
+  const items = state.history.slice(0, 6);
+  if (!items.length) {
+    el.premiumHistoryList.innerHTML = `<div class="history-empty">Nenhum sinal recente.</div>`;
+    return;
+  }
+  el.premiumHistoryList.innerHTML = items.map((signal) => {
+    const direction = getOperationalDirection(signal) || "WAIT";
+    const result = String(signal.result || "PENDING").toUpperCase();
+    const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
+    const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
+    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span>${Math.round(getOperationalScore(signal))}%</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
+  }).join("");
+}
+
+function renderHourStats(items = []) {
+  if (!el.hourHeatmap) return;
+  if (!Array.isArray(items) || !items.length) {
+    el.hourHeatmap.innerHTML = `<div class="history-empty">Sem estatística por horário disponível.</div>`;
+    return;
+  }
+  el.hourHeatmap.innerHTML = items.slice(0, 12).map((item) => {
+    const hour = item.hour ?? item.utcHour ?? item.label ?? "--";
+    const winrate = getWinrateValue(item);
+    return `<div class="hour-cell" style="--heat:${Math.max(0.12, winrate / 100)}"><strong>${String(hour).padStart(2, "0")}h</strong><span>${formatPercent(winrate)}</span></div>`;
+  }).join("");
+}
+
 function renderPerformanceDashboard(data = {}) {
   if (!data || typeof data !== "object") data = {};
 
@@ -1624,6 +1720,9 @@ function renderPerformanceDashboard(data = {}) {
   if (el.summarySignalsToday) el.summarySignalsToday.textContent = data.signalsToday ?? data.analyzedToday ?? 0;
   if (el.perfWinrate7d) el.perfWinrate7d.textContent = formatPercent(winrate7d);
   if (el.perfWinrate30d) el.perfWinrate30d.textContent = formatPercent(winrate30d);
+  if (el.summaryWinrate7d) el.summaryWinrate7d.textContent = formatPercent(winrate7d);
+  if (el.summaryWinrate30d) el.summaryWinrate30d.textContent = formatPercent(winrate30d);
+  if (el.summaryApprovalRate) el.summaryApprovalRate.textContent = formatPercent(data.approvalRate);
   if (el.perfLastApproved) el.perfLastApproved.textContent = lastApproved?.symbol || "--";
   if (el.performanceUpdated) el.performanceUpdated.textContent = data.generatedAt ? `Atualizado ${formatTime(data.generatedAt)}` : "sem dados";
 
@@ -1634,12 +1733,23 @@ function renderPerformanceDashboard(data = {}) {
     });
   }
 
+  const assetStats = data.winrateBySymbol || data.assetStats || data.assets || [];
+  const strategyStats = data.winrateByStrategy || data.strategyStats || data.strategies || [];
+
   if (el.perfWinrateByStrategy) {
-    el.perfWinrateByStrategy.innerHTML = renderWinrateBreakdown(data.winrateByStrategy, {
+    el.perfWinrateByStrategy.innerHTML = renderWinrateBreakdown(strategyStats, {
       labelKey: "strategyName",
       empty: "Sem resultados por estratégia"
     });
   }
+  if (el.assetRankingList) {
+    el.assetRankingList.innerHTML = renderWinrateBreakdown(assetStats, { labelKey: "symbol", empty: "Sem ranking de ativos disponível" });
+  }
+  if (el.strategyRankingList) {
+    el.strategyRankingList.innerHTML = renderWinrateBreakdown(strategyStats, { labelKey: "strategyName", empty: "Sem ranking de estratégias disponível" });
+  }
+  renderHourStats(data.hourStats || data.winrateByHour || []);
+  renderHealthScore(lastApproved || {}, state.engineSnapshot?.monitor || {});
 }
 
 async function loadPerformanceDashboard() {
@@ -1866,6 +1976,7 @@ function renderHistory() {
   }
 
   renderHistoryPagination();
+  renderPremiumHistory();
 }
 
 
