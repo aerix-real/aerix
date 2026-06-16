@@ -2193,3 +2193,132 @@ body.design-system-institutional {
   .entry-window-timer { grid-template-columns: 1fr; }
   .entry-window-classification { justify-self: start; }
 }
+
+/* Clean Dashboard Mode: institutional black/gold, decision-first and low visual noise. */
+body.design-system-institutional {
+  background: #030303;
+}
+
+body.design-system-institutional .content-panel {
+  gap: 14px;
+}
+
+body.design-system-institutional .headline-wrap {
+  display: none;
+}
+
+body.design-system-institutional .commercial-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.35fr) minmax(220px, 0.65fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+body.design-system-institutional .summary-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.design-system-institutional .commercial-summary-card {
+  min-height: 112px;
+  border-color: rgba(240, 207, 130, 0.18);
+  background: linear-gradient(180deg, rgba(18, 16, 11, 0.94), rgba(5, 5, 5, 0.96));
+  box-shadow: none;
+}
+
+body.design-system-institutional .commercial-summary-card strong {
+  color: #f5da95;
+  font-size: clamp(1.7rem, 2.4vw, 2.55rem);
+}
+
+body.design-system-institutional .current-signal-card,
+body.design-system-institutional .current-signal-card.execution-allowed,
+body.design-system-institutional .panel,
+body.design-system-institutional .premium-card,
+body.design-system-institutional .glass-card {
+  border-color: rgba(240, 207, 130, 0.18);
+  background: linear-gradient(180deg, rgba(13, 12, 9, 0.96), rgba(3, 3, 3, 0.98));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+body.design-system-institutional .current-signal-card::before,
+body.design-system-institutional .decision-focus-card::after,
+body.design-system-institutional .brand-terminal::after,
+body.design-system-institutional .signal-card::before,
+body.design-system-institutional .institutional-center-panel::before {
+  content: none !important;
+  display: none !important;
+}
+
+body.design-system-institutional .current-signal-card.execution-allowed {
+  border-color: rgba(240, 207, 130, 0.34);
+}
+
+body.design-system-institutional .signal-direction.call,
+body.design-system-institutional .signal-direction.put,
+body.design-system-institutional .signal-direction.neutral,
+body.design-system-institutional .entry-window-classification {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.clean-dashboard-focus-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.clean-why-card,
+.clean-history-card {
+  min-height: 260px;
+}
+
+.clean-why-card .why-signal-list,
+.clean-history-card .premium-history-list {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.technical-commercial-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+body.design-system-institutional .dashboard-tabs {
+  margin-top: 0;
+  border-color: rgba(240, 207, 130, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+body.design-system-institutional .dashboard-tab.active {
+  color: #1a1205;
+  background: linear-gradient(135deg, #f5da95, #b98b2d);
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  body.design-system-institutional .commercial-dashboard-grid,
+  .clean-dashboard-focus-grid,
+  .technical-commercial-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.design-system-institutional .summary-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body.design-system-institutional .summary-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.design-system-institutional .current-signal-scoreline,
+  body.design-system-institutional .current-signal-meta {
+    grid-template-columns: 1fr;
+  }
+}
