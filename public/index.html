@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=premium-dashboard-final" />
+  <link rel="stylesheet" href="/style.css?v=clean-dashboard" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -160,9 +160,7 @@
           <aside class="summary-card-grid" aria-label="Indicadores resumidos">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
             <article class="stat-card commercial-summary-card"><span>Winrate 7 dias</span><strong id="summaryWinrate7d">0%</strong><small>consistência semanal</small></article>
-            <article class="stat-card commercial-summary-card"><span>Winrate 30 dias</span><strong id="summaryWinrate30d">0%</strong><small>track record</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
-            <article class="stat-card commercial-summary-card"><span>Aprovação</span><strong id="summaryApprovalRate">0%</strong><small>filtro institucional</small></article>
             <article class="stat-card commercial-summary-card"><span>AERIX Health</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
           </aside>
         </section>
@@ -174,68 +172,15 @@
         </nav>
 
         <section class="dashboard-tab-panel active" data-tab-panel="operation">
-          <section class="operation-fast-grid" aria-label="Dados essenciais para decisão">
-            <article class="panel stats-panel premium-card essential-metrics-panel">
-              <div class="panel-header"><h3>Decisão rápida</h3><span>essencial</span></div>
-              <div class="stats-grid essential-stats-grid">
-                <div class="stat-card"><span>Winrate geral</span><strong id="statWinrate">0%</strong></div>
-                <div class="stat-card"><span>Sinais hoje</span><strong id="perfSignalsToday">0</strong></div>
-                <div class="stat-card"><span>Aprovados</span><strong id="perfApprovedToday">0</strong></div>
-                <div class="stat-card"><span>Último aprovado</span><strong id="perfLastApproved">--</strong></div>
-              </div>
-            </article>
-
-            <article class="panel signal-card compact-signal-details premium-card operation-signal-details">
-              <div class="signal-top">
-                <div>SINAL OPERACIONAL</div>
-                <div class="signal-time" id="signalTime">Aguardando dados</div>
-              </div>
-              <div class="signal-main">
-                <div>
-                  <span class="micro-label">Ativo monitorado</span>
-                  <div class="signal-asset" id="signalAsset">---</div>
-                </div>
-                <div class="signal-direction neutral" id="signalDirection">AGUARDANDO</div>
-              </div>
-              <div class="signal-meta-grid">
-                <div class="signal-meta-card"><span>Entrada</span><strong id="signalEntry">--</strong></div>
-                <div class="signal-meta-card"><span>Expiração</span><strong id="signalExpiry">--</strong></div>
-                <div class="signal-meta-card"><span>Confiança</span><strong id="signalConfidence">0%</strong></div>
-                <div class="signal-meta-card"><span>Timing</span><strong id="signalCountdown">--</strong></div>
-              </div>
-            </article>
-          </section>
-
-          <section class="premium-operation-grid" aria-label="Camada comercial premium">
-            <article class="panel premium-card health-panel">
-              <div class="panel-header"><h3>AERIX Health</h3><span id="healthUpdated">live</span></div>
-              <div class="health-score-ring"><strong id="healthScoreDetail">0%</strong><span>saúde operacional</span></div>
-              <div class="health-checklist" id="healthChecklist"></div>
-            </article>
-
-            <article class="panel premium-card ranking-panel">
-              <div class="panel-header"><h3>Ranking de Ativos</h3><span>winrate</span></div>
-              <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
-            </article>
-
-            <article class="panel premium-card operation-history-card">
-              <div class="panel-header"><h3>Histórico Premium</h3><span>compacto</span></div>
-              <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
-            </article>
-
-            <article class="panel premium-card why-signal-panel">
+          <section class="clean-dashboard-focus-grid" aria-label="Dashboard limpo para decisão rápida">
+            <article class="panel premium-card why-signal-panel clean-why-card">
               <div class="panel-header"><h3>Por que este sinal?</h3><span>máx. 4 razões</span></div>
               <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
             </article>
 
-            <article class="panel premium-card heatmap-hours-panel">
-              <div class="panel-header"><h3>Heatmap de Horários</h3><span>UTC</span></div>
-              <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
-            </article>
-
-            <article class="panel premium-card strategy-ranking-panel">
-              <div class="panel-header"><h3>Ranking de Estratégias</h3><span>assertividade</span></div>
-              <div class="premium-list-table" id="strategyRankingList"><div class="history-empty">Sem ranking de estratégias disponível.</div></div>
+            <article class="panel premium-card operation-history-card clean-history-card">
+              <div class="panel-header"><h3>Histórico resumido</h3><span>compacto</span></div>
+              <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
             </article>
           </section>
         </section>
@@ -370,7 +315,28 @@
               </div>
             </div>
           </section>
-        </section>
+          <section class="technical-commercial-grid" aria-label="Diagnósticos e rankings técnicos">
+            <article class="panel premium-card health-panel">
+              <div class="panel-header"><h3>AERIX Health</h3><span id="healthUpdated">live</span></div>
+              <div class="health-score-ring"><strong id="healthScoreDetail">0%</strong><span>saúde operacional</span></div>
+              <div class="health-checklist" id="healthChecklist"></div>
+            </article>
+
+            <article class="panel premium-card ranking-panel">
+              <div class="panel-header"><h3>Ranking de Ativos</h3><span>winrate</span></div>
+              <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
+            </article>
+
+            <article class="panel premium-card heatmap-hours-panel">
+              <div class="panel-header"><h3>Heatmap de Horários</h3><span>UTC</span></div>
+              <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
+            </article>
+
+            <article class="panel premium-card strategy-ranking-panel">
+              <div class="panel-header"><h3>Ranking de Estratégias</h3><span>assertividade</span></div>
+              <div class="premium-list-table" id="strategyRankingList"><div class="history-empty">Sem ranking de estratégias disponível.</div></div>
+            </article>
+          </section>
 
         <section class="panel filter-analytics-panel premium-card secondary-details-panel">
           <div class="panel-header"><h3>Filter Analytics</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
@@ -413,11 +379,13 @@
             <div class="pro-logs" id="proLogs"></div>
           </details>
         </section>
+        </section>
+
       </section>
     </main>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=premium-dashboard-final"></script>
+  <script src="/app.js?v=clean-dashboard"></script>
 </body>
 </html>
