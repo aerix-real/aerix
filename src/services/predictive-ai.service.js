@@ -72,62 +72,73 @@ class PredictiveAiService {
     let preScore = 50;
     const reasons = [];
     const risks = [];
+    const predictiveAudit = {
+      volatilityContribution: 0,
+      historicalContribution: 0,
+      directionContribution: 0,
+      regimeContribution: 0
+    };
+
+    const applyPredictiveContribution = (bucket, delta) => {
+      preScore += delta;
+      predictiveAudit[bucket] += delta;
+    };
 
     const marketRisks = detectMarketRisk(snapshot);
     risks.push(...marketRisks);
 
     if (probableDirection === "WAIT") {
-      preScore -= 18;
+      applyPredictiveContribution("directionContribution", -18);
       risks.push({ severity: mode === "conservative" ? "severe" : "moderate", reason: "Direção provável indefinida antes da estratégia." });
     } else {
-      preScore += 8;
+      applyPredictiveContribution("directionContribution", 8);
       reasons.push(`Direção provável detectada: ${probableDirection}.`);
     }
 
     if (symbolStats?.total >= 5) {
       if (symbolStats.winrate >= 68) {
-        preScore += 12;
+        applyPredictiveContribution("historicalContribution", 12);
         reasons.push("Ativo possui histórico favorável.");
       }
 
       if (symbolStats.lossrate >= 60) {
-        preScore -= 14;
+        applyPredictiveContribution("historicalContribution", -14);
         risks.push({ severity: symbolStats.lossrate >= 88 ? "critical" : symbolStats.lossrate >= 78 ? "severe" : "moderate", reason: "Ativo possui histórico recente desfavorável." });
       }
     }
 
     if (hourStats?.total >= 5) {
       if (hourStats.winrate >= 65) {
-        preScore += 8;
+        applyPredictiveContribution("historicalContribution", 8);
         reasons.push("Horário operacional historicamente favorável.");
       }
 
       if (hourStats.lossrate >= 65) {
-        preScore -= 16;
+        applyPredictiveContribution("historicalContribution", -16);
         risks.push({ severity: hourStats.lossrate >= 90 ? "critical" : hourStats.lossrate >= 82 ? "severe" : "moderate", reason: "Horário operacional com alto índice de loss." });
       }
     }
 
     if (directionStats?.total >= 5) {
       if (directionStats.winrate >= 65) {
-        preScore += 6;
+        applyPredictiveContribution("directionContribution", 6);
         reasons.push("Direção provável tem bom desempenho histórico.");
       }
 
       if (directionStats.lossrate >= 65) {
-        preScore -= 10;
+        applyPredictiveContribution("directionContribution", -10);
         risks.push({ severity: directionStats.lossrate >= 90 ? "critical" : directionStats.lossrate >= 82 ? "severe" : "moderate", reason: "Direção provável tem histórico fraco." });
       }
     }
 
     if (symbolDirectionStats?.total >= 5) {
       if (symbolDirectionStats.winrate >= 68) {
-        preScore += 10;
+        applyPredictiveContribution("historicalContribution", 10);
         reasons.push("Ativo + direção apresentam confluência histórica positiva.");
       }
 
       if (symbolDirectionStats.lossrate >= 65) {
-        preScore -= 18;
+        applyPredictiveContribution("historicalContribution", -18);
         risks.push({ severity: symbolDirectionStats.lossrate >= 88 ? "critical" : symbolDirectionStats.lossrate >= 80 ? "severe" : "moderate", reason: "Ativo + direção apresentam padrão ruim de loss." });
       }
     }
@@ -148,7 +159,7 @@ class PredictiveAiService {
       const losses = Number(criticalPattern.losses || 0);
       const lossrate = total ? (losses / total) * 100 : 0;
 
-      preScore -= lossrate >= 85 ? 32 : 24;
+      applyPredictiveContribution("historicalContribution", lossrate >= 85 ? -32 : -24);
       risks.push({
         severity: total >= 6 && lossrate >= 85 ? "critical" : "severe",
         reason: "Memória de IA detectou padrão crítico antes do sinal."
@@ -156,11 +167,11 @@ class PredictiveAiService {
     }
 
     if (mode === "conservative") {
-      preScore -= 4;
+      applyPredictiveContribution("regimeContribution", -4);
     }
 
     if (mode === "aggressive") {
-      preScore += 4;
+      applyPredictiveContribution("regimeContribution", 4);
     }
 
     preScore = clamp(preScore);
@@ -191,11 +202,42 @@ class PredictiveAiService {
         ? criticallyLowScore || criticalRisks.length >= 2
         : criticallyLowScore || criticalRisks.length >= 1;
     const riskReasons = risks.map((risk) => risk.reason);
+    const predictiveBlockScore = preScore;
+    const finalPredictiveScore = preScore;
+    const predictiveThreshold = minimum;
+    const auditMetrics = {
+      predictiveBlockScore,
+      volatilityContribution: predictiveAudit.volatilityContribution,
+      historicalContribution: predictiveAudit.historicalContribution,
+      directionContribution: predictiveAudit.directionContribution,
+      regimeContribution: predictiveAudit.regimeContribution,
+      finalPredictiveScore,
+      predictiveThreshold
+    };
+
+    console.log(JSON.stringify({
+      scope: "aerix_predictive_ai_gate",
+      event: "predictive_ai_gate_audit",
+      timestamp: new Date().toISOString(),
+      symbol,
+      mode,
+      hour,
+      probableDirection,
+      blocked,
+      ...auditMetrics
+    }));
 
     return {
       blocked,
       preScore,
       minimum,
+      predictiveBlockScore,
+      volatilityContribution: auditMetrics.volatilityContribution,
+      historicalContribution: auditMetrics.historicalContribution,
+      directionContribution: auditMetrics.directionContribution,
+      regimeContribution: auditMetrics.regimeContribution,
+      finalPredictiveScore,
+      predictiveThreshold,
       scoreAdjustment,
       symbol,
       hour,
