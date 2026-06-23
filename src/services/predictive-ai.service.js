@@ -68,6 +68,9 @@ class PredictiveAiService {
     const hourStats = stats.byHour?.[hour] || null;
     const directionStats = stats.bySignal?.[probableDirection] || null;
     const symbolDirectionStats = stats.bySymbolSignal?.[`${symbol}:${probableDirection}`] || null;
+    const m5VolatilityPercent = Number(snapshot?.timeframes?.m5?.volatilityPercent || 0);
+    const h1StrengthPercent = Number(snapshot?.timeframes?.h1?.strengthPercent || 0);
+    const m15StrengthPercent = Number(snapshot?.timeframes?.m15?.strengthPercent || 0);
 
     let preScore = 50;
     const reasons = [];
@@ -86,6 +89,13 @@ class PredictiveAiService {
 
     const marketRisks = detectMarketRisk(snapshot);
     risks.push(...marketRisks);
+
+    if (m5VolatilityPercent > 0 && m5VolatilityPercent < 0.025) {
+      applyPredictiveContribution("volatilityContribution", -18);
+    } else if (m5VolatilityPercent >= 0.025 && m5VolatilityPercent < 0.08) {
+      applyPredictiveContribution("volatilityContribution", -6);
+      reasons.push("Baixa volatilidade comum tratada como penalidade, sem hard block isolado.");
+    }
 
     if (probableDirection === "WAIT") {
       applyPredictiveContribution("directionContribution", -18);
@@ -195,9 +205,6 @@ class PredictiveAiService {
     const predictiveBlockScore = preScore;
     const finalPredictiveScore = preScore;
     const predictiveThreshold = minimum;
-    const m5VolatilityPercent = Number(snapshot?.timeframes?.m5?.volatilityPercent || 0);
-    const h1StrengthPercent = Number(snapshot?.timeframes?.h1?.strengthPercent || 0);
-    const m15StrengthPercent = Number(snapshot?.timeframes?.m15?.strengthPercent || 0);
     const scoreBelowThreshold = finalPredictiveScore < predictiveThreshold;
     const veryLowVolatilityBlock = m5VolatilityPercent > 0 && m5VolatilityPercent < 0.025;
     const lowVolatilityWarning = m5VolatilityPercent >= 0.025 && m5VolatilityPercent < 0.08;
@@ -217,17 +224,18 @@ class PredictiveAiService {
       criticalDirectionLossPattern ? "CRITICAL_DIRECTION_LOSS_PATTERN" : null,
       missingH1M15Strength ? "MISSING_H1_M15_STRENGTH" : null
     ].filter(Boolean);
-    const hardBlock = criticalRiskFlags.length > 0;
+    const hardBlockFlags = criticalRiskFlags;
+    const hardBlock = hardBlockFlags.length > 0;
     const shouldBlock = scoreBelowThreshold || hardBlock;
-    const blockCondition = scoreBelowThreshold
-      ? "FINAL_SCORE_BELOW_PREDICTIVE_THRESHOLD"
-      : hardBlock
-        ? criticalRiskFlags.join("+")
-        : "NONE";
+    const blockCondition = [
+      scoreBelowThreshold ? "FINAL_SCORE_BELOW_PREDICTIVE_THRESHOLD" : null,
+      hardBlock ? hardBlockFlags.join("+") : null
+    ].filter(Boolean).join("+") || "NONE";
     const blockReason = shouldBlock
-      ? (scoreBelowThreshold
-        ? `Score preditivo ${finalPredictiveScore}% abaixo do mínimo ${predictiveThreshold}%.`
-        : `Hard block preditivo: ${criticalRiskFlags.join(", ")}.`)
+      ? [
+        scoreBelowThreshold ? `Score preditivo ${finalPredictiveScore}% abaixo do mínimo ${predictiveThreshold}%.` : null,
+        hardBlock ? `Hard block preditivo: ${hardBlockFlags.join(", ")}.` : null
+      ].filter(Boolean).join(" ")
       : null;
     const scoreVsThresholdDecision = scoreBelowThreshold
       ? `${finalPredictiveScore} < ${predictiveThreshold}: BLOCK`
