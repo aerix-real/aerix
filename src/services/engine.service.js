@@ -338,6 +338,22 @@ function buildPreCheckMetrics(predictiveDecision = {}) {
     moderateRisks: Array.isArray(predictiveDecision.moderateRisks)
       ? predictiveDecision.moderateRisks
       : [],
+    predictiveBlockScore: Number(predictiveDecision.predictiveBlockScore || predictiveDecision.preScore || 0),
+    finalPredictiveScore: Number(predictiveDecision.finalPredictiveScore || predictiveDecision.preScore || 0),
+    predictiveThreshold: Number(predictiveDecision.predictiveThreshold || predictiveDecision.minimum || 0),
+    volatilityContribution: Number(predictiveDecision.volatilityContribution || 0),
+    historicalContribution: Number(predictiveDecision.historicalContribution || 0),
+    directionContribution: Number(predictiveDecision.directionContribution || 0),
+    regimeContribution: Number(predictiveDecision.regimeContribution || 0),
+    veryLowVolatilityBlock: Boolean(predictiveDecision.veryLowVolatilityBlock),
+    lowVolatilityWarning: Boolean(predictiveDecision.lowVolatilityWarning),
+    criticalRiskFlags: Array.isArray(predictiveDecision.criticalRiskFlags)
+      ? predictiveDecision.criticalRiskFlags
+      : [],
+    shouldBlock: Boolean(predictiveDecision.shouldBlock),
+    blockCondition: predictiveDecision.blockCondition || "NONE",
+    blockReason: predictiveDecision.blockReason || null,
+    scoreVsThresholdDecision: predictiveDecision.scoreVsThresholdDecision || null,
     explanation: predictiveDecision.explanation || null
   };
 }
