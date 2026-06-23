@@ -191,20 +191,48 @@ class PredictiveAiService {
       -22,
       8
     );
-    const criticallyLowScore = mode === "aggressive"
-      ? preScore < 24
-      : mode === "balanced"
-        ? preScore < 30
-        : preScore < minimum;
-    const blocked = mode === "conservative"
-      ? criticallyLowScore || severeRisks.length >= 1
-      : mode === "aggressive"
-        ? criticallyLowScore || criticalRisks.length >= 2
-        : criticallyLowScore || criticalRisks.length >= 1;
     const riskReasons = risks.map((risk) => risk.reason);
     const predictiveBlockScore = preScore;
     const finalPredictiveScore = preScore;
     const predictiveThreshold = minimum;
+    const m5VolatilityPercent = Number(snapshot?.timeframes?.m5?.volatilityPercent || 0);
+    const h1StrengthPercent = Number(snapshot?.timeframes?.h1?.strengthPercent || 0);
+    const m15StrengthPercent = Number(snapshot?.timeframes?.m15?.strengthPercent || 0);
+    const scoreBelowThreshold = finalPredictiveScore < predictiveThreshold;
+    const veryLowVolatilityBlock = m5VolatilityPercent > 0 && m5VolatilityPercent < 0.025;
+    const lowVolatilityWarning = m5VolatilityPercent >= 0.025 && m5VolatilityPercent < 0.08;
+    const criticalHistoricalRisk = Boolean(
+      criticalPattern ||
+      (symbolStats?.total >= 5 && Number(symbolStats.lossrate || 0) >= 88) ||
+      (hourStats?.total >= 5 && Number(hourStats.lossrate || 0) >= 90) ||
+      (symbolDirectionStats?.total >= 5 && Number(symbolDirectionStats.lossrate || 0) >= 88)
+    );
+    const criticalDirectionLossPattern = Boolean(
+      directionStats?.total >= 5 && Number(directionStats.lossrate || 0) >= 90
+    );
+    const missingH1M15Strength = h1StrengthPercent < 0.04 && m15StrengthPercent < 0.04;
+    const criticalRiskFlags = [
+      veryLowVolatilityBlock ? "VERY_LOW_VOLATILITY" : null,
+      criticalHistoricalRisk ? "CRITICAL_HISTORICAL_RISK" : null,
+      criticalDirectionLossPattern ? "CRITICAL_DIRECTION_LOSS_PATTERN" : null,
+      missingH1M15Strength ? "MISSING_H1_M15_STRENGTH" : null
+    ].filter(Boolean);
+    const hardBlock = criticalRiskFlags.length > 0;
+    const shouldBlock = scoreBelowThreshold || hardBlock;
+    const blockCondition = scoreBelowThreshold
+      ? "FINAL_SCORE_BELOW_PREDICTIVE_THRESHOLD"
+      : hardBlock
+        ? criticalRiskFlags.join("+")
+        : "NONE";
+    const blockReason = shouldBlock
+      ? (scoreBelowThreshold
+        ? `Score preditivo ${finalPredictiveScore}% abaixo do mínimo ${predictiveThreshold}%.`
+        : `Hard block preditivo: ${criticalRiskFlags.join(", ")}.`)
+      : null;
+    const scoreVsThresholdDecision = scoreBelowThreshold
+      ? `${finalPredictiveScore} < ${predictiveThreshold}: BLOCK`
+      : `${finalPredictiveScore} >= ${predictiveThreshold}: DO_NOT_BLOCK_BY_SCORE`;
+    const blocked = shouldBlock;
     const auditMetrics = {
       predictiveBlockScore,
       volatilityContribution: predictiveAudit.volatilityContribution,
@@ -212,7 +240,14 @@ class PredictiveAiService {
       directionContribution: predictiveAudit.directionContribution,
       regimeContribution: predictiveAudit.regimeContribution,
       finalPredictiveScore,
-      predictiveThreshold
+      predictiveThreshold,
+      veryLowVolatilityBlock,
+      lowVolatilityWarning,
+      criticalRiskFlags,
+      shouldBlock,
+      blockCondition,
+      blockReason,
+      scoreVsThresholdDecision
     };
 
     console.log(JSON.stringify({
@@ -238,6 +273,13 @@ class PredictiveAiService {
       regimeContribution: auditMetrics.regimeContribution,
       finalPredictiveScore,
       predictiveThreshold,
+      veryLowVolatilityBlock,
+      lowVolatilityWarning,
+      criticalRiskFlags,
+      shouldBlock,
+      blockCondition,
+      blockReason,
+      scoreVsThresholdDecision,
       scoreAdjustment,
       symbol,
       hour,
@@ -250,8 +292,8 @@ class PredictiveAiService {
       moderateRisks: moderateRisks.map((risk) => risk.reason),
       decision: blocked ? "PRE_BLOCKED" : "PRE_APPROVED_WITH_SCORE_ADJUSTMENT",
       explanation: blocked
-        ? `IA preditiva bloqueou risco crítico antes do sinal. Pre-score ${preScore}%. ${riskReasons.join(" ")}`
-        : `IA preditiva converteu riscos moderados em ajuste de score (${scoreAdjustment}). Pre-score ${preScore}%. ${reasons.join(" ")}`
+        ? `IA preditiva bloqueou antes do sinal. ${blockReason || "Condição crítica satisfeita."} Pre-score ${preScore}%. ${riskReasons.join(" ")}`
+        : `IA preditiva converteu riscos em ajuste de score (${scoreAdjustment}). Pre-score ${preScore}%. ${reasons.join(" ")}`
     };
   }
 }
