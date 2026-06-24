@@ -2188,6 +2188,19 @@ function filterConfirmedOperationalSignals(signals = []) {
   return signals.filter(isConfirmedOperationalSignal);
 }
 
+function auditSignalFlow(event, signal = {}, context = {}) {
+  console.log(JSON.stringify({
+    scope: "aerix_signal_flow_audit",
+    event,
+    timestamp: new Date().toISOString(),
+    signalId: signal.id || null,
+    symbol: signal.symbol || signal.asset || "UNKNOWN",
+    signal: signal.signal || signal.direction || "WAIT",
+    result: signal.result || null,
+    ...context
+  }));
+}
+
 function renderSignal(signal) {
   if (!signal || !isConfirmedOperationalSignal(signal)) return;
 
@@ -2288,6 +2301,8 @@ function renderSignal(signal) {
     pushChartPoint(confidence || 50);
     drawMiniChart();
   }
+
+  auditSignalFlow("SIGNAL_RENDERED", signal, { component: "dashboard_signal_card" });
 }
 
 async function setResult(id, result) {
@@ -2681,6 +2696,7 @@ socket.on("connect_error", () => {
 });
 
 socket.on("signal", (signal) => {
+  auditSignalFlow("SIGNAL_RECEIVED_FRONTEND", signal, { eventName: "signal" });
   renderShadowMode(signal, "signal");
   updateCompactOperations(signal, "signal");
 

@@ -26,6 +26,21 @@ const MIN_ANALYSIS_REVISIT_MS = Math.max(60 * 1000, Number(process.env.MIN_ANALY
 const RELEVANT_PRICE_CHANGE_PERCENT = Math.max(0, Number(process.env.RELEVANT_PRICE_CHANGE_PERCENT || 0.03));
 const SNAPSHOT_REQUEST_COST = 3;
 
+function logSignalFlow(event, signal = {}, context = {}) {
+  console.log(JSON.stringify({
+    scope: "aerix_signal_flow_audit",
+    event,
+    timestamp: new Date().toISOString(),
+    signalId: signal.id || null,
+    symbol: signal.symbol || signal.asset || "UNKNOWN",
+    signal: signal.signal || signal.direction || "WAIT",
+    result: signal.result || null,
+    executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? null,
+    finalScore: Number(signal.finalScore ?? signal.final_score ?? signal.score ?? signal.confidence ?? 0),
+    ...context
+  }));
+}
+
 function logStructuredEngineError(event, error, context = {}) {
   console.error(JSON.stringify({
     scope: "aerix_engine_runner",
@@ -685,14 +700,21 @@ class EngineRunnerService {
             continue;
           }
 
+          logSignalFlow("SIGNAL_GENERATED", signal, { stage: "post_execution_validation" });
+
           const saved = await this.persistGeneratedSignal(signal);
           signal.id = saved?.id || signal.id;
+
+          if (saved) {
+            logSignalFlow("SIGNAL_SAVED", saved, { table: "signal_history" });
+          }
 
           this.bestOpportunity = signal;
           this.latestResults = [signal, ...this.latestResults].slice(0, 30);
 
           emitToAll("signal", signal, { cacheLatest: true });
           emitToAll("bestOpportunity", signal, { cacheLatest: true });
+          logSignalFlow("SIGNAL_BROADCAST", signal, { events: ["signal", "bestOpportunity"] });
 
           await this.auditDecision("signal_generated", signal);
         } catch (symbolError) {
@@ -1135,6 +1157,14 @@ class EngineRunnerService {
 
       if (updated.length) {
         emitToAll("history", filterConfirmedOperationalSignals(updated), { cacheLatest: true });
+        console.log(JSON.stringify({
+          scope: "aerix_signal_flow_audit",
+          event: "SIGNAL_RESULT_UPDATED",
+          timestamp: new Date().toISOString(),
+          total: updated.length,
+          signalIds: updated.map((signal) => signal.id).filter(Boolean),
+          source: "result_checker"
+        }));
 
         await this.auditDecision("results_checked", {
           total: updated.length
