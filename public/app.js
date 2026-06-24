@@ -323,6 +323,28 @@ function debounce(fn, wait = 250) {
   };
 }
 
+
+const SIGNAL_PIPELINE_AUDIT_SCOPE = "signal_pipeline_audit";
+
+function getSignalPipelineAuditScore(signal = {}) {
+  return Number(signal.score ?? signal.adjustedScore ?? signal.adjusted_score ?? signal.finalScore ?? signal.final_score ?? signal.confidence ?? 0);
+}
+
+function auditSignalPipeline(event, signal = {}, extra = {}) {
+  console.log(JSON.stringify({
+    scope: SIGNAL_PIPELINE_AUDIT_SCOPE,
+    event,
+    timestamp: new Date().toISOString(),
+    symbol: signal.symbol || signal.asset || "UNKNOWN",
+    signal: signal.signal || signal.direction || "WAIT",
+    strategy: signal.strategyName || signal.strategy_name || signal.strategy || null,
+    score: getSignalPipelineAuditScore(signal),
+    confidence: Number(signal.confidence ?? signal.score ?? 0),
+    executionAllowed: Boolean(signal.executionAllowed ?? signal.execution_allowed ?? signal.execution?.allowed ?? false),
+    ...extra
+  }));
+}
+
 function scheduleHistoryRender() {
   if (state.pendingHistoryRender) return;
 
@@ -330,6 +352,10 @@ function scheduleHistoryRender() {
   scheduleVisualUpdate("history", () => {
     state.pendingHistoryRender = false;
     renderHistory();
+    auditSignalPipeline("SIGNAL_RENDERED", state.history[0] || {}, {
+      source: "frontend",
+      renderTarget: "history"
+    });
   });
 }
 
@@ -1656,6 +1682,18 @@ function renderFilterPerformance(data = {}) {
 
 function syncRuntimeDashboard(runtimePayload = {}) {
   const runtime = extractRuntimeSignals(runtimePayload);
+  if (runtime.ranking.length) {
+    auditSignalPipeline("RANKING_UPDATED", runtime.ranking[0], {
+      source: "frontend",
+      rankingSize: runtime.ranking.length
+    });
+  }
+  if (runtime.analytics && Object.keys(runtime.analytics).length) {
+    auditSignalPipeline("ANALYTICS_UPDATED", runtime.bestOpportunity || runtime.ranking[0] || runtime.history[0] || {}, {
+      source: "frontend",
+      analyticsScope: "runtime"
+    });
+  }
   const latestSignal = runtime.bestOpportunity || runtime.ranking[0] || runtime.history[0] || null;
 
   if (runtime.operationalMonitor) {
@@ -2681,10 +2719,18 @@ socket.on("connect_error", () => {
 });
 
 socket.on("signal", (signal) => {
+  auditSignalPipeline("SIGNAL_RECEIVED_FRONTEND", signal, {
+    source: "frontend",
+    socketEvent: "signal"
+  });
   renderShadowMode(signal, "signal");
   updateCompactOperations(signal, "signal");
 
   renderSignal(signal);
+  auditSignalPipeline("SIGNAL_RENDERED", signal, {
+    source: "frontend",
+    renderTarget: "current_signal"
+  });
 
   if (isConfirmedOperationalSignal(signal) && signalMatchesHistoryFilters(signal)) {
     state.history.unshift(signal);
@@ -2697,6 +2743,10 @@ socket.on("signal", (signal) => {
 });
 
 socket.on("signal-result-updated", (signal) => {
+  auditSignalPipeline("SIGNAL_RESULT_UPDATED", signal, {
+    source: "frontend",
+    socketEvent: "signal-result-updated"
+  });
   renderShadowMode(signal, "result");
 
   const index = state.history.findIndex((item) => item.id === signal.id);

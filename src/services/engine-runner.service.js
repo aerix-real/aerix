@@ -15,6 +15,7 @@ const { registerAudit } = require("./audit.service");
 const RateLimiterService = require("./rate-limiter.service");
 
 const signalRepository = require("../repositories/signal.repository");
+const { auditSignalPipeline } = require("../utils/signal-pipeline-audit");
 const { emitToAll } = require("../websocket/socket");
 const {
   isConfirmedOperationalSignal,
@@ -685,13 +686,26 @@ class EngineRunnerService {
             continue;
           }
 
+          auditSignalPipeline("SIGNAL_GENERATED", signal, { source: "engine_runner" });
+
           const saved = await this.persistGeneratedSignal(signal);
           signal.id = saved?.id || signal.id;
+
+          auditSignalPipeline("SIGNAL_SAVED", signal, {
+            source: "engine_runner",
+            persisted: Boolean(saved),
+            signalId: saved?.id || signal.id || null
+          });
 
           this.bestOpportunity = signal;
           this.latestResults = [signal, ...this.latestResults].slice(0, 30);
 
           emitToAll("signal", signal, { cacheLatest: true });
+          auditSignalPipeline("SIGNAL_BROADCAST", signal, {
+            source: "engine_runner",
+            socketEvent: "signal"
+          });
+
           emitToAll("bestOpportunity", signal, { cacheLatest: true });
 
           await this.auditDecision("signal_generated", signal);
@@ -1222,6 +1236,16 @@ class EngineRunnerService {
     const filterEfficiency = blockedAnalyses.length
       ? Number((((blockedAnalyses.length - shadowApprovedBlocks) / blockedAnalyses.length) * 100).toFixed(2))
       : 0;
+
+    const rankingAuditSignal = confirmedHistory[0] || confirmedThisCycle[0] || cycleResults[0] || {};
+    auditSignalPipeline("RANKING_UPDATED", rankingAuditSignal, {
+      source: "engine_runner",
+      rankingSize: confirmedHistory.length
+    });
+    auditSignalPipeline("ANALYTICS_UPDATED", rankingAuditSignal, {
+      source: "engine_runner",
+      analyticsScope: "historyStats"
+    });
 
     emitToAll("engine:update", {
       ok: true,

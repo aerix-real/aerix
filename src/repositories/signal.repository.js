@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { auditSignalPipeline } = require("../utils/signal-pipeline-audit");
 
 const MINIMUM_SCORE_SQL = `
   COALESCE(
@@ -161,7 +162,13 @@ async function insertSignal(data) {
   ];
 
   const result = await db.query(query, values);
-  return result.rows[0];
+  const saved = result.rows[0];
+  auditSignalPipeline("SIGNAL_SAVED", saved || data, {
+    source: "signal_repository",
+    persisted: Boolean(saved),
+    signalId: saved?.id || null
+  });
+  return saved;
 }
 
 async function save(data) {
@@ -744,7 +751,13 @@ async function updateSignalResult(id, result) {
     [result, id]
   );
 
-  return response.rows[0] || null;
+  const saved = response.rows[0] || null;
+  auditSignalPipeline("SIGNAL_RESULT_UPDATED", saved || { id, result }, {
+    source: "signal_repository.updateSignalResult",
+    signalId: id,
+    result
+  });
+  return saved;
 }
 
 async function getExpiredPendingSignals(limit = 50) {
@@ -766,6 +779,10 @@ async function getExpiredPendingSignals(limit = 50) {
 
 async function refreshOutcomeAnalytics() {
   await db.query("SELECT public.refresh_outcome_analytics()");
+  auditSignalPipeline("ANALYTICS_UPDATED", {}, {
+    source: "signal_repository.refreshOutcomeAnalytics",
+    analyticsScope: "outcome"
+  });
 }
 
 async function finalizeSignalResult(id, { result, resultPrice }) {
@@ -782,7 +799,13 @@ async function finalizeSignalResult(id, { result, resultPrice }) {
     [result, resultPrice, id]
   );
 
-  return response.rows[0] || null;
+  const saved = response.rows[0] || null;
+  auditSignalPipeline("SIGNAL_RESULT_UPDATED", saved || { id, result }, {
+    source: "signal_repository.finalizeSignalResult",
+    signalId: id,
+    result: saved?.result || result || null
+  });
+  return saved;
 }
 
 async function getOutcomeAnalytics() {
