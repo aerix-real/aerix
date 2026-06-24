@@ -1668,6 +1668,10 @@ function syncRuntimeDashboard(runtimePayload = {}) {
 
   if (runtime.history.length) {
     state.history = filterConfirmedOperationalSignals(runtime.history).slice(0, MAX_HISTORY_ITEMS);
+    auditSignalFlow("RANKING_UPDATED", state.history[0] || {}, {
+      total: state.history.length,
+      source: "engine:update"
+    });
     scheduleHistoryRender();
     scheduleEquityDraw();
   }
@@ -1686,6 +1690,14 @@ function syncRuntimeDashboard(runtimePayload = {}) {
   }
 
   const stats = runtime.analytics?.historyStats || {};
+  if (runtime.analytics && Object.keys(runtime.analytics).length) {
+    auditSignalFlow("ANALYTICS_UPDATED", latestSignal || {}, {
+      source: "engine:update",
+      hasHistoryStats: Boolean(runtime.analytics.historyStats),
+      hasPerformanceDashboard: Boolean(runtime.analytics.performanceDashboard)
+    });
+  }
+
   if (runtime.analytics?.performanceDashboard) {
     renderPerformanceDashboard(runtime.analytics.performanceDashboard);
   }
@@ -2190,13 +2202,15 @@ function filterConfirmedOperationalSignals(signals = []) {
 
 function auditSignalFlow(event, signal = {}, context = {}) {
   console.log(JSON.stringify({
-    scope: "aerix_signal_flow_audit",
+    scope: "signal_pipeline_audit",
     event,
     timestamp: new Date().toISOString(),
     signalId: signal.id || null,
     symbol: signal.symbol || signal.asset || "UNKNOWN",
     signal: signal.signal || signal.direction || "WAIT",
     result: signal.result || null,
+    executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? null,
+    finalScore: Number(signal.finalScore ?? signal.final_score ?? signal.score ?? signal.confidence ?? 0),
     ...context
   }));
 }
@@ -2753,6 +2767,11 @@ socket.on("filter-analytics:update", (payload) => {
   const analytics = payload?.data || payload;
   if (analytics && typeof analytics === "object") {
     state.filterAnalytics = analytics;
+    auditSignalFlow("ANALYTICS_UPDATED", {}, {
+      source: "filter-analytics:update",
+      hasSummary: Boolean(analytics.summary),
+      rankingTotal: normalizeSignalCollection(analytics.ranking).length
+    });
     renderFilterAnalytics(analytics);
   } else {
     loadFilterAnalytics();
