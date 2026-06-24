@@ -13,6 +13,7 @@ const { analyzeIndicators } = require("./indicator-engine.service");
 const { explainSignal, applyLossPenalty } = require("./signal-ai.service");
 const { registerAudit } = require("./audit.service");
 const RateLimiterService = require("./rate-limiter.service");
+const { auditSignalPipeline } = require("../utils/signal-pipeline-audit");
 
 const signalRepository = require("../repositories/signal.repository");
 const { emitToAll } = require("../websocket/socket");
@@ -27,18 +28,7 @@ const RELEVANT_PRICE_CHANGE_PERCENT = Math.max(0, Number(process.env.RELEVANT_PR
 const SNAPSHOT_REQUEST_COST = 3;
 
 function logSignalFlow(event, signal = {}, context = {}) {
-  console.log(JSON.stringify({
-    scope: "aerix_signal_flow_audit",
-    event,
-    timestamp: new Date().toISOString(),
-    signalId: signal.id || null,
-    symbol: signal.symbol || signal.asset || "UNKNOWN",
-    signal: signal.signal || signal.direction || "WAIT",
-    result: signal.result || null,
-    executionAllowed: signal.executionAllowed ?? signal.execution_allowed ?? null,
-    finalScore: Number(signal.finalScore ?? signal.final_score ?? signal.score ?? signal.confidence ?? 0),
-    ...context
-  }));
+  auditSignalPipeline(event, signal, context);
 }
 
 function logStructuredEngineError(event, error, context = {}) {
@@ -1158,7 +1148,7 @@ class EngineRunnerService {
       if (updated.length) {
         emitToAll("history", filterConfirmedOperationalSignals(updated), { cacheLatest: true });
         console.log(JSON.stringify({
-          scope: "aerix_signal_flow_audit",
+          scope: "signal_pipeline_audit",
           event: "SIGNAL_RESULT_UPDATED",
           timestamp: new Date().toISOString(),
           total: updated.length,

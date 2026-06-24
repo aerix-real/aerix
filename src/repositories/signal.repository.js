@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { auditSignalPipeline } = require("../utils/signal-pipeline-audit");
 
 const MINIMUM_SCORE_SQL = `
   COALESCE(
@@ -53,16 +54,7 @@ function isSchemaMismatchError(error) {
 }
 
 function logSignalFlow(event, signal = {}, context = {}) {
-  console.log(JSON.stringify({
-    scope: "aerix_signal_flow_audit",
-    event,
-    timestamp: new Date().toISOString(),
-    signalId: signal.id || null,
-    symbol: signal.symbol || "UNKNOWN",
-    signal: signal.signal || signal.direction || "WAIT",
-    result: signal.result || null,
-    ...context
-  }));
+  auditSignalPipeline(event, signal, context);
 }
 
 function logStructuredRepositoryError(event, error, context = {}) {
