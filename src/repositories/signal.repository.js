@@ -52,6 +52,19 @@ function isSchemaMismatchError(error) {
   return error?.code === "42703" || /column .* does not exist/i.test(String(error?.message || ""));
 }
 
+function logSignalFlow(event, signal = {}, context = {}) {
+  console.log(JSON.stringify({
+    scope: "aerix_signal_flow_audit",
+    event,
+    timestamp: new Date().toISOString(),
+    signalId: signal.id || null,
+    symbol: signal.symbol || "UNKNOWN",
+    signal: signal.signal || signal.direction || "WAIT",
+    result: signal.result || null,
+    ...context
+  }));
+}
+
 function logStructuredRepositoryError(event, error, context = {}) {
   console.error(JSON.stringify({
     scope: "aerix_signal_repository",
@@ -161,7 +174,13 @@ async function insertSignal(data) {
   ];
 
   const result = await db.query(query, values);
-  return result.rows[0];
+  const saved = result.rows[0];
+
+  if (saved) {
+    logSignalFlow("SIGNAL_SAVED", saved, { table: "signal_history", source: "signal_repository" });
+  }
+
+  return saved;
 }
 
 async function save(data) {
@@ -744,7 +763,13 @@ async function updateSignalResult(id, result) {
     [result, id]
   );
 
-  return response.rows[0] || null;
+  const saved = response.rows[0] || null;
+
+  if (saved) {
+    logSignalFlow("SIGNAL_RESULT_UPDATED", saved, { table: "signal_history", source: "manual_result_update" });
+  }
+
+  return saved;
 }
 
 async function getExpiredPendingSignals(limit = 50) {
@@ -782,7 +807,13 @@ async function finalizeSignalResult(id, { result, resultPrice }) {
     [result, resultPrice, id]
   );
 
-  return response.rows[0] || null;
+  const saved = response.rows[0] || null;
+
+  if (saved) {
+    logSignalFlow("SIGNAL_RESULT_UPDATED", saved, { table: "signal_history", source: "result_checker", resultPrice });
+  }
+
+  return saved;
 }
 
 async function getOutcomeAnalytics() {
