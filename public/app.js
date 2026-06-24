@@ -878,8 +878,11 @@ function getSignalApprovedTimestamp(signal = {}) {
     signal.timestamp ||
     signal.updated_at ||
     signal.updatedAt;
-  const parsed = raw ? new Date(raw) : new Date();
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+
+  if (!raw) return null;
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function getEntryWindowSignalKey(signal = {}) {
@@ -891,9 +894,16 @@ function getEntryWindowSignalKey(signal = {}) {
 }
 
 function classifyEntryWindow(elapsedSeconds = 0) {
-  if (elapsedSeconds <= 60) return { label: "Entrada Ideal", tone: "ideal", remaining: Math.max(0, 60 - elapsedSeconds) };
-  if (elapsedSeconds <= 120) return { label: "Entrada Aceitável", tone: "acceptable", remaining: Math.max(0, 120 - elapsedSeconds) };
-  return { label: "Entrada Tardia", tone: "late", remaining: 0 };
+  if (elapsedSeconds < 60) return { label: "Entrada Ideal", tone: "ideal" };
+  if (elapsedSeconds < 120) return { label: "Entrada Aceitável", tone: "acceptable" };
+  return { label: "Entrada Tardia", tone: "late" };
+}
+
+function formatEntryWindowCounter(elapsedSeconds = 0) {
+  const safeElapsed = Math.max(0, elapsedSeconds);
+  const minutes = Math.floor(safeElapsed / 60);
+  const seconds = safeElapsed % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function renderEntryWindowTimer() {
@@ -901,8 +911,8 @@ function renderEntryWindowTimer() {
 
   if (!approvedAt) {
     setTextContent(el.entryWindowCountdown, "--");
-    setTextContent(el.entryWindowClassification, "Aguardando sinal");
-    setTextContent(el.entryWindowTimestamp, "Timestamp pendente");
+    setTextContent(el.entryWindowClassification, "--");
+    setTextContent(el.entryWindowTimestamp, "--");
     if (el.entryWindowClassification) el.entryWindowClassification.className = "entry-window-classification neutral";
     if (el.entryWindowTimer) el.entryWindowTimer.className = "entry-window-timer neutral";
     return;
@@ -910,11 +920,8 @@ function renderEntryWindowTimer() {
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - approvedAt.getTime()) / 1000));
   const classification = classifyEntryWindow(elapsedSeconds);
-  const countdownText = classification.remaining > 0
-    ? `${classification.remaining}s restantes`
-    : `${elapsedSeconds}s decorridos`;
 
-  setTextContent(el.entryWindowCountdown, countdownText);
+  setTextContent(el.entryWindowCountdown, formatEntryWindowCounter(elapsedSeconds));
   setTextContent(el.entryWindowClassification, classification.label);
   setTextContent(el.entryWindowTimestamp, `Aprovado ${formatTime(approvedAt)}`);
 
