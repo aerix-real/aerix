@@ -137,6 +137,7 @@ const el = {
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
+  summaryLastUpdate: document.getElementById("summaryLastUpdate"),
   rateLimitStatus: document.getElementById("rateLimitStatus"),
   websocketStatus: document.getElementById("websocketStatus"),
   monitorUptime: document.getElementById("monitorUptime"),
@@ -981,6 +982,7 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.summaryEngineStatus, engineStatus);
   setTextContent(el.summarySocketStatus, socket.connected ? "Socket online" : "Reconectando");
   setTextContent(el.summaryLastAnalysis, cycleTime);
+  setTextContent(el.summaryLastUpdate, cycleTime);
   setTextContent(el.engineProcessStatus, source === "engine" || source === "bestOpportunity" ? "Processando" : "Aguardando");
   setTextContent(el.lastCycleTime, cycleTime);
   setTextContent(el.lastCycleCompact, cycleTime);
@@ -1782,12 +1784,14 @@ function buildWhySignal(signal = {}) {
   const direction = getOperationalDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
   const score = getOperationalScore(signal);
   const strategy = getStrategyLabel(signal);
+  const aiApproved = signal.aiApproved !== false && signal.ai_approved !== false && !signal.blocked;
   const reasons = [];
-  if (direction !== "WAIT") reasons.push("Tendência alinhada");
-  if (signal.aiApproved !== false && !signal.blocked) reasons.push("IA aprovou");
-  if (score >= 70) reasons.push("Score acima do mínimo");
-  if (strategy && strategy !== "--") reasons.push(`Estratégia utilizada: ${strategy}`);
-  if (!String(getVolatilityLabel(signal)).toLowerCase().includes("high")) reasons.push("Volatilidade aceitável");
+
+  if (direction !== "WAIT") reasons.push("✓ Tendência alinhada");
+  if (score >= 70) reasons.push("✓ Score aprovado");
+  if (strategy && strategy !== "--") reasons.push("✓ Estratégia aprovada");
+  if (aiApproved) reasons.push("✓ IA aprovou");
+
   return reasons.slice(0, 4);
 }
 
@@ -1812,7 +1816,7 @@ function renderPremiumHistory() {
     const result = String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
-    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span>${Math.round(getOperationalScore(signal))}%</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
+    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
   }).join("");
 }
 
