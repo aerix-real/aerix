@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=clean-dashboard" />
+  <link rel="stylesheet" href="/style.css?v=premium-saas" />
 </head>
 
 <body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
@@ -122,11 +122,11 @@
           <div class="headline" id="headlineText">Painel operacional compacto para leitura rápida de oportunidade, risco e resultado.</div>
         </section>
 
-        <section class="commercial-dashboard-grid" aria-label="Resumo comercial do painel AERIX">
-          <article class="panel best-opportunity-panel primary-opportunity-card premium-card decision-focus-card current-signal-card" id="currentSignalCard">
+        <section class="commercial-dashboard-grid premium-saas-main" aria-label="Resumo comercial do painel AERIX">
+          <article class="panel best-opportunity-panel primary-opportunity-card premium-card decision-focus-card current-signal-card hero-card" id="currentSignalCard">
             <div class="panel-header">
-              <h3>Sinal Atual</h3>
-              <span id="signalMode">operação rápida</span>
+              <h3>Hero Card</h3>
+              <span id="signalMode">sinal atual</span>
             </div>
             <div class="current-signal-head">
               <div>
@@ -135,108 +135,54 @@
               </div>
               <div class="signal-direction neutral" id="bestDirection">WAIT</div>
             </div>
-            <div class="current-signal-scoreline">
+            <div class="current-signal-scoreline hero-scoreline">
               <div><span>Score</span><strong id="bestScore">0%</strong></div>
               <div><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
-              <div><span>Expiração</span><strong id="bestExpiry">--</strong></div>
             </div>
-            <div class="current-signal-meta">
+            <div class="current-signal-meta hero-meta">
               <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
-              <div><span>Status da IA</span><strong id="bestAiStatus">Aguardando</strong></div>
-              <div><span>Status</span><strong id="bestEntryStatus">Aguardando</strong></div>
+              <div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div>
             </div>
-            <div class="entry-window-timer" id="entryWindowTimer" aria-label="Entry Window Timer M5">
-              <div>
-                <span>Entry Window M5</span>
-                <strong id="entryWindowCountdown">--</strong>
-              </div>
-              <div class="entry-window-classification neutral" id="entryWindowClassification">Aguardando sinal</div>
-              <small id="entryWindowTimestamp">Timestamp pendente</small>
-            </div>
-            <div class="why-signal-mini" id="whySignalMini"><span>Aguardando confluência institucional.</span></div>
-            <p class="compact-decision-text" id="decisionReason">IA aguardando confluência operacional.</p>
           </article>
 
-          <aside class="summary-card-grid" aria-label="Indicadores resumidos">
+          <aside class="summary-card-grid kpi-card-grid" aria-label="KPIs principais">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
-            <article class="stat-card commercial-summary-card"><span>Winrate 7 dias</span><strong id="summaryWinrate7d">0%</strong><small>consistência semanal</small></article>
-            <article class="stat-card commercial-summary-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume operacional</small></article>
-            <article class="stat-card commercial-summary-card"><span>AERIX Health</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
+            <article class="stat-card commercial-summary-card"><span>Sinais Hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
+            <article class="stat-card commercial-summary-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
+            <article class="stat-card commercial-summary-card"><span>Última Atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
           </aside>
         </section>
 
-        <nav class="dashboard-tabs" aria-label="Áreas do painel">
-          <button class="dashboard-tab active" type="button" data-tab="operation" aria-selected="true">Operação</button>
-          <button class="dashboard-tab" type="button" data-tab="history" aria-selected="false">Histórico</button>
-          <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false">Análise técnica</button>
+        <section class="clean-dashboard-focus-grid premium-saas-main" aria-label="Dashboard limpo para decisão rápida">
+          <article class="panel premium-card why-signal-panel clean-why-card">
+            <div class="panel-header"><h3>Por que este sinal?</h3><span>máx. 4 itens</span></div>
+            <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
+          </article>
+
+          <article class="panel premium-card operation-history-card clean-history-card">
+            <div class="panel-header"><h3>Histórico resumido</h3><span>últimos sinais</span></div>
+            <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
+          </article>
+        </section>
+
+        <nav class="dashboard-tabs technical-tabs" aria-label="Área técnica">
+          <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false">Aba técnica</button>
         </nav>
-
-        <section class="dashboard-tab-panel active" data-tab-panel="operation">
-          <section class="clean-dashboard-focus-grid" aria-label="Dashboard limpo para decisão rápida">
-            <article class="panel premium-card why-signal-panel clean-why-card">
-              <div class="panel-header"><h3>Por que este sinal?</h3><span>máx. 4 razões</span></div>
-              <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
-            </article>
-
-            <article class="panel premium-card operation-history-card clean-history-card">
-              <div class="panel-header"><h3>Histórico resumido</h3><span>compacto</span></div>
-              <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
-            </article>
-          </section>
-        </section>
-
-        <section class="dashboard-tab-panel" data-tab-panel="history" hidden>
-          <section class="panel history-panel compact-history-panel recent-signals-panel premium-card">
-            <div class="panel-header">
-              <h3>Últimos Sinais</h3>
-              <span id="historyCount">0</span>
-            </div>
-            <div class="history-toolbar" aria-label="Filtros do histórico de últimos sinais">
-              <label>
-                Ativo
-                <input id="historyFilterSymbol" type="search" placeholder="Ex: EURUSD" autocomplete="off" />
-              </label>
-              <label>
-                Estratégia
-                <input id="historyFilterStrategy" type="search" placeholder="Todas" autocomplete="off" />
-              </label>
-              <label>
-                Resultado
-                <select id="historyFilterResult">
-                  <option value="">Todos</option>
-                  <option value="pending">Pendente</option>
-                  <option value="win">WIN</option>
-                  <option value="loss">LOSS</option>
-                  <option value="draw">DRAW</option>
-                </select>
-              </label>
-            </div>
-            <div class="history-table-shell">
-              <div class="history-table" id="historyList"><div class="history-empty">Nenhum sinal ainda</div></div>
-            </div>
-            <div class="history-pagination" aria-label="Paginação dos últimos sinais">
-              <button id="historyPrev" type="button">Anterior</button>
-              <span id="historyPageInfo">Página 1</span>
-              <button id="historyNext" type="button">Próxima</button>
-              <small id="historyUpdated">sincronizando</small>
-            </div>
-          </section>
-        </section>
 
         <section class="dashboard-tab-panel" data-tab-panel="technical" hidden>
           <section class="panel advanced-hub-panel secondary-details-panel premium-card">
-            <div class="panel-header"><h3>Análise técnica</h3><span id="engineOnlineStatus">Sincronizando</span></div>
+            <div class="panel-header"><h3>Aba técnica</h3><span id="engineOnlineStatus">Sincronizando</span></div>
             <div class="technical-snapshot-grid">
-              <div class="compact-status-item"><span>Estratégia</span><strong id="techStrategy">--</strong></div>
-              <div class="compact-status-item"><span>marketRegime</span><strong id="marketRegime">NEUTRO</strong></div>
-              <div class="compact-status-item"><span>volatility</span><strong id="techVolatility">--</strong></div>
-              <div class="compact-status-item"><span>dynamicThresholds</span><strong id="techDynamicThresholds">--</strong></div>
-              <div class="compact-status-item"><span>blockReason</span><strong id="techBlockReason">--</strong></div>
-              <div class="compact-status-item"><span>activationReason</span><strong id="techActivationReason">--</strong></div>
+              <div class="compact-status-item"><span>Strategy diagnostics</span><strong id="techStrategy">--</strong></div>
+              <div class="compact-status-item"><span>Market diagnostics</span><strong id="marketRegime">NEUTRO</strong></div>
+              <div class="compact-status-item"><span>Market volatility</span><strong id="techVolatility">--</strong></div>
+              <div class="compact-status-item"><span>Adaptive thresholds</span><strong id="techDynamicThresholds">--</strong></div>
+              <div class="compact-status-item"><span>Release diagnostics</span><strong id="techBlockReason">--</strong></div>
+              <div class="compact-status-item"><span>Strategy diagnostics</span><strong id="techActivationReason">--</strong></div>
             </div>
             <div class="advanced-hub-grid technical-advanced-grid">
               <article class="institutional-subpanel compact-engine-panel premium-card">
-                <div class="subpanel-title"><strong>Status da engine</strong><span>runtime</span></div>
+                <div class="subpanel-title"><strong>Provider diagnostics</strong><span>runtime</span></div>
                 <div class="compact-status-grid engine-status-grid">
                   <div class="compact-status-item"><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div>
                   <div class="compact-status-item"><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div>
@@ -246,7 +192,7 @@
                   <div class="compact-status-item"><span>Liberação IA</span><strong id="aiReleaseStatus">Aguardando</strong></div>
                 </div>
                 <div class="ai-content">
-                  <span class="micro-label">Razões completas</span>
+                  <span class="micro-label">Auditorias completas</span>
                   <p class="ai-text" id="aiExplanation">IA operacional será exibida conforme a engine sincronizar dados.</p>
                 </div>
               </article>
@@ -254,8 +200,8 @@
               <section class="institutional-subpanel institutional-center-panel" id="institutionalCenter">
                 <div class="institutional-center-header">
                   <div>
-                    <span class="section-kicker">Auditoria e analytics</span>
-                    <h3>Operational Command Center</h3>
+                    <span class="section-kicker">Cache diagnostics · Market diagnostics · Auditorias completas</span>
+                    <h3>Technical Diagnostics Center</h3>
                   </div>
                   <span class="institutional-status-pill" id="saasStatus">SaaS em sincronização</span>
                 </div>
@@ -296,7 +242,7 @@
           </section>
 
           <section class="panel performance-dashboard-panel premium-card secondary-details-panel">
-            <div class="panel-header"><h3>Performance Institucional</h3><span id="performanceUpdated">sincronizando</span></div>
+            <div class="panel-header"><h3>Release diagnostics</h3><span id="performanceUpdated">sincronizando</span></div>
             <div class="performance-kpi-grid" aria-label="Dashboard institucional de performance">
               <div class="stat-card performance-kpi-card"><span>Bloqueados hoje</span><strong id="perfBlockedToday">0</strong></div>
               <div class="stat-card performance-kpi-card"><span>Taxa de aprovação</span><strong id="perfApprovalRate">0%</strong></div>
@@ -339,7 +285,7 @@
           </section>
 
         <section class="panel filter-analytics-panel premium-card secondary-details-panel">
-          <div class="panel-header"><h3>Filter Analytics</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
+          <div class="panel-header"><h3>Auditorias completas</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
           <details class="technical-details filter-details">
             <summary>Ver bloqueios, ranking, reasons e auditoria de filtros</summary>
             <div class="filter-summary-grid">
@@ -386,6 +332,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=clean-dashboard"></script>
+  <script src="/app.js?v=premium-saas"></script>
 </body>
 </html>
