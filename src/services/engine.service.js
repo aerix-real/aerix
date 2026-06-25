@@ -9,6 +9,7 @@ const predictiveAiService = require("./predictive-ai.service");
 const filterAnalyticsService = require("./filter-analytics.service");
 const engineDebugService = require("./engine-debug.service");
 const signalRepository = require("../repositories/signal.repository");
+const blockerAnalytics = require("./blocker-analytics.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 const ANALYSIS_CACHE_TTL_MS = Math.max(60 * 1000, Number(process.env.ANALYSIS_CACHE_TTL_MS || 5 * 60 * 1000));
@@ -636,6 +637,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
       : explanation
   };
 
+  finalResult.blockerAnalytics = blockerAnalytics.recordFinalGates(finalResult);
   finalResult.opportunityClass = classifyOpportunity(finalResult, strategyMode);
   finalResult.status = finalResult.opportunityClass;
   finalResult.risk = classifyRisk(finalResult);

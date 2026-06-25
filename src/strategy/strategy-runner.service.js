@@ -6,6 +6,7 @@ const {
   createTrendContinuationStrategy
 } = require("./index");
 const { getLastATR } = require("../indicators/atr.indicator");
+const blockerAnalytics = require("../services/blocker-analytics.service");
 
 function normalizeMode(mode = "balanced") {
   const normalized = String(mode || "balanced").toLowerCase();
@@ -1001,6 +1002,13 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   }));
 
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
+  const blockerAnalyticsContext = {
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    mode: normalizeMode(mode),
+    marketRegime,
+    alignment: Number(mtf?.alignment || 0),
+    volatility: Number(snapshot?.timeframes?.m5?.volatilityPercent || 0)
+  };
 
 
   const fallbackSignal = marketValidation.isFallbackData
@@ -1108,6 +1116,12 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       mode
     }));
 
+    result.blockerAnalytics = blockerAnalytics.recordCycle({
+      candidates: evaluated,
+      context: { ...blockerAnalyticsContext, marketRegime: effectiveMarketRegime },
+      finalSignal: result
+    });
+
     return result;
   }
 
@@ -1182,6 +1196,12 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       mode
     }));
 
+    result.blockerAnalytics = blockerAnalytics.recordCycle({
+      candidates: evaluated,
+      context: { ...blockerAnalyticsContext, marketRegime: effectiveMarketRegime },
+      finalSignal: result
+    });
+
     return result;
   }
 
@@ -1246,6 +1266,12 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     absenceReason: null,
     mode
   }));
+
+  result.blockerAnalytics = blockerAnalytics.recordCycle({
+    candidates: evaluated,
+    context: { ...blockerAnalyticsContext, marketRegime: effectiveMarketRegime },
+    finalSignal: result
+  });
 
   return result;
 }
