@@ -1,10 +1,6 @@
 const {
-  createBreakoutStrategy,
-  createInstitutionalPullbackStrategy,
-  createMomentumStrategy,
-  createPullbackStrategy,
-  createReversalStrategy,
-  createTrendContinuationStrategy
+  createEnabledStrategies,
+  getStrategyModeWeights
 } = require("./index");
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
@@ -41,14 +37,7 @@ function getModeRules(mode = "balanced") {
         insufficientCandles: 60,
         fallbackData: true
       },
-      weights: {
-        trend_continuation: 1.18,
-        institutional_pullback: 1.08,
-        pullback: 1.12,
-        breakout: 0.92,
-        momentum: 0.88,
-        reversal: 0.72
-      }
+      weights: getStrategyModeWeights("conservative")
     },
     balanced: {
       minScore: 68,
@@ -69,14 +58,7 @@ function getModeRules(mode = "balanced") {
         insufficientCandles: 45,
         fallbackData: true
       },
-      weights: {
-        trend_continuation: 1.05,
-        institutional_pullback: 1.04,
-        pullback: 1.02,
-        breakout: 1.03,
-        momentum: 1.03,
-        reversal: 0.94
-      }
+      weights: getStrategyModeWeights("balanced")
     },
     aggressive: {
       minScore: 61,
@@ -97,14 +79,7 @@ function getModeRules(mode = "balanced") {
         insufficientCandles: 30,
         fallbackData: true
       },
-      weights: {
-        trend_continuation: 0.98,
-        institutional_pullback: 1.02,
-        pullback: 0.99,
-        breakout: 1.12,
-        momentum: 1.14,
-        reversal: 1.06
-      }
+      weights: getStrategyModeWeights("aggressive")
     }
   };
 
@@ -966,14 +941,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     mode: normalizeMode(mode)
   };
 
-  const strategies = [
-    createTrendContinuationStrategy(),
-    createInstitutionalPullbackStrategy(),
-    createPullbackStrategy(),
-    createBreakoutStrategy(),
-    createMomentumStrategy(),
-    createReversalStrategy()
-  ];
+  const strategies = createEnabledStrategies();
 
   const evaluated = strategies.map((strategy) => {
     const result = safeEvaluateStrategy(strategy, payload);

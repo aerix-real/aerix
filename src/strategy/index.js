@@ -5,13 +5,25 @@ const { createInstitutionalPullbackStrategy } = require("./institutional-pullbac
 const { createLiquiditySweepFalseBreakoutStrategy } = require("./liquidity-sweep-false-breakout.strategy");
 const { createReversalStrategy } = require("./reversal.strategy");
 const { createTrendContinuationStrategy } = require("./trend-continuation.strategy");
+const {
+  STRATEGY_REGISTRY,
+  createEnabledStrategies,
+  getEnabledStrategyDefinitions,
+  getStrategyModeWeights,
+  getStrategyRegistry
+} = require("./strategy-registry");
 
 module.exports = {
+  STRATEGY_REGISTRY,
   createBreakoutStrategy,
+  createEnabledStrategies,
   createInstitutionalPullbackStrategy,
   createLiquiditySweepFalseBreakoutStrategy,
   createMomentumStrategy,
   createPullbackStrategy,
   createReversalStrategy,
-  createTrendContinuationStrategy
+  createTrendContinuationStrategy,
+  getEnabledStrategyDefinitions,
+  getStrategyModeWeights,
+  getStrategyRegistry
 };
