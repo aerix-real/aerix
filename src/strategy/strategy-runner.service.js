@@ -3,7 +3,8 @@ const {
   createMomentumStrategy,
   createPullbackStrategy,
   createReversalStrategy,
-  createTrendContinuationStrategy
+  createTrendContinuationStrategy,
+  createLiquiditySweepFalseBreakoutStrategy
 } = require("./index");
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
@@ -45,7 +46,8 @@ function getModeRules(mode = "balanced") {
         pullback: 1.12,
         breakout: 0.92,
         momentum: 0.88,
-        reversal: 0.72
+        reversal: 0.72,
+        liquidity_sweep_false_breakout: 0.72
       }
     },
     balanced: {
@@ -72,7 +74,8 @@ function getModeRules(mode = "balanced") {
         pullback: 1.02,
         breakout: 1.03,
         momentum: 1.03,
-        reversal: 0.94
+        reversal: 0.94,
+        liquidity_sweep_false_breakout: 0.84
       }
     },
     aggressive: {
@@ -99,7 +102,8 @@ function getModeRules(mode = "balanced") {
         pullback: 0.99,
         breakout: 1.12,
         momentum: 1.14,
-        reversal: 1.06
+        reversal: 1.06,
+        liquidity_sweep_false_breakout: 0.94
       }
     }
   };
@@ -967,7 +971,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     createPullbackStrategy(),
     createBreakoutStrategy(),
     createMomentumStrategy(),
-    createReversalStrategy()
+    createReversalStrategy(),
+    createLiquiditySweepFalseBreakoutStrategy()
   ];
 
   const evaluated = strategies.map((strategy) => {
