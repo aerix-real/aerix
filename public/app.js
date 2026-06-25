@@ -134,6 +134,8 @@ const el = {
   whySignalMini: document.getElementById("whySignalMini"),
   hourHeatmap: document.getElementById("hourHeatmap"),
   strategyRankingList: document.getElementById("strategyRankingList"),
+  strategyPerformanceComparison: document.getElementById("strategyPerformanceComparison"),
+  strategyComparisonUpdated: document.getElementById("strategyComparisonUpdated"),
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
@@ -1708,7 +1710,10 @@ function syncRuntimeDashboard(runtimePayload = {}) {
   }
 
   if (runtime.analytics?.performanceDashboard) {
-    renderPerformanceDashboard(runtime.analytics.performanceDashboard);
+    renderPerformanceDashboard({
+      ...runtime.analytics.performanceDashboard,
+      strategyPerformanceComparison: runtime.analytics.strategyPerformanceComparison
+    });
   }
 
   if (Object.keys(stats).length) {
@@ -1840,6 +1845,45 @@ function renderHourStats(items = []) {
   }).join("");
 }
 
+
+function renderStrategyPerformanceComparison(comparison = {}) {
+  const rows = Array.isArray(comparison?.strategies) ? comparison.strategies : [];
+
+  if (el.strategyComparisonUpdated) {
+    el.strategyComparisonUpdated.textContent = comparison?.generatedAt
+      ? `Atualizado ${formatTime(comparison.generatedAt)}`
+      : "Amostra insuficiente";
+  }
+
+  if (!el.strategyPerformanceComparison) return;
+
+  if (!rows.length) {
+    el.strategyPerformanceComparison.innerHTML = `<div class="history-empty">Amostra insuficiente</div>`;
+    return;
+  }
+
+  el.strategyPerformanceComparison.innerHTML = rows.map((item) => {
+    const insufficient = !item.hasEnoughSample;
+    const bestHour = item.bestHour ? `${String(item.bestHour.hour).padStart(2, "0")}h · ${formatPercent(item.bestHour.winrate)}` : "--";
+    const bestAsset = item.bestAsset ? `${escapeHtml(item.bestAsset.symbol)} · ${formatPercent(item.bestAsset.winrate)}` : "--";
+
+    return `<div class="performance-row strategy-comparison-row ${insufficient ? "insufficient" : ""}">
+      <div class="performance-row-main">
+        <strong>${escapeHtml(item.strategyName || "--")}</strong>
+        <span>${insufficient ? "Amostra insuficiente" : `${formatPercent(item.winrate)} WR · ${item.totalSignals} sinais`}</span>
+      </div>
+      <div class="performance-row-meta">
+        <span>Loss ${insufficient ? "--" : formatPercent(item.lossrate)}</span>
+        <span>Draw ${insufficient ? "--" : formatPercent(item.drawrate)}</span>
+        <span>Score ${insufficient ? "--" : formatPercent(item.averageScore)}</span>
+        <span>Conf. ${insufficient ? "--" : formatPercent(item.averageConfidence)}</span>
+        <span>Hora ${bestHour}</span>
+        <span>Ativo ${bestAsset}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
 function renderPerformanceDashboard(data = {}) {
   if (!data || typeof data !== "object") data = {};
 
@@ -1888,6 +1932,7 @@ function renderPerformanceDashboard(data = {}) {
     el.strategyRankingList.innerHTML = renderWinrateBreakdown(strategyStats, { labelKey: "strategyName", empty: "Sem ranking de estratégias disponível" });
   }
   renderHourStats(data.hourStats || data.winrateByHour || []);
+  renderStrategyPerformanceComparison(data.strategyPerformanceComparison || state.analytics?.strategyPerformanceComparison || {});
   renderHealthScore(lastApproved || {}, state.engineSnapshot?.monitor || {});
 }
 

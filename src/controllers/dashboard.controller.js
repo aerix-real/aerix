@@ -108,6 +108,7 @@ async function getDashboard(req, res) {
           outcomeAnalytics: analytics.outcomeAnalytics,
           adaptiveInsights: analytics.adaptiveInsights,
           performanceDashboard,
+          strategyPerformanceComparison: analytics.strategyPerformanceComparison,
           filters: {
             analyzedSignals: filterAnalytics.analyzedSignals,
             blockedSignals: filterAnalytics.blockedSignals,
@@ -146,11 +147,17 @@ async function getDashboard(req, res) {
 
 async function getPerformance(req, res) {
   try {
-    const performanceDashboard = await analyticsService.getPerformanceDashboard();
+    const [performanceDashboard, strategyPerformanceComparison] = await Promise.all([
+      analyticsService.getPerformanceDashboard(),
+      analyticsService.getStrategyPerformanceComparison()
+    ]);
 
     return res.status(200).json({
       ok: true,
-      data: performanceDashboard
+      data: {
+        ...performanceDashboard,
+        strategyPerformanceComparison
+      }
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
@@ -189,6 +196,7 @@ async function getHistory(req, res) {
         hourPerformance: analytics.hourPerformance,
         directionalPerformance: analytics.directionalPerformance,
         outcomeAnalytics: analytics.outcomeAnalytics,
+        strategyPerformanceComparison: analytics.strategyPerformanceComparison,
         adaptiveInsights: analytics.adaptiveInsights
       }
     });

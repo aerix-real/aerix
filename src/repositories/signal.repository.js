@@ -12,6 +12,19 @@ const MINIMUM_SCORE_SQL = `
   )
 `;
 
+
+const STRATEGY_PERFORMANCE_NAMES = [
+  "trend_continuation",
+  "pullback",
+  "institutional_pullback",
+  "liquidity_sweep_false_breakout",
+  "breakout",
+  "momentum",
+  "reversal"
+];
+
+const MIN_STRATEGY_PERFORMANCE_SAMPLE = 5;
+
 const CONFIRMED_OPERATIONAL_WHERE = `
   COALESCE(blocked, false) = false
   AND COALESCE(execution_allowed, false) = true
@@ -901,6 +914,151 @@ async function getHourlyPerformance(limit = 24) {
   return result.rows;
 }
 
+
+function mapStrategyPerformanceRow(row = {}) {
+  const total = Number(row.total || 0);
+  const wins = Number(row.wins || 0);
+  const losses = Number(row.losses || 0);
+  const draws = Number(row.draws || 0);
+  const hasEnoughSample = total >= MIN_STRATEGY_PERFORMANCE_SAMPLE;
+
+  return {
+    strategyName: row.strategy_name,
+    totalSignals: total,
+    wins,
+    losses,
+    draws,
+    winrate: hasEnoughSample ? calculateRate(wins, total) : 0,
+    lossrate: hasEnoughSample ? calculateRate(losses, total) : 0,
+    drawrate: hasEnoughSample ? calculateRate(draws, total) : 0,
+    averageScore: Number(row.avg_score || 0),
+    averageConfidence: Number(row.avg_confidence || 0),
+    bestHour: hasEnoughSample && row.best_hour !== null && row.best_hour !== undefined
+      ? {
+          hour: Number(row.best_hour),
+          totalSignals: Number(row.best_hour_total || 0),
+          winrate: Number(row.best_hour_winrate || 0)
+        }
+      : null,
+    bestAsset: hasEnoughSample && row.best_asset
+      ? {
+          symbol: row.best_asset,
+          totalSignals: Number(row.best_asset_total || 0),
+          winrate: Number(row.best_asset_winrate || 0)
+        }
+      : null,
+    hasEnoughSample,
+    status: hasEnoughSample ? "ok" : "Amostra insuficiente",
+    minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE
+  };
+}
+
+async function getStrategyPerformanceComparison() {
+  try {
+    const result = await db.query(
+      `
+      WITH strategy_list AS (
+        SELECT unnest($1::text[]) AS strategy_name
+      ), resolved_signals AS (
+        SELECT
+          COALESCE(strategy_name, 'unknown') AS strategy_name,
+          symbol,
+          result,
+          confidence,
+          COALESCE(NULLIF(adjusted_score, 0), final_score, confidence, 0) AS score,
+          EXTRACT(HOUR FROM created_at)::int AS hour
+        FROM public.signal_history
+        WHERE result IN ('win', 'loss', 'draw')
+          AND ${CONFIRMED_OPERATIONAL_WHERE}
+          AND COALESCE(strategy_name, 'unknown') = ANY($1::text[])
+      ), strategy_totals AS (
+        SELECT
+          strategy_name,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE result = 'win')::int AS wins,
+          COUNT(*) FILTER (WHERE result = 'loss')::int AS losses,
+          COUNT(*) FILTER (WHERE result = 'draw')::int AS draws,
+          COALESCE(AVG(score), 0)::numeric(10,2) AS avg_score,
+          COALESCE(AVG(confidence), 0)::numeric(10,2) AS avg_confidence
+        FROM resolved_signals
+        GROUP BY strategy_name
+      ), hour_rank AS (
+        SELECT
+          strategy_name,
+          hour,
+          COUNT(*)::int AS total,
+          ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)::numeric(10,2) AS winrate,
+          ROW_NUMBER() OVER (
+            PARTITION BY strategy_name
+            ORDER BY
+              ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100) DESC,
+              COUNT(*) DESC,
+              hour ASC
+          ) AS ranking
+        FROM resolved_signals
+        GROUP BY strategy_name, hour
+      ), asset_rank AS (
+        SELECT
+          strategy_name,
+          symbol,
+          COUNT(*)::int AS total,
+          ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)::numeric(10,2) AS winrate,
+          ROW_NUMBER() OVER (
+            PARTITION BY strategy_name
+            ORDER BY
+              ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100) DESC,
+              COUNT(*) DESC,
+              symbol ASC
+          ) AS ranking
+        FROM resolved_signals
+        GROUP BY strategy_name, symbol
+      )
+      SELECT
+        sl.strategy_name,
+        COALESCE(st.total, 0)::int AS total,
+        COALESCE(st.wins, 0)::int AS wins,
+        COALESCE(st.losses, 0)::int AS losses,
+        COALESCE(st.draws, 0)::int AS draws,
+        COALESCE(st.avg_score, 0)::numeric(10,2) AS avg_score,
+        COALESCE(st.avg_confidence, 0)::numeric(10,2) AS avg_confidence,
+        hr.hour AS best_hour,
+        COALESCE(hr.total, 0)::int AS best_hour_total,
+        COALESCE(hr.winrate, 0)::numeric(10,2) AS best_hour_winrate,
+        ar.symbol AS best_asset,
+        COALESCE(ar.total, 0)::int AS best_asset_total,
+        COALESCE(ar.winrate, 0)::numeric(10,2) AS best_asset_winrate
+      FROM strategy_list sl
+      LEFT JOIN strategy_totals st ON st.strategy_name = sl.strategy_name
+      LEFT JOIN hour_rank hr ON hr.strategy_name = sl.strategy_name AND hr.ranking = 1
+      LEFT JOIN asset_rank ar ON ar.strategy_name = sl.strategy_name AND ar.ranking = 1
+      ORDER BY array_position($1::text[], sl.strategy_name)
+      `,
+      [STRATEGY_PERFORMANCE_NAMES]
+    );
+
+    const strategies = result.rows.map(mapStrategyPerformanceRow);
+    return {
+      strategies,
+      minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE,
+      generatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    if (isSchemaMismatchError(error) || error?.code === "42P01" || error?.code === "42883") {
+      logStructuredRepositoryError("strategy_performance_comparison_schema_mismatch", error, {
+        fallback: "empty_strategy_performance_comparison"
+      });
+
+      return {
+        strategies: STRATEGY_PERFORMANCE_NAMES.map((strategy_name) => mapStrategyPerformanceRow({ strategy_name })),
+        minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE,
+        generatedAt: new Date().toISOString()
+      };
+    }
+
+    throw error;
+  }
+}
+
 async function getDirectionalPerformance() {
   const result = await db.query(`
     SELECT
@@ -936,5 +1094,6 @@ module.exports = {
   getOutcomeAnalytics,
   getTopSymbols,
   getHourlyPerformance,
-  getDirectionalPerformance
+  getDirectionalPerformance,
+  getStrategyPerformanceComparison
 };

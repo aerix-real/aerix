@@ -80,15 +80,20 @@ async function getPerformanceDashboard() {
   return signalRepository.getOperationalOverview();
 }
 
+async function getStrategyPerformanceComparison() {
+  return signalRepository.getStrategyPerformanceComparison();
+}
+
 async function getGlobalAnalytics() {
-  const [stats, topSymbols, hourlyPerformance, directionalPerformance, recentHistory, outcomeRows] =
+  const [stats, topSymbols, hourlyPerformance, directionalPerformance, recentHistory, outcomeRows, strategyPerformanceComparison] =
     await Promise.all([
       signalRepository.getStats(),
       signalRepository.getTopSymbols(8),
       signalRepository.getHourlyPerformance(24),
       signalRepository.getDirectionalPerformance(),
       signalRepository.getLatestConfirmed(20),
-      signalRepository.getOutcomeAnalytics()
+      signalRepository.getOutcomeAnalytics(),
+      signalRepository.getStrategyPerformanceComparison()
     ]);
 
   const resolvedBuckets = Object.values(stats?.bySignal || {});
@@ -156,6 +161,7 @@ async function getGlobalAnalytics() {
   return {
     summary,
     outcomeAnalytics,
+    strategyPerformanceComparison,
     symbolPerformance: symbols,
     hourPerformance: hours,
     directionalPerformance: directions,
@@ -166,5 +172,6 @@ async function getGlobalAnalytics() {
 
 module.exports = {
   getGlobalAnalytics,
-  getPerformanceDashboard
+  getPerformanceDashboard,
+  getStrategyPerformanceComparison
 };

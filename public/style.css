@@ -2454,3 +2454,38 @@ body.design-system-institutional .menu-toggle:hover {
   .technical-tabs { justify-content: stretch; }
   .technical-tabs .dashboard-tab { width: 100%; }
 }
+
+.strategy-comparison-panel {
+  margin-top: 18px;
+}
+
+.strategy-comparison-row {
+  display: grid;
+  gap: 10px;
+}
+
+.strategy-comparison-row.insufficient {
+  opacity: 0.72;
+}
+
+.performance-row-main,
+.performance-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.performance-row-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: var(--muted-text, #94a3b8);
+  font-size: 0.78rem;
+}
+
+.performance-row-meta span {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
