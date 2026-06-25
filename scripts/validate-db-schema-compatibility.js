@@ -271,7 +271,12 @@ while ((match = tableRegex.exec(sourceSql))) {
     "or",
     "base",
     "aggregated",
-    "metrics"
+    "metrics",
+    "strategy_list",
+    "resolved_signals",
+    "strategy_totals",
+    "hour_rank",
+    "asset_rank"
   ].includes(table)) referencedTables.add(table);
 }
 
