@@ -1,5 +1,6 @@
 const {
   createBreakoutStrategy,
+  createInstitutionalPullbackStrategy,
   createMomentumStrategy,
   createPullbackStrategy,
   createReversalStrategy,
@@ -42,6 +43,7 @@ function getModeRules(mode = "balanced") {
       },
       weights: {
         trend_continuation: 1.18,
+        institutional_pullback: 1.08,
         pullback: 1.12,
         breakout: 0.92,
         momentum: 0.88,
@@ -69,6 +71,7 @@ function getModeRules(mode = "balanced") {
       },
       weights: {
         trend_continuation: 1.05,
+        institutional_pullback: 1.04,
         pullback: 1.02,
         breakout: 1.03,
         momentum: 1.03,
@@ -96,6 +99,7 @@ function getModeRules(mode = "balanced") {
       },
       weights: {
         trend_continuation: 0.98,
+        institutional_pullback: 1.02,
         pullback: 0.99,
         breakout: 1.12,
         momentum: 1.14,
@@ -964,6 +968,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
 
   const strategies = [
     createTrendContinuationStrategy(),
+    createInstitutionalPullbackStrategy(),
     createPullbackStrategy(),
     createBreakoutStrategy(),
     createMomentumStrategy(),
