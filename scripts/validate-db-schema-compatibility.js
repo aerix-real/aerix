@@ -276,7 +276,8 @@ while ((match = tableRegex.exec(sourceSql))) {
     "resolved_signals",
     "strategy_totals",
     "hour_rank",
-    "asset_rank"
+    "asset_rank",
+    "regime_rank"
   ].includes(table)) referencedTables.add(table);
 }
 
