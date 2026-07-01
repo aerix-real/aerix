@@ -17,10 +17,10 @@ const STRATEGY_PERFORMANCE_NAMES = [
   "trend_continuation",
   "pullback",
   "institutional_pullback",
-  "liquidity_sweep_false_breakout",
   "breakout",
   "momentum",
-  "reversal"
+  "reversal",
+  "liquidity_sweep_false_breakout"
 ];
 
 const MIN_STRATEGY_PERFORMANCE_SAMPLE = 5;
@@ -947,6 +947,13 @@ function mapStrategyPerformanceRow(row = {}) {
           winrate: Number(row.best_asset_winrate || 0)
         }
       : null,
+    bestRegime: hasEnoughSample && row.best_regime
+      ? {
+          regime: row.best_regime,
+          totalSignals: Number(row.best_regime_total || 0),
+          winrate: Number(row.best_regime_winrate || 0)
+        }
+      : null,
     hasEnoughSample,
     status: hasEnoughSample ? "ok" : "Amostra insuficiente",
     minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE
@@ -966,7 +973,8 @@ async function getStrategyPerformanceComparison() {
           result,
           confidence,
           COALESCE(NULLIF(adjusted_score, 0), final_score, confidence, 0) AS score,
-          EXTRACT(HOUR FROM created_at)::int AS hour
+          EXTRACT(HOUR FROM created_at)::int AS hour,
+          COALESCE(NULLIF(market_regime, ''), 'UNKNOWN') AS market_regime
         FROM public.signal_history
         WHERE result IN ('win', 'loss', 'draw')
           AND ${CONFIRMED_OPERATIONAL_WHERE}
@@ -1012,6 +1020,21 @@ async function getStrategyPerformanceComparison() {
           ) AS ranking
         FROM resolved_signals
         GROUP BY strategy_name, symbol
+      ), regime_rank AS (
+        SELECT
+          strategy_name,
+          market_regime,
+          COUNT(*)::int AS total,
+          ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)::numeric(10,2) AS winrate,
+          ROW_NUMBER() OVER (
+            PARTITION BY strategy_name
+            ORDER BY
+              ((COUNT(*) FILTER (WHERE result = 'win')::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100) DESC,
+              COUNT(*) DESC,
+              market_regime ASC
+          ) AS ranking
+        FROM resolved_signals
+        GROUP BY strategy_name, market_regime
       )
       SELECT
         sl.strategy_name,
@@ -1026,19 +1049,38 @@ async function getStrategyPerformanceComparison() {
         COALESCE(hr.winrate, 0)::numeric(10,2) AS best_hour_winrate,
         ar.symbol AS best_asset,
         COALESCE(ar.total, 0)::int AS best_asset_total,
-        COALESCE(ar.winrate, 0)::numeric(10,2) AS best_asset_winrate
+        COALESCE(ar.winrate, 0)::numeric(10,2) AS best_asset_winrate,
+        rr.market_regime AS best_regime,
+        COALESCE(rr.total, 0)::int AS best_regime_total,
+        COALESCE(rr.winrate, 0)::numeric(10,2) AS best_regime_winrate
       FROM strategy_list sl
       LEFT JOIN strategy_totals st ON st.strategy_name = sl.strategy_name
       LEFT JOIN hour_rank hr ON hr.strategy_name = sl.strategy_name AND hr.ranking = 1
       LEFT JOIN asset_rank ar ON ar.strategy_name = sl.strategy_name AND ar.ranking = 1
-      ORDER BY array_position($1::text[], sl.strategy_name)
+      LEFT JOIN regime_rank rr ON rr.strategy_name = sl.strategy_name AND rr.ranking = 1
+      ORDER BY COALESCE(((st.wins::numeric / NULLIF(st.total::numeric, 0)) * 100), 0) DESC, COALESCE(st.total, 0) DESC, array_position($1::text[], sl.strategy_name)
       `,
       [STRATEGY_PERFORMANCE_NAMES]
     );
 
     const strategies = result.rows.map(mapStrategyPerformanceRow);
+    const eligibleStrategies = strategies.filter((item) => item.hasEnoughSample);
+    const topStrategy = eligibleStrategies[0] || null;
+    const worstStrategy = [...eligibleStrategies].sort((a, b) => a.winrate - b.winrate || b.totalSignals - a.totalSignals)[0] || null;
+    const mostUsed = [...strategies].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
+    const bestRegime = eligibleStrategies
+      .map((item) => ({ strategyName: item.strategyName, ...item.bestRegime }))
+      .filter((item) => item.regime)
+      .sort((a, b) => b.winrate - a.winrate || b.totalSignals - a.totalSignals)[0] || null;
+
     return {
       strategies,
+      summary: {
+        topStrategy,
+        worstStrategy,
+        mostUsed,
+        bestRegime
+      },
       minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE,
       generatedAt: new Date().toISOString()
     };

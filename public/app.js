@@ -136,6 +136,14 @@ const el = {
   strategyRankingList: document.getElementById("strategyRankingList"),
   strategyPerformanceComparison: document.getElementById("strategyPerformanceComparison"),
   strategyComparisonUpdated: document.getElementById("strategyComparisonUpdated"),
+  strategyTopStrategy: document.getElementById("strategyTopStrategy"),
+  strategyTopStrategyMeta: document.getElementById("strategyTopStrategyMeta"),
+  strategyWorstStrategy: document.getElementById("strategyWorstStrategy"),
+  strategyWorstStrategyMeta: document.getElementById("strategyWorstStrategyMeta"),
+  strategyMostUsed: document.getElementById("strategyMostUsed"),
+  strategyMostUsedMeta: document.getElementById("strategyMostUsedMeta"),
+  strategyBestRegime: document.getElementById("strategyBestRegime"),
+  strategyBestRegimeMeta: document.getElementById("strategyBestRegimeMeta"),
   summaryEngineStatus: document.getElementById("summaryEngineStatus"),
   summarySocketStatus: document.getElementById("summarySocketStatus"),
   summaryLastAnalysis: document.getElementById("summaryLastAnalysis"),
@@ -1846,8 +1854,31 @@ function renderHourStats(items = []) {
 }
 
 
+function renderStrategySummary(comparison = {}) {
+  const rows = Array.isArray(comparison?.strategies) ? comparison.strategies : [];
+  const summary = comparison?.summary || {};
+  const eligibleRows = rows.filter((item) => item?.hasEnoughSample);
+  const topStrategy = summary.topStrategy || eligibleRows[0] || null;
+  const worstStrategy = summary.worstStrategy || [...eligibleRows].sort((a, b) => a.winrate - b.winrate || b.totalSignals - a.totalSignals)[0] || null;
+  const mostUsed = summary.mostUsed || [...rows].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
+  const bestRegime = summary.bestRegime || eligibleRows
+    .map((item) => ({ strategyName: item.strategyName, ...(item.bestRegime || {}) }))
+    .filter((item) => item.regime)
+    .sort((a, b) => b.winrate - a.winrate || b.totalSignals - a.totalSignals)[0] || null;
+
+  if (el.strategyTopStrategy) el.strategyTopStrategy.textContent = topStrategy?.strategyName || "--";
+  if (el.strategyTopStrategyMeta) el.strategyTopStrategyMeta.textContent = topStrategy ? `${formatPercent(topStrategy.winrate)} · ${topStrategy.totalSignals} sinais` : "Amostra insuficiente";
+  if (el.strategyWorstStrategy) el.strategyWorstStrategy.textContent = worstStrategy?.strategyName || "--";
+  if (el.strategyWorstStrategyMeta) el.strategyWorstStrategyMeta.textContent = worstStrategy ? `${formatPercent(worstStrategy.winrate)} · ${worstStrategy.totalSignals} sinais` : "Amostra insuficiente";
+  if (el.strategyMostUsed) el.strategyMostUsed.textContent = mostUsed?.strategyName || "--";
+  if (el.strategyMostUsedMeta) el.strategyMostUsedMeta.textContent = mostUsed ? `${mostUsed.totalSignals} sinais · ${formatPercent(mostUsed.winrate)}` : "0 sinais";
+  if (el.strategyBestRegime) el.strategyBestRegime.textContent = bestRegime?.regime || "--";
+  if (el.strategyBestRegimeMeta) el.strategyBestRegimeMeta.textContent = bestRegime ? `${bestRegime.strategyName} · ${formatPercent(bestRegime.winrate)}` : "Amostra insuficiente";
+}
+
 function renderStrategyPerformanceComparison(comparison = {}) {
   const rows = Array.isArray(comparison?.strategies) ? comparison.strategies : [];
+  renderStrategySummary(comparison);
 
   if (el.strategyComparisonUpdated) {
     el.strategyComparisonUpdated.textContent = comparison?.generatedAt
@@ -1866,6 +1897,7 @@ function renderStrategyPerformanceComparison(comparison = {}) {
     const insufficient = !item.hasEnoughSample;
     const bestHour = item.bestHour ? `${String(item.bestHour.hour).padStart(2, "0")}h · ${formatPercent(item.bestHour.winrate)}` : "--";
     const bestAsset = item.bestAsset ? `${escapeHtml(item.bestAsset.symbol)} · ${formatPercent(item.bestAsset.winrate)}` : "--";
+    const bestRegime = item.bestRegime ? `${escapeHtml(item.bestRegime.regime)} · ${formatPercent(item.bestRegime.winrate)}` : "--";
 
     return `<div class="performance-row strategy-comparison-row ${insufficient ? "insufficient" : ""}">
       <div class="performance-row-main">
@@ -1877,8 +1909,9 @@ function renderStrategyPerformanceComparison(comparison = {}) {
         <span>Draw ${insufficient ? "--" : formatPercent(item.drawrate)}</span>
         <span>Score ${insufficient ? "--" : formatPercent(item.averageScore)}</span>
         <span>Conf. ${insufficient ? "--" : formatPercent(item.averageConfidence)}</span>
-        <span>Hora ${bestHour}</span>
         <span>Ativo ${bestAsset}</span>
+        <span>Hora ${bestHour}</span>
+        <span>Regime ${bestRegime}</span>
       </div>
     </div>`;
   }).join("");
