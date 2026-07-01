@@ -2549,3 +2549,111 @@ body.design-system-institutional .menu-toggle:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* AERIX Institutional Dashboard v2: decision-first SaaS cockpit. */
+body.design-system-institutional {
+  background: #020303;
+}
+body.design-system-institutional::before,
+body.design-system-institutional::after,
+.brand-terminal::after,
+.signal-card::before,
+.institutional-center-panel::before { display: none; }
+
+.panel,
+.glass-card {
+  background: linear-gradient(180deg, rgba(15, 16, 16, 0.96), rgba(6, 7, 7, 0.94));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: none;
+}
+.panel:hover,
+.premium-card:hover { transform: none; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.045); }
+
+.topbar { gap: 12px; margin-bottom: 12px; }
+.brand-terminal { min-height: 64px; padding: 10px 14px; }
+.logo-banner-img { max-height: 42px; filter: none; }
+.compact-status-strip .top-status-card,
+.compact-status-strip .live-clock-card { min-height: 64px; }
+
+.commercial-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.25fr) minmax(280px, 0.75fr);
+  gap: 14px;
+}
+.decision-focus-card {
+  min-height: 0;
+  border-color: rgba(240, 207, 130, 0.34);
+  background: linear-gradient(180deg, rgba(19, 17, 13, 0.98), rgba(5, 6, 6, 0.96));
+}
+.current-signal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.current-asset { display: block; margin-top: 8px; color: #fff8e8; font-size: clamp(2.4rem, 5vw, 5.6rem); line-height: .9; letter-spacing: -0.065em; }
+.current-signal-scoreline,
+.current-signal-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.current-signal-scoreline > div,
+.current-signal-meta > div,
+.entry-window-timer {
+  min-width: 0;
+  border: 1px solid rgba(240,207,130,.15);
+  border-radius: 14px;
+  background: rgba(0,0,0,.24);
+  padding: 12px;
+}
+.current-signal-scoreline span,
+.current-signal-meta span,
+.entry-window-timer span { display:block; color: var(--muted); font-size:.64rem; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }
+.current-signal-scoreline strong { color: var(--gold-strong); font-size: clamp(1.65rem, 3vw, 2.55rem); }
+.current-signal-meta strong { display:block; overflow:hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.entry-window-timer { display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px; margin-top:12px; }
+.entry-window-timer small { grid-column:1/-1; color: var(--muted); }
+.entry-window-timer strong { color: var(--gold-strong); font-size:1.35rem; }
+.entry-window-classification { border-radius:999px; padding:7px 10px; font-size:.72rem; font-weight:950; letter-spacing:.08em; text-transform:uppercase; }
+.entry-window-classification.ideal { color: var(--buy); background: rgba(65,230,167,.10); }
+.entry-window-classification.acceptable { color: var(--pending); background: rgba(255,209,102,.10); }
+.entry-window-classification.late { color: var(--sell); background: rgba(255,100,127,.10); }
+
+.summary-card-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+.clean-dashboard-focus-grid,
+.operational-heatmap-main-grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:14px; }
+.why-signal-list { display:grid; gap:8px; }
+.why-chip { padding:10px 12px; border:1px solid rgba(240,207,130,.13); border-radius:12px; background:rgba(0,0,0,.22); color:var(--text-soft); font-weight:800; }
+.signal-breakdown-list { display:grid; gap:12px; }
+.breakdown-row div { display:flex; justify-content:space-between; gap:12px; margin-bottom:7px; }
+.breakdown-row span { color:var(--muted); font-size:.72rem; font-weight:900; text-transform:uppercase; letter-spacing:.12em; }
+.breakdown-row strong { color:var(--gold-strong); }
+.breakdown-row i { display:block; height:9px; border-radius:999px; background:linear-gradient(90deg, var(--gold-2) var(--value), rgba(255,255,255,.08) var(--value)); }
+.premium-history-list { display:grid; gap:8px; }
+.premium-history-row { display:grid; grid-template-columns: 72px minmax(80px,1fr) auto auto; align-items:center; gap:8px; padding:9px 10px; border:1px solid rgba(240,207,130,.12); border-radius:12px; background:rgba(0,0,0,.22); }
+.premium-history-row time { color:var(--muted); font-size:.8rem; }
+.main-strategy-grid { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:10px; }
+.strategy-main-tile { padding:12px; border:1px solid rgba(240,207,130,.13); border-radius:14px; background:rgba(0,0,0,.22); }
+.strategy-main-tile span { display:block; min-height:34px; color:var(--text-soft); font-size:.78rem; font-weight:900; }
+.strategy-main-tile strong { display:block; margin:8px 0; color:var(--gold-strong); font-size:1.35rem; }
+.strategy-main-tile small { color:var(--muted); }
+.dashboard-tabs { margin-top: 2px; }
+.dashboard-tab { min-height:40px; padding: 0 14px; border:1px solid rgba(240,207,130,.18); border-radius:12px; color:var(--gold-2); background:rgba(0,0,0,.24); font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+.dashboard-tab-panel { display:grid; gap:14px; }
+.dashboard-tab-panel[hidden] { display:none !important; }
+.technical-commercial-grid .ranking-panel,
+.technical-commercial-grid .heatmap-hours-panel { display:none; }
+
+@media (max-width: 1400px) {
+  .main-layout { grid-template-columns: 1fr; }
+  .commercial-dashboard-grid { grid-template-columns: minmax(0,1fr) minmax(250px,.65fr); }
+  .main-strategy-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+@media (max-width: 960px) {
+  .commercial-dashboard-grid,
+  .clean-dashboard-focus-grid,
+  .operational-heatmap-main-grid { grid-template-columns: 1fr; }
+  .compact-status-strip { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .main-strategy-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .current-asset { font-size: clamp(2.2rem, 11vw, 4rem); }
+}
+@media (max-width: 560px) {
+  .summary-card-grid,
+  .current-signal-scoreline,
+  .current-signal-meta,
+  .main-strategy-grid { grid-template-columns: 1fr; }
+  .premium-history-row { grid-template-columns: 1fr 1fr; }
+  .entry-window-timer { grid-template-columns: 1fr; }
+}

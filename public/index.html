@@ -157,7 +157,7 @@
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais Hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
             <article class="stat-card commercial-summary-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
-            <article class="stat-card commercial-summary-card"><span>Última Atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
+            <article class="stat-card commercial-summary-card"><span>Ativos Monitorados</span><strong id="summaryAssetsMonitored">0</strong><small>watchlist ativa</small></article>
           </aside>
         </section>
 
@@ -167,9 +167,34 @@
             <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
           </article>
 
-          <article class="panel premium-card operation-history-card clean-history-card">
-            <div class="panel-header"><h3>Histórico resumido</h3><span>últimos sinais</span></div>
-            <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
+          <article class="panel premium-card signal-breakdown-card">
+            <div class="panel-header"><h3>Signal Breakdown</h3><span>scores</span></div>
+            <div class="signal-breakdown-list" id="signalBreakdownList">
+              <div class="history-empty">Aguardando scores do sinal.</div>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel premium-card operation-history-card clean-history-card">
+          <div class="panel-header"><h3>Histórico Premium</h3><span>hora · ativo · sinal · resultado</span></div>
+          <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
+        </section>
+
+        <section class="panel premium-card main-strategy-performance-card">
+          <div class="panel-header"><h3>Strategy Performance</h3><span>winrate · sinais · melhor horário</span></div>
+          <div class="main-strategy-grid" id="mainStrategyPerformanceList">
+            <div class="history-empty">Amostra insuficiente.</div>
+          </div>
+        </section>
+
+        <section class="operational-heatmap-main-grid">
+          <article class="panel premium-card heatmap-hours-panel">
+            <div class="panel-header"><h3>Heatmap Operacional</h3><span>melhores horários</span></div>
+            <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
+          </article>
+          <article class="panel premium-card ranking-panel">
+            <div class="panel-header"><h3>Melhores Ativos</h3><span>winrate</span></div>
+            <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
           </article>
         </section>
 
@@ -289,15 +314,6 @@
               <div class="health-checklist" id="healthChecklist"></div>
             </article>
 
-            <article class="panel premium-card ranking-panel">
-              <div class="panel-header"><h3>Ranking de Ativos</h3><span>winrate</span></div>
-              <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
-            </article>
-
-            <article class="panel premium-card heatmap-hours-panel">
-              <div class="panel-header"><h3>Heatmap de Horários</h3><span>UTC</span></div>
-              <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
-            </article>
 
             <article class="panel premium-card strategy-ranking-panel">
               <div class="panel-header"><h3>Ranking de Estratégias</h3><span>assertividade</span></div>
