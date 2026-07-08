@@ -2549,3 +2549,126 @@ body.design-system-institutional .menu-toggle:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Entry-delay UX and compact operational clarity. */
+.top-status-card strong[id$="TopStatus"],
+#panelSyncStatus {
+  color: var(--online);
+}
+
+.top-status-card strong:is(#engineTopStatus, #feedTopStatus, #aiTopStatus),
+#panelSyncStatus {
+  font-size: clamp(0.78rem, 1vw, 0.96rem);
+}
+
+.mode-warning {
+  margin: 10px 0 0;
+  color: var(--pending);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.health-kpi-card {
+  gap: 8px;
+}
+
+.health-mini-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.health-mini-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-mini-list .ok { color: var(--buy); }
+.health-mini-list .warn { color: var(--sell); }
+
+body.design-system-institutional .entry-window-timer {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(240, 207, 130, 0.18);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.entry-window-timer span,
+.entry-window-timer small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.entry-window-timer strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--gold-strong);
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+  line-height: 1;
+}
+
+.entry-window-classification {
+  border: 1px solid rgba(240, 207, 130, 0.18);
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: var(--pending);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.entry-window-timer.ideal .entry-window-classification { color: var(--buy); border-color: rgba(65, 230, 167, 0.28); }
+.entry-window-timer.acceptable .entry-window-classification,
+.entry-window-timer.preparing .entry-window-classification { color: var(--pending); border-color: rgba(255, 209, 102, 0.3); }
+.entry-window-timer.late .entry-window-classification { color: var(--sell); border-color: rgba(255, 100, 127, 0.32); }
+
+body.design-system-institutional .entry-window-timer small {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  body.design-system-institutional .entry-window-timer {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-window-classification {
+    width: 100%;
+  }
+
+  .health-mini-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.premium-history-header {
+  display: grid;
+  grid-template-columns: 72px minmax(86px, 1fr) 76px 82px;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .premium-history-header {
+    grid-template-columns: 62px minmax(72px, 1fr) 68px 76px;
+    font-size: 0.58rem;
+  }
+}

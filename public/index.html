@@ -60,9 +60,9 @@
 
       <div class="topbar-right compact-status-strip" aria-label="Status operacional essencial">
         <div class="top-status-card glass-card"><span>Engine</span><strong id="engineTopStatus">Sincronizando</strong></div>
-        <div class="top-status-card glass-card"><span>Último ciclo</span><strong id="lastCycleCompact">--</strong></div>
-        <div class="top-status-card glass-card connection-card"><span class="connection-badge connecting" id="connectionBadge"></span><strong id="connectionText">Conectando...</strong></div>
-        <div class="top-status-card glass-card"><span>Modo</span><strong id="topCurrentMode">Equilibrado</strong></div>
+        <div class="top-status-card glass-card"><span>Feed</span><strong id="feedTopStatus">Sincronizando</strong></div>
+        <div class="top-status-card glass-card"><span>IA</span><strong id="aiTopStatus">Sincronizando</strong></div>
+        <div class="top-status-card glass-card connection-card"><span class="connection-badge connecting" id="connectionBadge"></span><strong id="panelSyncStatus">Painel sincronizando</strong></div>
         <div class="live-clock-card glass-card compact-clock"><span>Tempo real</span><strong id="liveClock">00:00:00</strong></div>
       </div>
     </header>
@@ -106,6 +106,7 @@
             <button class="mode-btn" data-mode="agressivo" type="button">Agressivo <span class="mode-risk">mais sinais</span></button>
           </div>
           <p class="mode-description" id="modeDescription">Modo equilibrado ativo. Ajuste fino disponível para usuários autenticados.</p>
+          <p class="mode-warning" id="modeWarning" hidden>Modo agressivo gera mais sinais, com maior exposição operacional.</p>
         </section>
 
         <section class="panel timeline-panel">
@@ -156,7 +157,7 @@
           <aside class="summary-card-grid kpi-card-grid" aria-label="KPIs principais">
             <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
             <article class="stat-card commercial-summary-card"><span>Sinais Hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
-            <article class="stat-card commercial-summary-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">sincronizando</small></article>
+            <article class="stat-card commercial-summary-card health-kpi-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">0/5 checks ativos · Sincronizando...</small><div class="health-mini-list" id="healthChecklistCompact"></div></article>
             <article class="stat-card commercial-summary-card"><span>Última Atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
           </aside>
         </section>
@@ -169,6 +170,7 @@
 
           <article class="panel premium-card operation-history-card clean-history-card">
             <div class="panel-header"><h3>Histórico resumido</h3><span>últimos sinais</span></div>
+            <div class="premium-history-header" aria-hidden="true"><span>Hora</span><span>Ativo</span><span>Sinal</span><span>Status</span></div>
             <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
           </article>
         </section>

@@ -33,6 +33,7 @@ const state = {
   dashboardSnapshot: null,
   engineSnapshot: null,
   premiumSnapshot: null,
+  activeSignal: null,
   filterAnalytics: null,
   filterPerformance: null,
   performanceDashboard: null,
@@ -79,6 +80,9 @@ const el = {
 
   connectionBadge: document.getElementById("connectionBadge"),
   connectionText: document.getElementById("connectionText"),
+  feedTopStatus: document.getElementById("feedTopStatus"),
+  aiTopStatus: document.getElementById("aiTopStatus"),
+  panelSyncStatus: document.getElementById("panelSyncStatus"),
   liveClock: document.getElementById("liveClock"),
   headlineText: document.getElementById("headlineText"),
 
@@ -128,6 +132,7 @@ const el = {
   healthSummary: document.getElementById("healthSummary"),
   healthUpdated: document.getElementById("healthUpdated"),
   healthChecklist: document.getElementById("healthChecklist"),
+  healthChecklistCompact: document.getElementById("healthChecklistCompact"),
   assetRankingList: document.getElementById("assetRankingList"),
   premiumHistoryList: document.getElementById("premiumHistoryList"),
   whySignalList: document.getElementById("whySignalList"),
@@ -904,15 +909,18 @@ function getEntryWindowSignalKey(signal = {}) {
 }
 
 function classifyEntryWindow(elapsedSeconds = 0) {
-  if (elapsedSeconds < 60) return { label: "Entrada Ideal", tone: "ideal" };
-  if (elapsedSeconds < 120) return { label: "Entrada Aceitável", tone: "acceptable" };
-  return { label: "Entrada Tardia", tone: "late" };
+  if (elapsedSeconds < 5) return { label: "🟡 Preparando entrada", tone: "preparing" };
+  if (elapsedSeconds < 60) return { label: "🟢 Entrada liberada", tone: "ideal" };
+  if (elapsedSeconds < 120) return { label: "🟡 Entrada aceitável", tone: "acceptable" };
+  return { label: "🔴 Entrada tardia", tone: "late" };
 }
 
 function formatEntryWindowCounter(elapsedSeconds = 0) {
   const safeElapsed = Math.max(0, elapsedSeconds);
-  const minutes = Math.floor(safeElapsed / 60);
-  const seconds = safeElapsed % 60;
+  if (safeElapsed < 5) return String(5 - safeElapsed);
+  const releasedElapsed = safeElapsed - 5;
+  const minutes = Math.floor(releasedElapsed / 60);
+  const seconds = releasedElapsed % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -951,7 +959,7 @@ function registerEntryWindow(signal = {}) {
 
   if (state.entryWindow.signalKey !== signalKey) {
     state.entryWindow.signalKey = signalKey;
-    state.entryWindow.approvedAt = getSignalApprovedTimestamp(signal);
+    state.entryWindow.approvedAt = new Date();
   }
 
   renderEntryWindowTimer();
@@ -965,11 +973,13 @@ function updateCompactOperations(signal = {}, source = "engine") {
   const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
   const score = getOperationalScore(signal);
   const blocked = Boolean(signal.blocked || direction === "WAIT" || signal.executionAllowed === false || signal.execution_allowed === false);
-  const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Liberada" : "Aguardando";
+  const hasDisplaySignal = Boolean(signal.symbol || signal.asset || ["CALL", "PUT"].includes(direction));
+  state.activeSignal = hasDisplaySignal ? signal : null;
+  const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Preparando" : "Aguardando";
   if (!blocked && isConfirmedOperationalSignal(signal)) registerEntryWindow(signal);
   const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
   const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
-  const release = entryStatus === "Liberada" ? "Sinal liberado" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
+  const release = entryStatus === "Preparando" ? "IA Online" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
   const strategyLabel = getStrategyLabel(signal);
   const marketRegime = getMarketRegime(signal);
   const blockReason = getBlockReason(signal);
@@ -993,9 +1003,14 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.currentRisk, getRiskLabel(signal));
   setTextContent(el.decisionReason, getDecisionReason(signal));
   setTextContent(el.aiReleaseStatus, release);
-  const engineStatus = socket.connected ? "Online" : "Offline";
+  const feedOnline = !(signal.feedStatus === "offline" || signal.dataStatus === "offline" || signal.feedOnline === false);
+  const aiOnline = !(signal.aiStatus === "offline" || signal.ai === false);
+  const engineStatus = socket.connected ? "Engine Online" : "Engine Offline";
   setTextContent(el.engineOnlineStatus, engineStatus);
   setTextContent(el.engineTopStatus, engineStatus);
+  setTextContent(el.feedTopStatus, feedOnline ? "Feed Online" : "Feed Offline");
+  setTextContent(el.aiTopStatus, aiOnline ? "IA Online" : "IA Offline");
+  setTextContent(el.panelSyncStatus, socket.connected ? "Painel Sincronizado" : "Socket Offline");
   setTextContent(el.summaryEngineStatus, engineStatus);
   setTextContent(el.summarySocketStatus, socket.connected ? "Socket online" : "Reconectando");
   setTextContent(el.summaryLastAnalysis, cycleTime);
@@ -1255,6 +1270,8 @@ function applyModeUI(mode, notify = true) {
   if (modeDescription) {
     modeDescription.textContent = MODE_DESCRIPTIONS[safeMode] || MODE_DESCRIPTIONS.equilibrado;
   }
+  const modeWarning = document.getElementById("modeWarning");
+  if (modeWarning) modeWarning.hidden = safeMode !== "agressivo";
 
   setTextContent(el.topCurrentMode, safeMode.charAt(0).toUpperCase() + safeMode.slice(1));
 
@@ -1781,22 +1798,25 @@ function isRecentAnalysis(value) {
 function renderHealthScore(signal = {}, monitor = state.engineSnapshot?.monitor || {}) {
   const lastValue = signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || monitor.lastExecutionAt;
   const checks = [
-    ["Engine online", Boolean(monitor.isRunning || socket.connected)],
-    ["TwelveData online", !(monitor.twelveDataStatus === "offline" || monitor.twelveDataOnline === false)],
-    ["Cache ativo", Number(monitor.cacheTotalLookups || monitor.cacheHits || 0) > 0 || Number(monitor.cacheHitRate || 0) > 0],
-    ["IA ativa", !(signal.aiStatus === "offline" || signal.ai === false) && Boolean(signal.aiApproved !== false)],
-    ["Última análise recente", isRecentAnalysis(lastValue)]
+    ["Engine", Boolean(monitor.isRunning || socket.connected)],
+    ["Dados", !(monitor.twelveDataStatus === "offline" || monitor.twelveDataOnline === false)],
+    ["IA", !(signal.aiStatus === "offline" || signal.ai === false) && Boolean(signal.aiApproved !== false)],
+    ["Socket", Boolean(socket.connected)],
+    ["Histórico", Boolean(state.history.length || state.activeSignal || isRecentAnalysis(lastValue))]
   ];
   const online = checks.filter(([, ok]) => ok).length;
   const score = Math.round((online / checks.length) * 100);
-  const label = score >= 80 ? "saudável" : score >= 60 ? "atenção" : "sincronizando";
+  const label = score >= 80 ? "Saudável" : score >= 60 ? "Atenção" : "Sincronizando...";
 
   setTextContent(el.healthScore, `${score}%`);
   setTextContent(el.healthScoreDetail, `${score}%`);
-  setTextContent(el.healthSummary, `${online}/${checks.length} checks · ${label}`);
+  setTextContent(el.healthSummary, `${online}/${checks.length} checks ativos · ${label}`);
   setTextContent(el.healthUpdated, lastValue ? `Atualizado ${formatTime(lastValue)}` : "live");
   if (el.healthChecklist) {
     el.healthChecklist.innerHTML = checks.map(([name, ok]) => `<div class="health-check ${ok ? "ok" : "warn"}"><span></span>${escapeHtml(name)}</div>`).join("");
+  }
+  if (el.healthChecklistCompact) {
+    el.healthChecklistCompact.innerHTML = checks.map(([name, ok]) => `<span class="${ok ? "ok" : "warn"}">${ok ? "✓" : "✕"} ${escapeHtml(name)}</span>`).join("");
   }
 }
 
@@ -1826,7 +1846,9 @@ function renderWhySignal(signal = {}) {
 
 function renderPremiumHistory() {
   if (!el.premiumHistoryList) return;
-  const items = state.history.slice(0, 6);
+  const active = state.activeSignal ? [state.activeSignal] : [];
+  const seen = new Set(active.map(getEntryWindowSignalKey));
+  const items = [...active, ...state.history.filter((item) => !seen.has(getEntryWindowSignalKey(item)))].slice(0, 6);
   if (!items.length) {
     el.premiumHistoryList.innerHTML = `<div class="history-empty">Nenhum sinal recente.</div>`;
     return;
@@ -1836,7 +1858,7 @@ function renderPremiumHistory() {
     const result = String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
-    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp)}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
+    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
   }).join("");
 }
 
@@ -2447,9 +2469,13 @@ async function setResult(id, result) {
 }
 
 function setConnection(status) {
-  if (!el.connectionText || !el.connectionBadge) return;
+  if (!el.connectionBadge) return;
 
-  el.connectionText.textContent = status;
+  setTextContent(el.connectionText, status);
+  setTextContent(el.panelSyncStatus, status === "Online" ? "Painel Sincronizado" : status === "Offline" ? "Socket Offline" : "Painel Sincronizando");
+  setTextContent(el.engineTopStatus, status === "Online" ? "Engine Online" : status === "Offline" ? "Engine Offline" : "Engine Sincronizando");
+  setTextContent(el.feedTopStatus, status === "Online" ? "Feed Online" : status === "Offline" ? "Feed Offline" : "Feed Sincronizando");
+  setTextContent(el.aiTopStatus, status === "Online" ? "IA Online" : status === "Offline" ? "IA Offline" : "IA Sincronizando");
   setTextContent(el.websocketStatus, status);
   setTextContent(el.summarySocketStatus, status);
   setTextContent(el.engineOnlineStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
