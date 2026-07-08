@@ -117,18 +117,18 @@ const STRATEGY_REGISTRY = Object.freeze([
   Object.freeze({
     strategyName: "liquidity_sweep_false_breakout",
     displayName: "Liquidity Sweep False Breakout",
-    enabled: false,
+    enabled: true,
     priority: 70,
     modeWeights: Object.freeze({
-      conservative: 1,
-      balanced: 1,
-      aggressive: 1
+      conservative: 0.82,
+      balanced: 0.9,
+      aggressive: 0.96
     }),
     supportedRegimes: Object.freeze(ALL_REGIMES),
     minScore: 72,
     factory: createLiquiditySweepFalseBreakoutStrategy,
     handler: createLiquiditySweepFalseBreakoutStrategy,
-    description: "Liquidity sweep existente registrado para ativação futura sem conflito no index."
+    description: "False breakout de primeira classe com varredura de liquidez, retorno à faixa e peso inicial moderado/baixo."
   })
 ]);
 
