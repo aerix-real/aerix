@@ -17,10 +17,10 @@ const STRATEGY_PERFORMANCE_NAMES = [
   "trend_continuation",
   "pullback",
   "institutional_pullback",
+  "liquidity_sweep_false_breakout",
   "breakout",
   "momentum",
-  "reversal",
-  "liquidity_sweep_false_breakout"
+  "reversal"
 ];
 
 const MIN_STRATEGY_PERFORMANCE_SAMPLE = 5;
@@ -1067,7 +1067,7 @@ async function getStrategyPerformanceComparison() {
     const eligibleStrategies = strategies.filter((item) => item.hasEnoughSample);
     const topStrategy = eligibleStrategies[0] || null;
     const worstStrategy = [...eligibleStrategies].sort((a, b) => a.winrate - b.winrate || b.totalSignals - a.totalSignals)[0] || null;
-    const mostUsed = [...strategies].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
+    const mostUsed = [...eligibleStrategies].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
     const bestRegime = eligibleStrategies
       .map((item) => ({ strategyName: item.strategyName, ...item.bestRegime }))
       .filter((item) => item.regime)
@@ -1079,7 +1079,9 @@ async function getStrategyPerformanceComparison() {
         topStrategy,
         worstStrategy,
         mostUsed,
-        bestRegime
+        bestRegime,
+        hasEnoughSample: eligibleStrategies.length > 0,
+        insufficientSampleMessage: eligibleStrategies.length > 0 ? null : "Amostra insuficiente"
       },
       minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE,
       generatedAt: new Date().toISOString()
@@ -1092,6 +1094,14 @@ async function getStrategyPerformanceComparison() {
 
       return {
         strategies: STRATEGY_PERFORMANCE_NAMES.map((strategy_name) => mapStrategyPerformanceRow({ strategy_name })),
+        summary: {
+          topStrategy: null,
+          worstStrategy: null,
+          mostUsed: null,
+          bestRegime: null,
+          hasEnoughSample: false,
+          insufficientSampleMessage: "Amostra insuficiente"
+        },
         minimumSample: MIN_STRATEGY_PERFORMANCE_SAMPLE,
         generatedAt: new Date().toISOString()
       };
