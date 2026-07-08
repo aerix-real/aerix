@@ -17,6 +17,7 @@ const STRATEGY_PERFORMANCE_NAMES = [
   "trend_continuation",
   "pullback",
   "institutional_pullback",
+  "institutional_first_retest",
   "liquidity_sweep_false_breakout",
   "breakout",
   "momentum",

@@ -2,6 +2,7 @@ const { createBreakoutStrategy } = require("./breakout.strategy");
 const { createMomentumStrategy } = require("./momentum.strategy");
 const { createPullbackStrategy } = require("./pullback.strategy");
 const { createInstitutionalPullbackStrategy } = require("./institutional-pullback.strategy");
+const { createInstitutionalFirstRetestStrategy } = require("./institutional-first-retest.strategy");
 const { createLiquiditySweepFalseBreakoutStrategy } = require("./liquidity-sweep-false-breakout.strategy");
 const { createReversalStrategy } = require("./reversal.strategy");
 const { createTrendContinuationStrategy } = require("./trend-continuation.strategy");
@@ -49,6 +50,22 @@ const STRATEGY_REGISTRY = Object.freeze([
     factory: createInstitutionalPullbackStrategy,
     handler: createInstitutionalPullbackStrategy,
     description: "Pullback institucional preservado para setups com alinhamento, RSI, ADX e ATR."
+  }),
+  Object.freeze({
+    strategyName: "institutional_first_retest",
+    displayName: "Institutional First Retest",
+    enabled: true,
+    priority: 25,
+    modeWeights: Object.freeze({
+      conservative: 0.98,
+      balanced: 1.02,
+      aggressive: 1.04
+    }),
+    supportedRegimes: Object.freeze(["TRENDING", "BREAKOUT", "FALLBACK_SIGNAL"]),
+    minScore: 74,
+    factory: createInstitutionalFirstRetestStrategy,
+    handler: createInstitutionalFirstRetestStrategy,
+    description: "Primeiro retorno institucional após rompimento confirmado, com afastamento mínimo, estrutura preservada e candle de confirmação."
   }),
   Object.freeze({
     strategyName: "pullback",
