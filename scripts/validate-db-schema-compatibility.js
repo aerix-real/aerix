@@ -91,6 +91,8 @@ const requiredSchema = {
     "market_regime",
     "institutional_quality",
     "adaptive_adjustment",
+    "historical_strategy_weight",
+    "historical_adjustment",
     "tuning_weight",
     "execution_allowed",
     "meta",
@@ -161,6 +163,22 @@ const requiredSchema = {
     "last_thresholds",
     "updated_at"
   ],
+  strategy_statistics: [
+    "id",
+    "strategy_name",
+    "symbol",
+    "hour",
+    "market_regime",
+    "signals",
+    "wins",
+    "losses",
+    "draws",
+    "win_rate",
+    "avg_score",
+    "avg_confidence",
+    "avg_duration",
+    "last_updated"
+  ],
   ai_loss_memory: [
     "id",
     "memory_key",
@@ -221,6 +239,8 @@ const requiredIndexes = [
   "idx_threshold_history_strategy_created",
   "idx_threshold_changes_scope_created",
   "idx_threshold_performance_scope_unique",
+  "idx_strategy_statistics_lookup",
+  "idx_strategy_statistics_last_updated",
   "idx_ai_loss_memory_key_unique",
   "idx_analytics_scope",
   "idx_analytics_scope_winrate"

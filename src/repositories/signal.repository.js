@@ -135,11 +135,13 @@ async function insertSignal(data) {
       tuning_weight,
       execution_allowed,
       minimum_score,
-      adjusted_score
+      adjusted_score,
+      historical_strategy_weight,
+      historical_adjustment
     )
     VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
+      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31
     )
     RETURNING *;
   `;
@@ -175,7 +177,9 @@ async function insertSignal(data) {
     normalizeNumber(data.tuning_weight ?? data.tuningWeight, 1),
     data.execution_allowed ?? data.executionAllowed ?? false,
     normalizeNumber(data.minimum_score ?? data.minimumScore, 0),
-    normalizeNumber(data.adjusted_score ?? data.adjustedScore ?? data.final_score ?? data.finalScore, 0)
+    normalizeNumber(data.adjusted_score ?? data.adjustedScore ?? data.final_score ?? data.finalScore, 0),
+    normalizeNumber(data.historical_strategy_weight ?? data.historicalStrategyWeight, 0),
+    normalizeNumber(data.historical_adjustment ?? data.historicalAdjustment, 0)
   ];
 
   const result = await db.query(query, values);
@@ -777,6 +781,151 @@ async function updateSignalResult(id, result) {
   return saved;
 }
 
+function normalizeStrategyStatisticsRow(row = null) {
+  if (!row) return null;
+
+  return {
+    strategyName: row.strategy_name,
+    symbol: row.symbol,
+    hour: Number(row.hour || 0),
+    marketRegime: row.market_regime,
+    signals: Number(row.signals || 0),
+    wins: Number(row.wins || 0),
+    losses: Number(row.losses || 0),
+    draws: Number(row.draws || 0),
+    winRate: normalizeNumber(row.win_rate, 0),
+    win_rate: normalizeNumber(row.win_rate, 0),
+    avgScore: normalizeNumber(row.avg_score, 0),
+    avgConfidence: normalizeNumber(row.avg_confidence, 0),
+    avgDuration: normalizeNumber(row.avg_duration, 0),
+    lastUpdated: row.last_updated
+  };
+}
+
+async function getStrategyStatistics({ strategyName, symbol, hour, marketRegime } = {}) {
+  try {
+    const result = await db.query(
+      `
+      SELECT *
+      FROM public.strategy_statistics
+      WHERE strategy_name = $1
+        AND symbol = $2
+        AND hour = $3
+        AND market_regime = $4
+      LIMIT 1
+      `,
+      [
+        strategyName || "unknown",
+        symbol || "UNKNOWN",
+        Number(hour || 0),
+        marketRegime || "NORMAL"
+      ]
+    );
+
+    return normalizeStrategyStatisticsRow(result.rows[0] || null);
+  } catch (error) {
+    if (isSchemaMismatchError(error) || error?.code === "42P01") {
+      logStructuredRepositoryError("strategy_statistics_schema_mismatch", error, {
+        fallback: "null_strategy_statistics"
+      });
+
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function upsertStrategyStatistics(data = {}) {
+  try {
+    const result = String(data.result || "").toLowerCase();
+    const score = normalizeNumber(data.score, 0);
+    const confidence = normalizeNumber(data.confidence, 0);
+    const duration = normalizeNumber(data.duration, 0);
+
+    const response = await db.query(
+      `
+      INSERT INTO public.strategy_statistics (
+        strategy_name,
+        symbol,
+        hour,
+        market_regime,
+        signals,
+        wins,
+        losses,
+        draws,
+        win_rate,
+        avg_score,
+        avg_confidence,
+        avg_duration,
+        last_updated
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        1,
+        CASE WHEN $5 = 'win' THEN 1 ELSE 0 END,
+        CASE WHEN $5 = 'loss' THEN 1 ELSE 0 END,
+        CASE WHEN $5 = 'draw' THEN 1 ELSE 0 END,
+        CASE WHEN $5 = 'win' THEN 1 ELSE 0 END,
+        $6,
+        $7,
+        $8,
+        NOW()
+      )
+      ON CONFLICT (strategy_name, symbol, hour, market_regime)
+      DO UPDATE SET
+        signals = public.strategy_statistics.signals + 1,
+        wins = public.strategy_statistics.wins + CASE WHEN EXCLUDED.wins > 0 THEN 1 ELSE 0 END,
+        losses = public.strategy_statistics.losses + CASE WHEN EXCLUDED.losses > 0 THEN 1 ELSE 0 END,
+        draws = public.strategy_statistics.draws + CASE WHEN EXCLUDED.draws > 0 THEN 1 ELSE 0 END,
+        win_rate = (
+          (public.strategy_statistics.wins + CASE WHEN EXCLUDED.wins > 0 THEN 1 ELSE 0 END)::numeric /
+          NULLIF(public.strategy_statistics.signals + 1, 0)
+        ),
+        avg_score = (
+          ((public.strategy_statistics.avg_score * public.strategy_statistics.signals) + EXCLUDED.avg_score) /
+          NULLIF(public.strategy_statistics.signals + 1, 0)
+        ),
+        avg_confidence = (
+          ((public.strategy_statistics.avg_confidence * public.strategy_statistics.signals) + EXCLUDED.avg_confidence) /
+          NULLIF(public.strategy_statistics.signals + 1, 0)
+        ),
+        avg_duration = (
+          ((public.strategy_statistics.avg_duration * public.strategy_statistics.signals) + EXCLUDED.avg_duration) /
+          NULLIF(public.strategy_statistics.signals + 1, 0)
+        ),
+        last_updated = NOW()
+      RETURNING *
+      `,
+      [
+        data.strategyName || "unknown",
+        data.symbol || "UNKNOWN",
+        Number(data.hour || 0),
+        data.marketRegime || "NORMAL",
+        result,
+        score,
+        confidence,
+        duration
+      ]
+    );
+
+    return normalizeStrategyStatisticsRow(response.rows[0] || null);
+  } catch (error) {
+    if (isSchemaMismatchError(error) || error?.code === "42P01") {
+      logStructuredRepositoryError("strategy_statistics_upsert_schema_mismatch", error, {
+        fallback: "skip_strategy_statistics_upsert"
+      });
+
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function getExpiredPendingSignals(limit = 50) {
   const result = await db.query(
     `
@@ -1140,6 +1289,8 @@ module.exports = {
   getPerformanceByHour,
   getOperationalOverview,
   updateSignalResult,
+  getStrategyStatistics,
+  upsertStrategyStatistics,
   getExpiredPendingSignals,
   refreshOutcomeAnalytics,
   finalizeSignalResult,

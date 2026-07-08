@@ -237,6 +237,8 @@ async function ensureSignalHistoryTable() {
   await ensureColumn("signal_history", "execution_allowed", "BOOLEAN DEFAULT TRUE");
   await ensureColumn("signal_history", "minimum_score", "NUMERIC DEFAULT 0");
   await ensureColumn("signal_history", "adjusted_score", "NUMERIC DEFAULT 0");
+  await ensureColumn("signal_history", "historical_strategy_weight", "NUMERIC DEFAULT 0");
+  await ensureColumn("signal_history", "historical_adjustment", "NUMERIC DEFAULT 0");
 
   await db.query(`
     UPDATE public.signal_history
@@ -293,6 +295,21 @@ async function ensureOutcomeAnalyticsTable() {
     await db.query(sql);
   } catch (err) {
     logSchemaWarning("outcome_analytics_bootstrap_failed", {
+      migrationPath,
+      error: err.message
+    });
+    throw err;
+  }
+}
+
+async function ensureStrategyStatisticsTable() {
+  const migrationPath = path.resolve(__dirname, "../db/migrations/015_strategy_intelligence_engine.sql");
+
+  try {
+    const sql = fs.readFileSync(migrationPath, "utf8");
+    await db.query(sql);
+  } catch (err) {
+    logSchemaWarning("strategy_statistics_bootstrap_failed", {
       migrationPath,
       error: err.message
     });
@@ -703,6 +720,7 @@ async function bootstrapDatabase() {
   await ensureUserSettingsTable();
   await ensureSignalHistoryTable();
   await ensureOutcomeAnalyticsTable();
+  await ensureStrategyStatisticsTable();
   await ensureBillingTable();
   await ensureAuditLogsTable();
   await ensureFilterBlockEventsTable();

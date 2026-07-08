@@ -875,6 +875,11 @@ class EngineRunnerService {
     signal.final_score = signal.finalScore;
     signal.adaptiveAdjustment = Number(adaptive.adaptiveAdjustment || 0);
     signal.adaptive_adjustment = signal.adaptiveAdjustment;
+    signal.historicalStrategyWeight = Number(adaptive.historicalStrategyWeight || 0);
+    signal.historical_strategy_weight = signal.historicalStrategyWeight;
+    signal.historicalAdjustment = Number(adaptive.historicalAdjustment || 0);
+    signal.historical_adjustment = signal.historicalAdjustment;
+    signal.strategyIntelligence = adaptive.strategyIntelligence || null;
     signal.adaptiveReasons = adaptive.adaptiveReasons || [];
     signal.adaptiveAdjustments = {
       adjustment: signal.adaptiveAdjustment,
@@ -1085,6 +1090,10 @@ class EngineRunnerService {
 
       adaptive_adjustment: Number(signal.adaptiveAdjustment || signal.adaptive_adjustment || 0),
       adaptiveAdjustment: Number(signal.adaptiveAdjustment || signal.adaptive_adjustment || 0),
+      historical_strategy_weight: Number(signal.historicalStrategyWeight || signal.historical_strategy_weight || 0),
+      historicalStrategyWeight: Number(signal.historicalStrategyWeight || signal.historical_strategy_weight || 0),
+      historical_adjustment: Number(signal.historicalAdjustment || signal.historical_adjustment || 0),
+      historicalAdjustment: Number(signal.historicalAdjustment || signal.historical_adjustment || 0),
 
       tuning_weight: Number(signal.tuningWeight || signal.tuning_weight || 1),
       tuningWeight: Number(signal.tuningWeight || signal.tuning_weight || 1),
