@@ -11,7 +11,14 @@ const BLOCKER_COUNTERS = [
   "veryLowVolatility",
   "predictiveGate",
   "dynamicThreshold",
-  "executionValidation"
+  "executionValidation",
+  "liquiditySweepFalseBreakoutNotConfirmed",
+  "liquidityLevelDetected",
+  "sweepDetected",
+  "closeBackInsideRange",
+  "rejectionWickConfirmed",
+  "continuationFailureConfirmed",
+  "tradableLocalVolatility"
 ];
 
 const COUNTER_ALIASES = {
@@ -21,6 +28,9 @@ const COUNTER_ALIASES = {
   dynamic_threshold_penalty: "dynamicThreshold",
   low_score_block: "dynamicThreshold",
   execution_block: "executionValidation",
+  liquiditySweepCallNotConfirmed: "liquiditySweepFalseBreakoutNotConfirmed",
+  liquiditySweepPutNotConfirmed: "liquiditySweepFalseBreakoutNotConfirmed",
+  strategyScoreBelowThreshold: "dynamicThreshold",
   breakoutStrength: "breakoutStrengthAboveThreshold",
   reversalPattern: "reversalPatternFound",
   MACD: "macdDirectionConfirmed",
