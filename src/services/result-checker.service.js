@@ -3,6 +3,7 @@ const { getMarketSnapshot } = require("./market-data.service");
 const executionService = require("./execution.service");
 const filterAnalyticsService = require("./filter-analytics.service");
 const { registerAudit } = require("./audit.service");
+const strategyIntelligenceService = require("./strategy-intelligence.service");
 
 class ResultCheckerService {
   constructor() {
@@ -118,6 +119,9 @@ class ResultCheckerService {
 
             // 🧠 IA aprende com WIN/LOSS
             executionService.learnFromResult(learningSignal, finalResult);
+            await strategyIntelligenceService.learnFromOutcome(saved, finalResult).catch((error) => {
+              console.error("Erro ao atualizar strategy_intelligence:", error.message || error);
+            });
             await filterAnalyticsService.updateShadowOutcomes(saved, finalResult).catch(() => 0);
             await this.registerOutcomeAudit(signal, saved, finalResult, resultPrice).catch((error) => {
               console.error("Erro ao registrar signal_outcome_audit:", error.message || error);

@@ -1,5 +1,6 @@
 const signalRepository = require("../repositories/signal.repository");
 const dynamicThresholdService = require("../modules/dynamic-threshold");
+const strategyIntelligenceService = require("./strategy-intelligence.service");
 
 function clamp(value, min = -30, max = 30) {
   return Math.max(min, Math.min(max, Number(value || 0)));
@@ -197,14 +198,29 @@ class AdaptiveService {
     const rampUpLimit = getAdaptiveRampUpLimit(profile.totalHistoricalSignals);
     const adaptiveAdjustment = clamp(rawAdaptiveAdjustment, -rampUpLimit, rampUpLimit);
 
-    const finalScore = Math.max(
+    const scoreBeforeStrategyIntelligence = Math.max(
       0,
       Math.min(100, Number((Number(baseScore || 0) + adaptiveAdjustment).toFixed(2)))
     );
+    const strategyIntelligence = await strategyIntelligenceService.evaluate(
+      scoreBeforeStrategyIntelligence,
+      {
+        ...item,
+        symbol,
+        signal,
+        strategyName,
+        hour: profile.hour,
+        marketRegime: profile.marketRegime
+      }
+    );
+    const finalScore = strategyIntelligence.finalScore;
 
     return {
       finalScore,
       adaptiveAdjustment,
+      historicalStrategyWeight: strategyIntelligence.historicalStrategyWeight,
+      historicalAdjustment: strategyIntelligence.historicalAdjustment,
+      strategyIntelligence,
       adaptiveReasons: [...learning.reasons, ...(thresholdLearning.reasons || [])],
       dynamicThresholds: thresholdLearning,
       adaptiveAdjustmentAudit: {
@@ -220,7 +236,8 @@ class AdaptiveService {
         },
         components: [
           learning.audit,
-          thresholdLearning.adaptiveAdjustmentAudit
+          thresholdLearning.adaptiveAdjustmentAudit,
+          strategyIntelligence.audit
         ].filter(Boolean)
       },
       learningProfile: {
@@ -232,6 +249,9 @@ class AdaptiveService {
         marketRegimeStats: profile.marketRegimeStats || null,
         lossPattern: profile.lossPattern || null,
         thresholdPerformance: thresholdLearning.thresholdPerformance || null,
+        strategyStatistics: strategyIntelligence.statistics || null,
+        historicalStrategyWeight: strategyIntelligence.historicalStrategyWeight,
+        historicalAdjustment: strategyIntelligence.historicalAdjustment,
         totalHistoricalSignals: profile.totalHistoricalSignals,
         adaptiveRampUpLimit: rampUpLimit
       }
