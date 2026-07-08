@@ -1858,20 +1858,33 @@ function renderStrategySummary(comparison = {}) {
   const rows = Array.isArray(comparison?.strategies) ? comparison.strategies : [];
   const summary = comparison?.summary || {};
   const eligibleRows = rows.filter((item) => item?.hasEnoughSample);
+  const hasEnoughSample = Boolean(summary.hasEnoughSample ?? eligibleRows.length);
   const topStrategy = summary.topStrategy || eligibleRows[0] || null;
   const worstStrategy = summary.worstStrategy || [...eligibleRows].sort((a, b) => a.winrate - b.winrate || b.totalSignals - a.totalSignals)[0] || null;
-  const mostUsed = summary.mostUsed || [...rows].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
+  const mostUsed = summary.mostUsed || [...eligibleRows].sort((a, b) => b.totalSignals - a.totalSignals || b.winrate - a.winrate)[0] || null;
   const bestRegime = summary.bestRegime || eligibleRows
     .map((item) => ({ strategyName: item.strategyName, ...(item.bestRegime || {}) }))
     .filter((item) => item.regime)
     .sort((a, b) => b.winrate - a.winrate || b.totalSignals - a.totalSignals)[0] || null;
+
+  if (!hasEnoughSample) {
+    if (el.strategyTopStrategy) el.strategyTopStrategy.textContent = "--";
+    if (el.strategyTopStrategyMeta) el.strategyTopStrategyMeta.textContent = "Amostra insuficiente";
+    if (el.strategyWorstStrategy) el.strategyWorstStrategy.textContent = "--";
+    if (el.strategyWorstStrategyMeta) el.strategyWorstStrategyMeta.textContent = "Amostra insuficiente";
+    if (el.strategyMostUsed) el.strategyMostUsed.textContent = "--";
+    if (el.strategyMostUsedMeta) el.strategyMostUsedMeta.textContent = "Amostra insuficiente";
+    if (el.strategyBestRegime) el.strategyBestRegime.textContent = "--";
+    if (el.strategyBestRegimeMeta) el.strategyBestRegimeMeta.textContent = "Amostra insuficiente";
+    return;
+  }
 
   if (el.strategyTopStrategy) el.strategyTopStrategy.textContent = topStrategy?.strategyName || "--";
   if (el.strategyTopStrategyMeta) el.strategyTopStrategyMeta.textContent = topStrategy ? `${formatPercent(topStrategy.winrate)} · ${topStrategy.totalSignals} sinais` : "Amostra insuficiente";
   if (el.strategyWorstStrategy) el.strategyWorstStrategy.textContent = worstStrategy?.strategyName || "--";
   if (el.strategyWorstStrategyMeta) el.strategyWorstStrategyMeta.textContent = worstStrategy ? `${formatPercent(worstStrategy.winrate)} · ${worstStrategy.totalSignals} sinais` : "Amostra insuficiente";
   if (el.strategyMostUsed) el.strategyMostUsed.textContent = mostUsed?.strategyName || "--";
-  if (el.strategyMostUsedMeta) el.strategyMostUsedMeta.textContent = mostUsed ? `${mostUsed.totalSignals} sinais · ${formatPercent(mostUsed.winrate)}` : "0 sinais";
+  if (el.strategyMostUsedMeta) el.strategyMostUsedMeta.textContent = mostUsed ? `${mostUsed.totalSignals} sinais · ${formatPercent(mostUsed.winrate)}` : "Amostra insuficiente";
   if (el.strategyBestRegime) el.strategyBestRegime.textContent = bestRegime?.regime || "--";
   if (el.strategyBestRegimeMeta) el.strategyBestRegimeMeta.textContent = bestRegime ? `${bestRegime.strategyName} · ${formatPercent(bestRegime.winrate)}` : "Amostra insuficiente";
 }
@@ -1881,7 +1894,10 @@ function renderStrategyPerformanceComparison(comparison = {}) {
   renderStrategySummary(comparison);
 
   if (el.strategyComparisonUpdated) {
-    el.strategyComparisonUpdated.textContent = comparison?.generatedAt
+    const hasEnoughSample = Boolean(comparison?.summary?.hasEnoughSample ?? rows.some((item) => item?.hasEnoughSample));
+    el.strategyComparisonUpdated.textContent = !hasEnoughSample
+      ? "Amostra insuficiente"
+      : comparison?.generatedAt
       ? `Atualizado ${formatTime(comparison.generatedAt)}`
       : "Amostra insuficiente";
   }
