@@ -1007,9 +1007,9 @@ function updateCompactOperations(signal = {}, source = "engine") {
   const aiOnline = !(signal.aiStatus === "offline" || signal.ai === false);
   const engineStatus = socket.connected ? "Engine Online" : "Engine Offline";
   setTextContent(el.engineOnlineStatus, engineStatus);
-  setTextContent(el.engineTopStatus, engineStatus);
-  setTextContent(el.feedTopStatus, feedOnline ? "Feed Online" : "Feed Offline");
-  setTextContent(el.aiTopStatus, aiOnline ? "IA Online" : "IA Offline");
+  setTextContent(el.engineTopStatus, socket.connected ? "Online" : "Offline");
+  setTextContent(el.feedTopStatus, feedOnline ? "Online" : "Offline");
+  setTextContent(el.aiTopStatus, aiOnline ? "Online" : "Offline");
   setTextContent(el.panelSyncStatus, socket.connected ? "Painel Sincronizado" : "Socket Offline");
   setTextContent(el.summaryEngineStatus, engineStatus);
   setTextContent(el.summarySocketStatus, socket.connected ? "Socket online" : "Reconectando");
@@ -1848,7 +1848,7 @@ function renderPremiumHistory() {
   if (!el.premiumHistoryList) return;
   const active = state.activeSignal ? [state.activeSignal] : [];
   const seen = new Set(active.map(getEntryWindowSignalKey));
-  const items = [...active, ...state.history.filter((item) => !seen.has(getEntryWindowSignalKey(item)))].slice(0, 6);
+  const items = [...active, ...state.history.filter((item) => !seen.has(getEntryWindowSignalKey(item)))].slice(0, 5);
   if (!items.length) {
     el.premiumHistoryList.innerHTML = `<div class="history-empty">Nenhum sinal recente.</div>`;
     return;
@@ -1858,7 +1858,7 @@ function renderPremiumHistory() {
     const result = String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
-    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result)}</span></div>`;
+    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span>${escapeHtml(getStrategyLabel(signal))}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result === "PENDING" ? "PENDENTE" : result)}</span></div>`;
   }).join("");
 }
 
@@ -2473,9 +2473,9 @@ function setConnection(status) {
 
   setTextContent(el.connectionText, status);
   setTextContent(el.panelSyncStatus, status === "Online" ? "Painel Sincronizado" : status === "Offline" ? "Socket Offline" : "Painel Sincronizando");
-  setTextContent(el.engineTopStatus, status === "Online" ? "Engine Online" : status === "Offline" ? "Engine Offline" : "Engine Sincronizando");
-  setTextContent(el.feedTopStatus, status === "Online" ? "Feed Online" : status === "Offline" ? "Feed Offline" : "Feed Sincronizando");
-  setTextContent(el.aiTopStatus, status === "Online" ? "IA Online" : status === "Offline" ? "IA Offline" : "IA Sincronizando");
+  setTextContent(el.engineTopStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
+  setTextContent(el.feedTopStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
+  setTextContent(el.aiTopStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
   setTextContent(el.websocketStatus, status);
   setTextContent(el.summarySocketStatus, status);
   setTextContent(el.engineOnlineStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");

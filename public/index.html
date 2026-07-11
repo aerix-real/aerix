@@ -3,358 +3,121 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AERIX · Institutional Trading Terminal</title>
-  <meta name="description" content="AERIX · Plataforma institucional de trading, sinais, IA operacional e monitoramento em tempo real." />
+  <title>AERIX · Terminal Institucional</title>
+  <meta name="description" content="AERIX · Terminal institucional de inteligência de mercado, sinais e operação em tempo real." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=premium-saas" />
+  <link rel="stylesheet" href="/style.css?v=institutional-terminal" />
 </head>
-
-<body class="mode-equilibrado plan-premium sidebar-collapsed design-system-institutional">
+<body class="mode-equilibrado terminal-ui sidebar-collapsed">
   <div class="login-overlay" id="loginOverlay">
-    <div class="login-box glass-card">
-      <div class="login-brand">
-        <div class="brand-mark">A</div>
-        <div>
-          <h1>AERIX</h1>
-          <p>Hedge Intelligence Suite</p>
-        </div>
-      </div>
-
+    <form id="loginForm" class="login-box" autocomplete="on">
+      <div class="login-brand"><span>A</span><div><h1>AERIX</h1><p>Terminal Institucional</p></div></div>
       <div id="authFeedback" class="auth-feedback hidden"></div>
-
-      <form id="loginForm" class="login-form" autocomplete="on">
-        <div class="field">
-          <label for="loginUser">E-mail</label>
-          <input id="loginUser" name="email" type="email" autocomplete="username" placeholder="Digite seu e-mail" required />
-        </div>
-
-        <div class="field">
-          <label for="loginPass">Senha</label>
-          <input id="loginPass" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
-        </div>
-
-        <button type="submit" class="login-btn" id="loginButton">Entrar no terminal</button>
-
-        <p class="login-note">Ambiente institucional com execução, IA e monitoramento em nível hedge fund.</p>
-      </form>
-    </div>
+      <label>E-mail<input id="loginUser" name="email" type="email" autocomplete="username" required /></label>
+      <label>Senha<input id="loginPass" name="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit" id="loginButton">Entrar no terminal</button>
+      <small>Ambiente seguro com autenticação, API e Socket.IO preservados.</small>
+    </form>
   </div>
 
   <div class="app-shell">
-    <header class="topbar premium-topbar">
-      <div class="topbar-left">
-        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menu" aria-expanded="false">☰</button>
-
-        <div class="brand-terminal glass-card">
-          <div class="logo-banner">
-            <img src="/logo.png" class="logo-banner-img" alt="AERIX" />
-          </div>
-          <div class="brand-copy">
-            <span>Institutional Alpha OS</span>
-            <strong>Trading Intelligence Command</strong>
-          </div>
-        </div>
+    <header class="topbar">
+      <div class="topbar-brand">
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Alternar menu" aria-expanded="false">☰</button>
+        <img src="/logo.png" alt="AERIX" />
+        <strong>AERIX</strong>
       </div>
-
-      <div class="topbar-right compact-status-strip" aria-label="Status operacional essencial">
-        <div class="top-status-card glass-card"><span>Engine</span><strong id="engineTopStatus">Sincronizando</strong></div>
-        <div class="top-status-card glass-card"><span>Feed</span><strong id="feedTopStatus">Sincronizando</strong></div>
-        <div class="top-status-card glass-card"><span>IA</span><strong id="aiTopStatus">Sincronizando</strong></div>
-        <div class="top-status-card glass-card connection-card"><span class="connection-badge connecting" id="connectionBadge"></span><strong id="panelSyncStatus">Painel sincronizando</strong></div>
-        <div class="live-clock-card glass-card compact-clock"><span>Tempo real</span><strong id="liveClock">00:00:00</strong></div>
+      <div class="topbar-status" aria-label="Status operacional">
+        <span class="status-pill"><i></i><b>Engine</b> <strong id="engineTopStatus">Sincronizando</strong></span>
+        <span class="status-pill"><i></i><b>Feed</b> <strong id="feedTopStatus">Sincronizando</strong></span>
+        <span class="status-pill"><i></i><b>IA</b> <strong id="aiTopStatus">Sincronizando</strong></span>
+        <span class="status-pill mode"><b>Modo</b> <strong id="topCurrentMode">Equilibrado</strong></span>
+        <span class="status-pill"><b>Ciclo</b> <strong id="lastCycleCompact">--</strong></span>
+        <span class="status-pill clock"><strong id="liveClock">00:00:00</strong></span>
       </div>
+      <span class="connection-badge connecting" id="connectionBadge" title="Socket"></span><span id="panelSyncStatus" class="sr-only">Painel sincronizando</span><span id="connectionText" class="sr-only">Conectando</span>
     </header>
 
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-
     <main class="main-layout">
       <aside class="side-panel">
-        <section class="panel user-panel">
-          <div class="panel-header"><h3>Investor Console</h3></div>
-          <div class="user-box">
-            <div class="user-avatar">A</div>
-            <div class="user-meta">
-              <strong id="userName">Usuário</strong>
-              <span id="userEmail">---</span>
-            </div>
-          </div>
-          <div class="plan-row">
-            <span>Status</span>
-            <strong class="plan-badge premium" id="planBadge">ACESSO COMPLETO</strong>
-          </div>
+        <nav class="terminal-nav" aria-label="Áreas do terminal">
+          <button class="dashboard-tab active" type="button" data-tab="operation" aria-selected="true"><span>⌁</span><b>Operação</b></button>
+          <button class="dashboard-tab" type="button" data-tab="history" aria-selected="false"><span>↺</span><b>Histórico</b></button>
+          <button class="dashboard-tab" type="button" data-tab="analytics" aria-selected="false"><span>◫</span><b>Analytics</b></button>
+          <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false"><span>⌘</span><b>Técnico</b></button>
+          <button class="dashboard-tab" type="button" data-tab="settings" aria-selected="false"><span>⚙</span><b>Config.</b></button>
+        </nav>
+        <div class="account-mini">
+          <div><strong id="userName">Usuário</strong><small id="userEmail">---</small><small id="planBadge">ACESSO COMPLETO</small></div>
           <button class="logout-btn" id="logoutBtn" type="button">Sair</button>
-        </section>
-
-        <section class="panel premium-panel">
-          <div class="panel-header"><h3>Prime Access</h3></div>
-          <div class="premium-status" id="premiumStatus">Acesso completo liberado para usuários autenticados.</div>
-          <ul class="premium-list">
-            <li>Cockpit multi-estratégia institucional</li>
-            <li>Engine quantitativa em tempo real</li>
-            <li>Gestão de risco e tracking de execução</li>
-            <li>Camada de IA tática com contexto macro</li>
-          </ul>
-        </section>
-
-        <section class="panel mode-panel">
-          <div class="panel-header"><h3>Mandato Operacional</h3></div>
-          <div class="mode-switcher">
-            <button class="mode-btn" data-mode="conservador" type="button">Conservador <span class="mode-risk">baixo risco</span></button>
-            <button class="mode-btn active" data-mode="equilibrado" type="button">Equilibrado <span class="mode-risk">padrão</span></button>
-            <button class="mode-btn" data-mode="agressivo" type="button">Agressivo <span class="mode-risk">mais sinais</span></button>
-          </div>
-          <p class="mode-description" id="modeDescription">Modo equilibrado ativo. Ajuste fino disponível para usuários autenticados.</p>
-          <p class="mode-warning" id="modeWarning" hidden>Modo agressivo gera mais sinais, com maior exposição operacional.</p>
-        </section>
-
-        <section class="panel timeline-panel">
-          <div class="panel-header"><h3>Timeline Operacional</h3><span id="timelineCount">live</span></div>
-          <div class="operation-timeline" id="operationTimeline">
-            <div class="timeline-event"><time>--:--</time><span>Terminal aguardando sincronização da engine.</span></div>
-          </div>
-        </section>
+        </div>
       </aside>
 
-      <section class="content-panel compact-commercial-panel">
-        <section class="headline-wrap command-hero compact-headline">
-          <div class="headline-kicker">AERIX PRIME DESK</div>
-          <div class="headline" id="headlineText">Painel operacional compacto para leitura rápida de oportunidade, risco e resultado.</div>
+      <section class="content-panel">
+        <section class="dashboard-tab-panel active" data-tab-panel="operation">
+          <p class="terminal-kicker">OPERAÇÃO</p>
+          <h1 id="headlineText">Terminal institucional ativo. IA operacional monitorando mercado em tempo real.</h1>
+          <section class="operation-grid">
+            <article class="hero-signal" id="currentSignalCard">
+              <div class="hero-top"><span id="signalMode">sinal atual</span><span id="marketRegime">NEUTRO</span></div>
+              <div class="hero-main"><strong id="bestAsset">Mercado em análise</strong><div class="signal-direction neutral" id="bestDirection">WAIT</div></div>
+              <p class="wait-copy">Aguardando oportunidade válida</p>
+              <div class="hero-metrics"><div><span>Confiança</span><strong id="bestConfidence">0%</strong></div><div><span>Score final</span><strong id="bestScore">0%</strong></div><div><span>Estratégia vencedora</span><strong id="bestStrategy">--</strong></div><div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div><div><span>Horário</span><strong id="signalTime">--</strong></div><div><span>Expiração</span><strong id="bestExpiry">--</strong></div></div>
+              <div class="entry-window-timer neutral" id="entryWindowTimer"><span>Entry Timing</span><strong id="entryWindowClassification">Preparando entrada</strong><b id="entryWindowCountdown">--</b><small id="entryWindowTimestamp">--</small></div>
+            </article>
+            <aside class="summary-card-grid">
+              <article class="stat-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
+              <article class="stat-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
+              <article class="stat-card health-kpi-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">0/5 serviços ativos</small><div class="health-mini-list" id="healthChecklistCompact"></div></article>
+              <article class="stat-card"><span>Última atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
+            </aside>
+          </section>
+          <section class="decision-grid">
+            <article class="panel"><div class="panel-header"><h2>Por que este sinal?</h2><span>máx. 4</span></div><div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div></article>
+            <article class="panel"><div class="panel-header"><h2>Histórico resumido</h2><span>5 recentes</span></div><div class="premium-history-header"><span>Hora</span><span>Ativo</span><span>Direção</span><span>Estratégia</span><span>Resultado</span></div><div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div></article>
+            <article class="panel ranking-compact"><div class="panel-header"><h2>Ranking de oportunidades</h2><span>top 5</span></div><div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem oportunidades disponíveis.</div></div></article>
+          </section>
         </section>
 
-        <section class="commercial-dashboard-grid premium-saas-main" aria-label="Resumo comercial do painel AERIX">
-          <article class="panel best-opportunity-panel primary-opportunity-card premium-card decision-focus-card current-signal-card hero-card" id="currentSignalCard">
-            <div class="panel-header">
-              <h3>Hero Card</h3>
-              <span id="signalMode">sinal atual</span>
-            </div>
-            <div class="current-signal-head">
-              <div>
-                <span class="micro-label">Ativo</span>
-                <strong id="bestAsset" class="current-asset">---</strong>
-              </div>
-              <div class="signal-direction neutral" id="bestDirection">WAIT</div>
-            </div>
-            <div class="current-signal-scoreline hero-scoreline">
-              <div><span>Score</span><strong id="bestScore">0%</strong></div>
-              <div><span>Confiança</span><strong id="bestConfidence">0%</strong></div>
-            </div>
-            <div class="current-signal-meta hero-meta">
-              <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
-              <div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div>
-            </div>
-            <div class="entry-window-timer neutral" id="entryWindowTimer" aria-label="Janela de entrada do sinal atual">
-              <div>
-                <span>ENTRY WINDOW</span>
-                <strong id="entryWindowCountdown">--</strong>
-              </div>
-              <div class="entry-window-classification neutral" id="entryWindowClassification">--</div>
-              <small id="entryWindowTimestamp">--</small>
-            </div>
-          </article>
-
-          <aside class="summary-card-grid kpi-card-grid" aria-label="KPIs principais">
-            <article class="stat-card commercial-summary-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
-            <article class="stat-card commercial-summary-card"><span>Sinais Hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
-            <article class="stat-card commercial-summary-card health-kpi-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">0/5 checks ativos · Sincronizando...</small><div class="health-mini-list" id="healthChecklistCompact"></div></article>
-            <article class="stat-card commercial-summary-card"><span>Última Atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
-          </aside>
+        <section class="dashboard-tab-panel" data-tab-panel="analytics" hidden>
+          <p class="terminal-kicker">ANALYTICS</p><h1>Performance e inteligência operacional</h1>
+          <div class="analytics-grid">
+            <article class="panel"><div class="panel-header"><h2>Performance por estratégia</h2><span id="performanceUpdated">sincronizando</span></div><div class="performance-list" id="perfWinrateByStrategy"></div></article>
+            <article class="panel"><div class="panel-header"><h2>Winrate por ativo</h2><span>7 dias</span></div><div class="performance-list" id="perfWinrateByAsset"></div></article>
+            <article class="panel"><div class="panel-header"><h2>Melhores horários</h2><span>UTC</span></div><div class="hour-heatmap" id="hourHeatmap"></div></article>
+            <article class="panel"><div class="panel-header"><h2>Regimes de mercado</h2><span id="strategyBestRegimeMeta">amostra</span></div><div class="strategy-summary-tile"><strong id="strategyBestRegime">--</strong><small>melhor regime</small></div></article>
+            <article class="panel"><div class="panel-header"><h2>Heatmap operacional</h2><span>live</span></div><div class="institutional-heatmap" id="institutionalHeatmap"></div></article>
+            <article class="panel"><div class="panel-header"><h2>Ranking de estratégias</h2><span>assertividade</span></div><div class="premium-list-table" id="strategyRankingList"></div></article>
+          </div>
+          <section class="panel history-panel"><div class="panel-header"><h2>Histórico completo</h2><span id="historyUpdated">--</span></div><div class="history-filters"><input id="historyFilterSymbol" placeholder="Ativo" /><input id="historyFilterStrategy" placeholder="Estratégia" /><select id="historyFilterResult"><option value="">Resultado</option><option>WIN</option><option>LOSS</option><option>DRAW</option><option>PENDING</option></select></div><div id="historyList" class="history-list"></div><div class="history-pagination"><button id="historyPrev" type="button">Anterior</button><span id="historyPageInfo">1</span><button id="historyNext" type="button">Próxima</button><span id="historyCount">0</span></div></section>
         </section>
 
-        <section class="clean-dashboard-focus-grid premium-saas-main" aria-label="Dashboard limpo para decisão rápida">
-          <article class="panel premium-card why-signal-panel clean-why-card">
-            <div class="panel-header"><h3>Por que este sinal?</h3><span>máx. 4 itens</span></div>
-            <div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div>
-          </article>
-
-          <article class="panel premium-card operation-history-card clean-history-card">
-            <div class="panel-header"><h3>Histórico resumido</h3><span>últimos sinais</span></div>
-            <div class="premium-history-header" aria-hidden="true"><span>Hora</span><span>Ativo</span><span>Sinal</span><span>Status</span></div>
-            <div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div>
-          </article>
-        </section>
-
-        <nav class="dashboard-tabs technical-tabs" aria-label="Área técnica">
-          <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false">Aba técnica</button>
-        </nav>
+        <section class="dashboard-tab-panel" data-tab-panel="history" hidden><p class="terminal-kicker">HISTÓRICO</p><h1>Histórico operacional</h1><div id="historyListClone" class="history-note">Use Analytics para filtros completos.</div></section>
 
         <section class="dashboard-tab-panel" data-tab-panel="technical" hidden>
-          <section class="panel advanced-hub-panel secondary-details-panel premium-card">
-            <div class="panel-header"><h3>Aba técnica</h3><span id="engineOnlineStatus">Sincronizando</span></div>
-            <div class="technical-snapshot-grid">
-              <div class="compact-status-item"><span>Strategy diagnostics</span><strong id="techStrategy">--</strong></div>
-              <div class="compact-status-item"><span>Market diagnostics</span><strong id="marketRegime">NEUTRO</strong></div>
-              <div class="compact-status-item"><span>Market volatility</span><strong id="techVolatility">--</strong></div>
-              <div class="compact-status-item"><span>Adaptive thresholds</span><strong id="techDynamicThresholds">--</strong></div>
-              <div class="compact-status-item"><span>Release diagnostics</span><strong id="techBlockReason">--</strong></div>
-              <div class="compact-status-item"><span>Strategy diagnostics</span><strong id="techActivationReason">--</strong></div>
-            </div>
-            <div class="advanced-hub-grid technical-advanced-grid">
-              <article class="institutional-subpanel compact-engine-panel premium-card">
-                <div class="subpanel-title"><strong>Provider diagnostics</strong><span>runtime</span></div>
-                <div class="compact-status-grid engine-status-grid">
-                  <div class="compact-status-item"><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div>
-                  <div class="compact-status-item"><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div>
-                  <div class="compact-status-item"><span>Rate limit</span><strong id="rateLimitStatus">OK</strong></div>
-                  <div class="compact-status-item"><span>WebSocket</span><strong id="websocketStatus">Conectando</strong></div>
-                  <div class="compact-status-item"><span>Risco atual</span><strong id="currentRisk">--</strong></div>
-                  <div class="compact-status-item"><span>Liberação IA</span><strong id="aiReleaseStatus">Aguardando</strong></div>
-                </div>
-                <div class="ai-content">
-                  <span class="micro-label">Auditorias completas</span>
-                  <p class="ai-text" id="aiExplanation">IA operacional será exibida conforme a engine sincronizar dados.</p>
-                </div>
-              </article>
-
-              <section class="institutional-subpanel institutional-center-panel" id="institutionalCenter">
-                <div class="institutional-center-header">
-                  <div>
-                    <span class="section-kicker">Cache diagnostics · Market diagnostics · Auditorias completas</span>
-                    <h3>Technical Diagnostics Center</h3>
-                  </div>
-                  <span class="institutional-status-pill" id="saasStatus">SaaS em sincronização</span>
-                </div>
-                <div class="institutional-metrics-grid operational-monitor-grid" aria-label="Monitor operacional da engine">
-                  <article class="institutional-metric-card premium-card"><span>Uptime da engine</span><strong id="monitorUptime">--</strong><small>Tempo ativo desde o último start</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Requests TwelveData hoje</span><strong id="monitorTwelveDataRequests">0</strong><small id="monitorTwelveDataBudget">Budget diário sincronizando</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Cache hit rate</span><strong id="monitorCacheHitRate">0%</strong><small id="monitorCacheLookups">Lookup cache/runtime</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Sinais analisados</span><strong id="monitorAnalyzedSignals">0</strong><small>Ciclo operacional de hoje</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Sinais aprovados</span><strong id="monitorApprovedSignals">0</strong><small>CALL/PUT confirmados</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Última execução</span><strong id="monitorLastExecution">--</strong><small id="monitorLastStatus">Engine em sincronização</small></article>
-                </div>
-                <div class="institutional-metrics-grid">
-                  <article class="institutional-metric-card premium-card"><span>Módulos Engine</span><strong id="engineModules">12/14</strong><small>Confluência, risco, timing e histórico ativos</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Adaptive Rank</span><strong id="adaptiveRank">A-</strong><small>Score recalibrado por assertividade recente</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Anti-loss Level</span><strong id="antiLossLevel">Nível 3</strong><small>Filtro defensivo contra falso positivo</small></article>
-                  <article class="institutional-metric-card premium-card"><span>Status SaaS</span><strong id="saasStatusCard">Online</strong><small>API, Socket.IO, login e engine preservados</small></article>
-                </div>
-                <div class="realtime-metrics-grid" aria-label="Indicadores institucionais em tempo real">
-                  <article class="realtime-metric-card premium-card"><span>Latência</span><strong id="metricLatency">--ms</strong><small>Socket.IO + API</small></article>
-                  <article class="realtime-metric-card premium-card"><span>Fluxo</span><strong id="metricFlow">--</strong><small>Intensidade operacional</small></article>
-                  <article class="realtime-metric-card premium-card"><span>Risco</span><strong id="metricRisk">--</strong><small>Filtro anti-loss</small></article>
-                  <article class="realtime-metric-card premium-card"><span>IA</span><strong id="metricAi">--</strong><small>Confiança adaptativa</small></article>
-                </div>
-                <div class="institutional-ops-grid">
-                  <div class="institutional-subpanel heatmap-panel">
-                    <div class="subpanel-title"><strong>Heatmap Institucional</strong><span>market microstructure</span></div>
-                    <div class="institutional-heatmap" id="institutionalHeatmap"></div>
-                  </div>
-                  <div class="institutional-subpanel ai-insights-panel">
-                    <div class="subpanel-title"><strong>IA Insights</strong><span>decision layer</span></div>
-                    <div class="ai-insights-list" id="aiInsightsList">
-                      <article class="ai-insight-item"><span>01</span><strong>Monitoramento</strong><p>IA aguardando confluência operacional.</p></article>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </section>
-
-          <section class="panel performance-dashboard-panel premium-card secondary-details-panel" aria-label="Strategy Performance Dashboard">
-            <div class="panel-header"><h3>Strategy Performance Dashboard</h3><span id="performanceUpdated">sincronizando</span></div>
-            <div class="performance-kpi-grid" aria-label="Dashboard institucional de performance">
-              <div class="stat-card performance-kpi-card"><span>Bloqueados hoje</span><strong id="perfBlockedToday">0</strong></div>
-              <div class="stat-card performance-kpi-card"><span>Taxa de aprovação</span><strong id="perfApprovalRate">0%</strong></div>
-              <div class="stat-card performance-kpi-card"><span>Winrate 24h</span><strong id="perfWinrate24h">0%</strong></div>
-              <div class="stat-card performance-kpi-card"><span>Winrate 7 dias</span><strong id="perfWinrate7d">0%</strong></div>
-              <div class="stat-card performance-kpi-card"><span>Winrate 30 dias</span><strong id="perfWinrate30d">0%</strong></div>
-            </div>
-            <div class="performance-breakdown-grid">
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Winrate por ativo</strong><span>últimos 7 dias</span></div>
-                <div class="performance-list" id="perfWinrateByAsset"><div class="history-empty">Sem resultados por ativo</div></div>
-              </div>
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Winrate por estratégia</strong><span>últimos 7 dias</span></div>
-                <div class="performance-list" id="perfWinrateByStrategy"><div class="history-empty">Sem resultados por estratégia</div></div>
-              </div>
-            </div>
-            <div class="institutional-subpanel strategy-performance-card">
-              <div class="subpanel-title"><strong>STRATEGY PERFORMANCE</strong><span>atuais e novas · ordenado por winrate</span></div>
-              <div class="strategy-performance-summary-grid" aria-label="Resumo institucional de performance por estratégia">
-                <div class="strategy-summary-tile"><span>TOP STRATEGY</span><strong id="strategyTopStrategy">--</strong><small id="strategyTopStrategyMeta">Amostra insuficiente</small></div>
-                <div class="strategy-summary-tile"><span>WORST STRATEGY</span><strong id="strategyWorstStrategy">--</strong><small id="strategyWorstStrategyMeta">Amostra insuficiente</small></div>
-                <div class="strategy-summary-tile"><span>MOST USED</span><strong id="strategyMostUsed">--</strong><small id="strategyMostUsedMeta">0 sinais</small></div>
-                <div class="strategy-summary-tile"><span>BEST REGIME</span><strong id="strategyBestRegime">--</strong><small id="strategyBestRegimeMeta">Amostra insuficiente</small></div>
-              </div>
-            </div>
-            <div class="institutional-subpanel strategy-comparison-panel">
-              <div class="subpanel-title"><strong>Comparação de desempenho por estratégia</strong><span id="strategyComparisonUpdated">Amostra insuficiente</span></div>
-              <div class="performance-list strategy-comparison-list" id="strategyPerformanceComparison"><div class="history-empty">Amostra insuficiente</div></div>
-            </div>
-          </section>
-          <section class="technical-commercial-grid" aria-label="Diagnósticos e rankings técnicos">
-            <article class="panel premium-card health-panel">
-              <div class="panel-header"><h3>AERIX Health</h3><span id="healthUpdated">live</span></div>
-              <div class="health-score-ring"><strong id="healthScoreDetail">0%</strong><span>saúde operacional</span></div>
-              <div class="health-checklist" id="healthChecklist"></div>
-            </article>
-
-            <article class="panel premium-card ranking-panel">
-              <div class="panel-header"><h3>Ranking de Ativos</h3><span>winrate</span></div>
-              <div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem ranking de ativos disponível.</div></div>
-            </article>
-
-            <article class="panel premium-card heatmap-hours-panel">
-              <div class="panel-header"><h3>Heatmap de Horários</h3><span>UTC</span></div>
-              <div class="hour-heatmap" id="hourHeatmap"><div class="history-empty">Sem estatística por horário disponível.</div></div>
-            </article>
-
-            <article class="panel premium-card strategy-ranking-panel">
-              <div class="panel-header"><h3>Ranking de Estratégias</h3><span>assertividade</span></div>
-              <div class="premium-list-table" id="strategyRankingList"><div class="history-empty">Sem ranking de estratégias disponível.</div></div>
-            </article>
-          </section>
-
-        <section class="panel filter-analytics-panel premium-card secondary-details-panel">
-          <div class="panel-header"><h3>Auditorias completas</h3><span id="filterAnalyticsUpdated">sem dados</span></div>
-          <details class="technical-details filter-details">
-            <summary>Ver bloqueios, ranking, reasons e auditoria de filtros</summary>
-            <div class="filter-summary-grid">
-              <div class="stat-card"><span>Taxa de aprovação</span><strong id="filterApprovalRate">0%</strong></div>
-              <div class="stat-card"><span>Sinais analisados</span><strong id="filterTotalSignals">0</strong></div>
-              <div class="stat-card"><span>Sinais confirmados</span><strong id="filterApprovedSignals">0</strong></div>
-              <div class="stat-card"><span>Sinais bloqueados</span><strong id="filterBlockedSignals">0</strong></div>
-              <div class="stat-card"><span>Watchlist</span><strong id="filterWatchlistRate">0%</strong></div>
-              <div class="stat-card"><span>Alta confiança</span><strong id="filterHighConfidenceRate">0%</strong></div>
-              <div class="stat-card"><span>Média confiança</span><strong id="filterMediumConfidenceRate">0%</strong></div>
-              <div class="stat-card"><span>Penalizações</span><strong id="filterPenaltySignals">0</strong></div>
-            </div>
-            <div class="filter-analytics-grid">
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Top filtros bloqueadores</strong><span>ranking</span></div>
-                <div class="filter-ranking-list" id="filterRankingList"><div class="history-empty">Nenhum bloqueio registrado</div></div>
-              </div>
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Ativos mais bloqueados</strong><span>assets</span></div>
-                <div class="filter-ranking-list" id="filterAssetList"><div class="history-empty">Nenhum ativo bloqueado</div></div>
-              </div>
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Horários mais bloqueados</strong><span>UTC</span></div>
-                <div class="filter-ranking-list" id="filterHourList"><div class="history-empty">Nenhum horário mapeado</div></div>
-              </div>
-              <div class="institutional-subpanel">
-                <div class="subpanel-title"><strong>Últimos bloqueios</strong><span>auditoria</span></div>
-                <div class="filter-block-list" id="filterBlockList"><div class="history-empty">Aguardando bloqueios da engine</div></div>
-              </div>
+          <p class="terminal-kicker">TÉCNICO</p><h1>Diagnósticos internos</h1>
+          <details class="technical-details" open><summary>Runtime, filtros, scores brutos e auditorias</summary>
+            <div class="technical-grid">
+              <article class="panel"><div class="panel-header"><h2>Provider diagnostics</h2><span id="engineOnlineStatus">Sincronizando</span></div><div class="compact-status-grid"><div><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div><div><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div><div><span>Rate limit</span><strong id="rateLimitStatus">OK</strong></div><div><span>WebSocket</span><strong id="websocketStatus">Conectando</strong></div><div><span>Risco</span><strong id="currentRisk">--</strong></div><div><span>Liberação IA</span><strong id="aiReleaseStatus">Aguardando</strong></div></div><p id="aiExplanation">IA operacional será exibida conforme a engine sincronizar dados.</p></article>
+              <article class="panel"><div class="panel-header"><h2>Strategy diagnostics</h2><span id="techStrategy">--</span></div><div class="compact-status-grid"><div><span>Volatilidade</span><strong id="techVolatility">--</strong></div><div><span>Adaptive Threshold</span><strong id="techDynamicThresholds">--</strong></div><div><span>Blocker</span><strong id="techBlockReason">--</strong></div><div><span>Release</span><strong id="techActivationReason">--</strong></div></div></article>
+              <article class="panel health-panel"><div class="panel-header"><h2>AERIX Health</h2><span id="healthUpdated">live</span></div><strong id="healthScoreDetail">0%</strong><div id="healthChecklist"></div></article>
+              <article class="panel"><div class="panel-header"><h2>Monitor</h2><span id="monitorLastStatus">standby</span></div><div class="compact-status-grid"><div><span>Uptime</span><strong id="monitorUptime">--</strong></div><div><span>Requests</span><strong id="monitorTwelveDataRequests">0</strong><small id="monitorTwelveDataBudget"></small></div><div><span>Cache</span><strong id="monitorCacheHitRate">0%</strong><small id="monitorCacheLookups"></small></div><div><span>Analisados</span><strong id="monitorAnalyzedSignals">0</strong></div><div><span>Aprovados</span><strong id="monitorApprovedSignals">0</strong></div><div><span>Última execução</span><strong id="monitorLastExecution">--</strong></div></div></article>
+              <article class="panel filter-analytics-panel"><div class="panel-header"><h2>Blocker Analytics</h2><span id="filterAnalyticsUpdated">sem dados</span></div><div class="filter-summary-grid"><div><span>Aprovação</span><strong id="filterApprovalRate">0%</strong></div><div><span>Total</span><strong id="filterTotalSignals">0</strong></div><div><span>Confirmados</span><strong id="filterApprovedSignals">0</strong></div><div><span>Bloqueados</span><strong id="filterBlockedSignals">0</strong></div><div><span>Watchlist</span><strong id="filterWatchlistRate">0%</strong></div><div><span>Alta confiança</span><strong id="filterHighConfidenceRate">0%</strong></div><div><span>Média confiança</span><strong id="filterMediumConfidenceRate">0%</strong></div><div><span>Penalizações</span><strong id="filterPenaltySignals">0</strong></div></div><div id="filterRankingList"></div><div id="filterAssetList"></div><div id="filterHourList"></div><div id="filterBlockList"></div></article>
+              <article class="panel"><div class="panel-header"><h2>Logs</h2><span>auditoria</span></div><div id="proLogs" class="pro-logs"></div></article>
             </div>
           </details>
         </section>
 
-        <section class="panel pro-audit-panel secondary-details-panel">
-          <details class="technical-details audit-details">
-            <summary>Ver logs profissionais</summary>
-            <div class="pro-logs" id="proLogs"></div>
-          </details>
-        </section>
-        </section>
+        <section class="dashboard-tab-panel" data-tab-panel="settings" hidden><p class="terminal-kicker">CONFIGURAÇÕES</p><h1>Mandato operacional</h1><div class="mode-switcher"><button class="mode-btn" data-mode="conservador" type="button">Conservador <span>baixo risco</span></button><button class="mode-btn active" data-mode="equilibrado" type="button">Equilibrado <span>padrão</span></button><button class="mode-btn" data-mode="agressivo" type="button">Agressivo <span>mais sinais</span></button></div><p id="modeDescription">Modo equilibrado ativo.</p><p id="modeWarning" hidden>Modo agressivo gera mais sinais, com maior exposição operacional.</p><p id="premiumStatus">Acesso completo liberado.</p></section>
 
+        <div class="sr-only" aria-hidden="true"><span id="signalAsset"></span><span id="signalDirection"></span><span id="signalEntry"></span><span id="signalExpiry"></span><span id="signalConfidence"></span><span id="signalCountdown"></span><span id="bestReason"></span><span id="bestEntryStatus"></span><span id="decisionReason"></span><span id="summaryWinrate7d"></span><span id="summaryWinrate30d"></span><span id="summaryApprovalRate"></span><span id="summaryEngineStatus"></span><span id="summarySocketStatus"></span><span id="summaryLastAnalysis"></span><span id="statTotal"></span><span id="statWins"></span><span id="statLosses"></span><span id="statWinrate"></span><span id="statsUpdated"></span><span id="filterPerformanceUpdated"></span><span id="perfSignalsToday"></span><span id="perfApprovedToday"></span><span id="perfBlockedToday"></span><span id="perfApprovalRate"></span><span id="perfWinrate24h"></span><span id="perfWinrate7d"></span><span id="perfWinrate30d"></span><span id="strategyTopStrategy"></span><span id="strategyTopStrategyMeta"></span><span id="strategyWorstStrategy"></span><span id="strategyWorstStrategyMeta"></span><span id="strategyMostUsed"></span><span id="strategyMostUsedMeta"></span><span id="strategyPerformanceComparison"></span><span id="strategyComparisonUpdated"></span><span id="metricLatency"></span><span id="metricFlow"></span><span id="metricRisk"></span><span id="metricAi"></span><span id="aiInsightsList"></span><span id="operationTimeline"></span><span id="timelineCount"></span><canvas id="equityCurveCanvas"></canvas><span id="equityStatus"></span><span id="shadowModePanel"></span><span id="shadowModeStatus"></span><span id="shadowModeList"></span><span id="shadowModeUpdated"></span><span id="filterPerformancePanel"></span><span id="filterPerformanceCards"></span><span id="saasStatus"></span><span id="saasStatusCard"></span><span id="engineModules"></span><span id="adaptiveRank"></span><span id="antiLossLevel"></span></div>
       </section>
     </main>
   </div>
-
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=premium-saas"></script>
+  <script src="/app.js?v=institutional-terminal"></script>
 </body>
 </html>
