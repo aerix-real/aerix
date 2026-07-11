@@ -84,13 +84,14 @@
 
         <section class="dashboard-tab-panel" data-tab-panel="analytics" hidden>
           <p class="terminal-kicker">ANALYTICS</p><h1>Performance e inteligência operacional</h1>
-          <div class="analytics-grid">
-            <article class="panel"><div class="panel-header"><h2>Performance por estratégia</h2><span id="performanceUpdated">sincronizando</span></div><div class="performance-list" id="perfWinrateByStrategy"></div></article>
-            <article class="panel"><div class="panel-header"><h2>Winrate por ativo</h2><span>7 dias</span></div><div class="performance-list" id="perfWinrateByAsset"></div></article>
-            <article class="panel"><div class="panel-header"><h2>Melhores horários</h2><span>UTC</span></div><div class="hour-heatmap" id="hourHeatmap"></div></article>
-            <article class="panel"><div class="panel-header"><h2>Regimes de mercado</h2><span id="strategyBestRegimeMeta">amostra</span></div><div class="strategy-summary-tile"><strong id="strategyBestRegime">--</strong><small>melhor regime</small></div></article>
-            <article class="panel"><div class="panel-header"><h2>Heatmap operacional</h2><span>live</span></div><div class="institutional-heatmap" id="institutionalHeatmap"></div></article>
-            <article class="panel"><div class="panel-header"><h2>Ranking de estratégias</h2><span>assertividade</span></div><div class="premium-list-table" id="strategyRankingList"></div></article>
+          <div class="analytics-workspace" id="analyticsWorkspace">
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Strategy Performance</h2><span id="performanceUpdated">sincronizando</span></div><div class="performance-list analytics-table" id="perfWinrateByStrategy"></div></article>
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Asset Performance</h2><span>Hezilex + Forex</span></div><div class="performance-list analytics-table" id="perfWinrateByAsset"></div></article>
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Operational Heatmap</h2><span>UTC</span></div><div class="hour-heatmap analytics-heatmap" id="hourHeatmap"></div></article>
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Market Regime Performance</h2><span id="strategyBestRegimeMeta">amostra</span></div><div class="performance-list analytics-table" id="marketRegimePerformance"><div class="strategy-summary-tile"><strong id="strategyBestRegime">--</strong><small>melhor regime</small></div></div></article>
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Signal Breakdown</h2><span id="analyticsSignalBreakdownMeta">--</span></div><div class="analytics-breakdown" id="analyticsSignalBreakdown"></div></article>
+            <article class="panel analytics-panel"><div class="panel-header"><h2>Blocker Statistics</h2><span id="analyticsBlockersMeta">--</span></div><div class="performance-list analytics-table" id="analyticsBlockers"></div></article>
+            <article class="panel analytics-panel analytics-wide"><div class="panel-header"><h2>Ranking de estratégias</h2><span>assertividade</span></div><div class="premium-list-table analytics-table" id="strategyRankingList"></div></article>
           </div>
           <section class="panel history-panel"><div class="panel-header"><h2>Histórico completo</h2><span id="historyUpdated">--</span></div><div class="history-filters"><input id="historyFilterSymbol" placeholder="Ativo" /><input id="historyFilterStrategy" placeholder="Estratégia" /><select id="historyFilterResult"><option value="">Resultado</option><option>WIN</option><option>LOSS</option><option>DRAW</option><option>PENDING</option></select></div><div id="historyList" class="history-list"></div><div class="history-pagination"><button id="historyPrev" type="button">Anterior</button><span id="historyPageInfo">1</span><button id="historyNext" type="button">Próxima</button><span id="historyCount">0</span></div></section>
         </section>

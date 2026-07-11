@@ -223,6 +223,12 @@ const el = {
   perfLastApproved: document.getElementById("perfLastApproved"),
   perfWinrateByAsset: document.getElementById("perfWinrateByAsset"),
   perfWinrateByStrategy: document.getElementById("perfWinrateByStrategy"),
+  analyticsWorkspace: document.getElementById("analyticsWorkspace"),
+  marketRegimePerformance: document.getElementById("marketRegimePerformance"),
+  analyticsSignalBreakdown: document.getElementById("analyticsSignalBreakdown"),
+  analyticsSignalBreakdownMeta: document.getElementById("analyticsSignalBreakdownMeta"),
+  analyticsBlockers: document.getElementById("analyticsBlockers"),
+  analyticsBlockersMeta: document.getElementById("analyticsBlockersMeta"),
 
   filterPerformancePanel: document.getElementById("filterPerformancePanel"),
   filterPerformanceCards: document.getElementById("filterPerformanceCards"),
@@ -2004,6 +2010,114 @@ function renderHourStats(items = []) {
 }
 
 
+
+function getSampleLabel(total = 0) {
+  const count = Number(total);
+  if (!Number.isFinite(count) || count <= 0) return "Amostra inicial";
+  if (count < 8) return "Amostra inicial";
+  if (count < 30) return "Amostra em desenvolvimento";
+  return "Amostra suficiente";
+}
+
+function formatAnalyticsNumber(value, fallback = "--") {
+  if (value === null || value === undefined || value === "") return fallback;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(Math.round(numeric * 100) / 100) : fallback;
+}
+
+function getAnalyticsAssetLabel(value = "") {
+  const raw = String(value || "").trim();
+  const upper = raw.toUpperCase();
+  const hezilexMap = {
+    BTC: "Hezilex BTC", ETH: "Hezilex ETH", SOL: "Hezilex SOL", XRP: "Hezilex XRP", BNB: "Hezilex BNB", ADA: "Hezilex ADA", DOGE: "Hezilex DOGE", AVAX: "Hezilex AVAX"
+  };
+  if (!upper) return "--";
+  if (upper.includes("/") || /^[A-Z]{6}$/.test(upper)) return upper;
+  return hezilexMap[upper.replace(/USDT|USD/g, "")] || raw;
+}
+
+function buildAnalyticsBuckets(items = [], keyGetter = () => "--") {
+  const buckets = new Map();
+  normalizeSignalCollection(items).slice(0, MAX_HISTORY_ITEMS).forEach((signal) => {
+    const key = keyGetter(signal) || "--";
+    const current = buckets.get(key) || { label: key, total: 0, wins: 0, losses: 0, draw: 0, pending: 0, blocked: 0, scoreSum: 0, confidenceSum: 0 };
+    const result = String(signal.result || signal.status || "PENDING").toUpperCase();
+    current.total += 1;
+    current.wins += result === "WIN" ? 1 : 0;
+    current.losses += result === "LOSS" ? 1 : 0;
+    current.draw += result === "DRAW" ? 1 : 0;
+    current.pending += ["PENDING", "WAIT"].includes(result) ? 1 : 0;
+    current.blocked += signal.blocked ? 1 : 0;
+    current.scoreSum += getOperationalScore(signal);
+    current.confidenceSum += Number(signal.confidence || 0) || 0;
+    buckets.set(key, current);
+  });
+  return Array.from(buckets.values()).map((bucket) => ({
+    ...bucket,
+    winrate: bucket.total ? (bucket.wins / Math.max(1, bucket.wins + bucket.losses + bucket.draw)) * 100 : 0,
+    averageScore: bucket.total ? bucket.scoreSum / bucket.total : 0,
+    averageConfidence: bucket.total ? bucket.confidenceSum / bucket.total : 0,
+    sampleLabel: getSampleLabel(bucket.total)
+  })).sort((a, b) => b.winrate - a.winrate || b.total - a.total).slice(0, 8);
+}
+
+function renderAnalyticsRows(rows = [], empty = "Sem dados analíticos disponíveis.") {
+  if (!Array.isArray(rows) || !rows.length) return `<div class="history-empty analytics-empty">${escapeHtml(empty)}</div>`;
+  return rows.map((item, index) => `
+    <div class="performance-row analytics-row">
+      <div class="rank-left"><span class="rank-position">#${index + 1}</span><div><strong>${escapeHtml(item.label || "--")}</strong><span>${formatAnalyticsNumber(item.wins, "0")} wins · ${formatAnalyticsNumber(item.losses, "0")} losses · ${formatAnalyticsNumber(item.total, "0")} sinais</span></div></div>
+      <div class="analytics-row-metrics"><span class="sample-label">${escapeHtml(item.sampleLabel || getSampleLabel(item.total))}</span><div class="performance-bar"><i style="width:${Math.max(4, Math.min(100, Number(item.winrate) || 0))}%"></i></div><strong>${formatPercent(item.winrate)}</strong></div>
+    </div>`).join("");
+}
+
+function renderStrategyPerformance(data = {}) {
+  const rows = Array.isArray(data.winrateByStrategy || data.strategyStats || data.strategies)
+    ? (data.winrateByStrategy || data.strategyStats || data.strategies).map((item) => ({ label: item.strategyName || item.strategy_name || item.strategy || "--", total: item.total || item.totalSignals || 0, wins: item.wins || 0, losses: item.losses || 0, winrate: getWinrateValue(item), sampleLabel: item.sampleLabel || getSampleLabel(item.total || item.totalSignals) }))
+    : buildAnalyticsBuckets(state.history, getStrategyLabel);
+  if (el.perfWinrateByStrategy) el.perfWinrateByStrategy.innerHTML = renderAnalyticsRows(rows, "Sem performance por estratégia.");
+  return rows;
+}
+
+function renderAssetPerformance(data = {}) {
+  const rows = Array.isArray(data.winrateBySymbol || data.assetStats || data.assets)
+    ? (data.winrateBySymbol || data.assetStats || data.assets).map((item) => ({ label: getAnalyticsAssetLabel(item.symbol || item.asset), total: item.total || item.totalSignals || 0, wins: item.wins || 0, losses: item.losses || 0, winrate: getWinrateValue(item), sampleLabel: item.sampleLabel || getSampleLabel(item.total || item.totalSignals) }))
+    : buildAnalyticsBuckets(state.history, (signal) => getAnalyticsAssetLabel(signal.symbol || signal.asset));
+  if (el.perfWinrateByAsset) el.perfWinrateByAsset.innerHTML = renderAnalyticsRows(rows, "Sem performance por ativo.");
+  return rows;
+}
+
+function renderMarketRegimePerformance(data = {}) {
+  const rows = buildAnalyticsBuckets(state.history, getMarketRegime);
+  if (el.marketRegimePerformance) {
+    const summaryTile = `<div class="strategy-summary-tile"><strong id="strategyBestRegime">${escapeHtml(el.strategyBestRegime?.textContent || "--")}</strong><small>melhor regime</small></div>`;
+    el.marketRegimePerformance.innerHTML = `${summaryTile}${renderAnalyticsRows(rows, "Sem performance por regime de mercado.")}`;
+    el.strategyBestRegime = document.getElementById("strategyBestRegime");
+  }
+}
+
+function renderAnalyticsSignalBreakdown() {
+  const items = state.history.slice(0, MAX_HISTORY_ITEMS);
+  const counts = items.reduce((acc, signal) => { const dir = getOperationalDirection(signal) || "WAIT"; acc[dir] = (acc[dir] || 0) + 1; return acc; }, { CALL: 0, PUT: 0, WAIT: 0 });
+  if (el.analyticsSignalBreakdownMeta) el.analyticsSignalBreakdownMeta.textContent = getSampleLabel(items.length);
+  if (el.analyticsSignalBreakdown) el.analyticsSignalBreakdown.innerHTML = ["CALL", "PUT", "WAIT"].map((key) => `<div class="breakdown-card"><span>${key}</span><strong>${counts[key] || 0}</strong><small>${items.length ? formatPercent(((counts[key] || 0) / items.length) * 100) : "--"}</small></div>`).join("");
+}
+
+function renderAnalyticsBlockers(data = {}) {
+  const blocks = Array.isArray(data.blocksByFilter) ? data.blocksByFilter : buildAnalyticsBuckets(state.history.filter((item) => item.blocked), getBlockReason);
+  const rows = blocks.map((item) => ({ label: item.filter || item.reason || item.label || "--", total: item.total || item.count || 0, wins: item.approved || 0, losses: item.blocked || item.total || item.count || 0, winrate: item.rate || item.blockRate || 0, sampleLabel: getSampleLabel(item.total || item.count) }));
+  if (el.analyticsBlockersMeta) el.analyticsBlockersMeta.textContent = getSampleLabel(rows.reduce((sum, item) => sum + Number(item.total || 0), 0));
+  if (el.analyticsBlockers) el.analyticsBlockers.innerHTML = renderAnalyticsRows(rows, "Sem bloqueios registrados.");
+}
+
+function renderAnalyticsWorkspace(data = state.performanceDashboard || {}) {
+  renderStrategyPerformance(data);
+  renderAssetPerformance(data);
+  renderOperationalHeatmap(state.activeSignal || {});
+  renderMarketRegimePerformance(data);
+  renderAnalyticsSignalBreakdown();
+  renderAnalyticsBlockers(state.filterAnalytics || {});
+}
+
 function renderStrategySummary(comparison = {}) {
   const rows = Array.isArray(comparison?.strategies) ? comparison.strategies : [];
   const summary = comparison?.summary || {};
@@ -2108,22 +2222,10 @@ function renderPerformanceDashboard(data = {}) {
   if (el.perfLastApproved) el.perfLastApproved.textContent = lastApproved?.symbol || "--";
   if (el.performanceUpdated) el.performanceUpdated.textContent = data.generatedAt ? `Atualizado ${formatTime(data.generatedAt)}` : "sem dados";
 
-  if (el.perfWinrateByAsset) {
-    el.perfWinrateByAsset.innerHTML = renderWinrateBreakdown(data.winrateBySymbol, {
-      labelKey: "symbol",
-      empty: "Sem resultados por ativo"
-    });
-  }
-
   const assetStats = data.winrateBySymbol || data.assetStats || data.assets || [];
   const strategyStats = data.winrateByStrategy || data.strategyStats || data.strategies || [];
-
-  if (el.perfWinrateByStrategy) {
-    el.perfWinrateByStrategy.innerHTML = renderWinrateBreakdown(strategyStats, {
-      labelKey: "strategyName",
-      empty: "Sem resultados por estratégia"
-    });
-  }
+  renderAssetPerformance(data);
+  renderStrategyPerformance(data);
   if (el.assetRankingList) {
     el.assetRankingList.innerHTML = renderWinrateBreakdown(assetStats, { labelKey: "symbol", empty: "Sem ranking de ativos disponível" });
   }
@@ -2131,6 +2233,9 @@ function renderPerformanceDashboard(data = {}) {
     el.strategyRankingList.innerHTML = renderWinrateBreakdown(strategyStats, { labelKey: "strategyName", empty: "Sem ranking de estratégias disponível" });
   }
   renderHourStats(data.hourStats || data.winrateByHour || []);
+  renderMarketRegimePerformance(data);
+  renderAnalyticsSignalBreakdown();
+  renderAnalyticsBlockers(state.filterAnalytics || {});
   renderStrategyPerformanceComparison(data.strategyPerformanceComparison || state.analytics?.strategyPerformanceComparison || {});
   renderHealthScore(lastApproved || {}, state.engineSnapshot?.monitor || {});
 }
@@ -2265,6 +2370,7 @@ async function loadFilterAnalytics() {
     if (analytics && typeof analytics === "object") {
       state.filterAnalytics = analytics;
       renderFilterAnalytics(analytics);
+      renderAnalyticsBlockers(analytics);
       return;
     }
 
@@ -2857,6 +2963,7 @@ function setupDashboardTabs() {
       });
 
       if (target === "history") scheduleHistoryRender();
+      if (target === "analytics") renderAnalyticsWorkspace();
       if (target === "technical") {
         renderOperationalHeatmap();
         renderAIInsights();
@@ -3032,6 +3139,7 @@ socket.on("filter-analytics:update", (payload) => {
       rankingTotal: normalizeSignalCollection(analytics.ranking).length
     });
     renderFilterAnalytics(analytics);
+    renderAnalyticsBlockers(analytics);
   } else {
     loadFilterAnalytics();
   }
