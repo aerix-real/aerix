@@ -10,6 +10,13 @@ const filterAnalyticsService = require("./filter-analytics.service");
 const engineDebugService = require("./engine-debug.service");
 const signalRepository = require("../repositories/signal.repository");
 const blockerAnalytics = require("./blocker-analytics.service");
+const {
+  decorateCryptoResult,
+  findHezilexAsset,
+  isHezilexCryptoMode,
+  logCryptoAudit,
+  selectCryptoAssetsForCycle
+} = require("./market-mode.service");
 
 const DEFAULT_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"];
 const ANALYSIS_CACHE_TTL_MS = Math.max(60 * 1000, Number(process.env.ANALYSIS_CACHE_TTL_MS || 5 * 60 * 1000));
@@ -420,7 +427,16 @@ function uniqueMessages(messages = []) {
 
 async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
   const { preferences, modeConfig } = await getUserModeConfig(userId);
-  const snapshot = providedSnapshot || (await getMarketSnapshot(symbol));
+  const marketAsset = isHezilexCryptoMode() ? findHezilexAsset(symbol) : null;
+  const providerSymbol = marketAsset?.providerSymbol || symbol;
+  const displaySymbol = marketAsset?.displayName || symbol;
+  const snapshot = providedSnapshot || (await getMarketSnapshot(providerSymbol));
+  if (marketAsset) {
+    snapshot.symbol = displaySymbol;
+    snapshot.providerSymbol = providerSymbol;
+    snapshot.displayName = displaySymbol;
+    snapshot.marketMode = "HEZILEX_CRYPTO";
+  }
   const strategyMode = mapTradingModeToStrategyMode(preferences.trading_mode);
 
   const h1Indicators = analyzeIndicators(snapshot.timeframes.h1.candles, strategyMode);
@@ -428,7 +444,8 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
   const m5Indicators = analyzeIndicators(snapshot.timeframes.m5.candles, strategyMode);
 
   const predictiveDecision = await predictiveAiService.evaluatePreSignal({
-    symbol,
+    symbol: displaySymbol,
+    providerSymbol,
     snapshot,
     mode: strategyMode
   });
@@ -455,7 +472,8 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
   marketContext.dynamicMinScore = strategyResult.dynamicMinScore || null;
 
   const adaptiveContext = {
-    symbol,
+    symbol: displaySymbol,
+    providerSymbol,
     signal: strategyResult.signal,
     strategyName: strategyResult.strategyName || "unknown",
     marketRegime: strategyResult.marketRegime || marketContext.marketRegime || "NORMAL",
@@ -579,7 +597,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
   const explanation =
     preferences.ai_explanations_enabled !== false
       ? explainSignal({
-          symbol,
+          symbol: displaySymbol,
           signal: finalSignal,
           confidence: strategyResult.confidence,
           reasons: uniqueMessages([
@@ -655,7 +673,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
         : "Oportunidade monitorada; aguardar melhora de score/timing.";
 
   const legacySignal = buildLegacySignalShape(
-    symbol,
+    displaySymbol,
     finalResult,
     snapshot,
     strategyMode
@@ -665,8 +683,9 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     try {
       await filterAnalyticsService.recordSignalFilters({
         ...finalResult,
-        symbol,
-        asset: symbol,
+        symbol: displaySymbol,
+        asset: displaySymbol,
+        providerSymbol,
         userId,
         mode: strategyMode,
         timestamp: snapshot?.timestamp || new Date().toISOString()
@@ -678,8 +697,9 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
 
   engineDebugService.recordFinalDecision({
     ...finalResult,
-    symbol,
-    asset: symbol,
+    symbol: displaySymbol,
+    asset: displaySymbol,
+    providerSymbol,
     mode: strategyMode,
     marketContext,
     timestamp: snapshot?.timestamp || new Date().toISOString()
@@ -688,8 +708,12 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     stage: "analyze_symbol"
   });
 
-  return {
-    symbol,
+  const analysisResult = {
+    symbol: displaySymbol,
+    asset: displaySymbol,
+    displayName: displaySymbol,
+    providerSymbol,
+    marketMode: marketAsset ? "HEZILEX_CRYPTO" : "FOREX",
     signal: finalResult.signal,
     confidence: finalResult.confidence,
     finalScore: finalResult.finalScore,
@@ -774,7 +798,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     mode: modeConfig,
     strategyMode,
     currentSignal: legacySignal,
-    signalCenter: buildSignalCenter(symbol, finalResult, snapshot),
+    signalCenter: buildSignalCenter(displaySymbol, finalResult, snapshot),
     timeframes: {
       h1: summarizeTimeframe(h1Indicators),
       m15: summarizeTimeframe(m15Indicators),
@@ -788,6 +812,23 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     marketContext,
     timestamp: snapshot.timestamp
   };
+
+  if (marketAsset) {
+    logCryptoAudit("symbol_analysis_completed", {
+      displayName: displaySymbol,
+      providerSymbol,
+      provider: process.env.CRYPTO_PROVIDER || "twelvedata",
+      selectedForCycle: true,
+      timeframe: "5min,15min,1h",
+      candleCount: snapshot?.dataQuality?.candles || null,
+      spread: null,
+      volume: null,
+      volatility: snapshot?.timeframes?.m5?.volatilityPercent || null
+    });
+    return decorateCryptoResult(analysisResult, marketAsset);
+  }
+
+  return analysisResult;
 }
 
 
@@ -907,8 +948,11 @@ function buildHistoryStats(results = []) {
 
 function buildRanking(results = []) {
   return results.map((item) => ({
-    symbol: item.symbol,
-    asset: item.symbol,
+    symbol: item.displayName || item.symbol,
+    asset: item.displayName || item.symbol,
+    displayName: item.displayName || item.symbol,
+    providerSymbol: item.providerSymbol || null,
+    marketMode: item.marketMode || "FOREX",
     confidence: item.confidence,
     finalScore: Number(item.finalScore || item.confidence || 0),
     score: Number(item.finalScore || item.confidence || 0),
@@ -940,8 +984,12 @@ function buildRanking(results = []) {
 
 function buildHistory(results = []) {
   return results.map((item) => ({
-    symbol: item.symbol,
-    asset: item.symbol,
+    symbol: item.displayName || item.symbol,
+    asset: item.displayName || item.symbol,
+    displayName: item.displayName || item.symbol,
+    providerSymbol: item.providerSymbol || null,
+    marketMode: item.marketMode || "FOREX",
+    meta: item.historyMeta || null,
     signal: item.signal,
     direction: item.signal,
     confidence: item.confidence,
@@ -975,9 +1023,9 @@ function buildHistory(results = []) {
 
 async function analyzePreferredSymbols(userId) {
   const { preferences } = await getUserModeConfig(userId);
-  const symbols = preferences.preferred_symbols?.length
-    ? preferences.preferred_symbols
-    : DEFAULT_SYMBOLS;
+  const symbols = isHezilexCryptoMode()
+    ? selectCryptoAssetsForCycle({ strategyMode: mapTradingModeToStrategyMode(preferences.trading_mode) }).map((asset) => asset.displayName)
+    : (preferences.preferred_symbols?.length ? preferences.preferred_symbols : DEFAULT_SYMBOLS);
 
   const results = [];
 
