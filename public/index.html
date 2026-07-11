@@ -176,8 +176,49 @@
         </section>
 
         <nav class="dashboard-tabs technical-tabs" aria-label="Área técnica">
+          <button class="dashboard-tab active" type="button" data-tab="analytics" aria-selected="true">Analytics</button>
           <button class="dashboard-tab" type="button" data-tab="technical" aria-selected="false">Aba técnica</button>
         </nav>
+
+
+        <section class="dashboard-tab-panel analytics-workspace-panel active" data-tab-panel="analytics">
+          <section class="panel analytics-command-panel premium-card" aria-label="Analytics institucional do Terminal AERIX">
+            <div class="panel-header"><h3>Analytics Workspace</h3><span id="analyticsUpdated">dados limitados · leitura não conclusiva</span></div>
+            <div class="analytics-note">Camada analítica separada da operação. Métricas derivadas dos dados já disponíveis, com proteção explícita para amostras pequenas, campos incompletos e múltiplos mercados.</div>
+
+            <div class="analytics-grid">
+              <article class="institutional-subpanel analytics-wide">
+                <div class="subpanel-title"><strong>Strategy Performance</strong><span>amostra, winrate e melhores contextos</span></div>
+                <div class="analytics-table" id="analyticsStrategyPerformance"><div class="history-empty">Sem estatística por estratégia disponível.</div></div>
+              </article>
+
+              <article class="institutional-subpanel analytics-wide">
+                <div class="subpanel-title"><strong>Asset Performance</strong><span>nomes do mercado configurado</span></div>
+                <div class="analytics-table" id="analyticsAssetPerformance"><div class="history-empty">Sem estatística por ativo disponível.</div></div>
+              </article>
+
+              <article class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Operational Heatmap</strong><span>hora · sinais · winrate · confiança</span></div>
+                <div class="analytics-heatmap" id="analyticsOperationalHeatmap"><div class="history-empty">Sem heatmap operacional disponível.</div></div>
+              </article>
+
+              <article class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Market Regime Performance</strong><span>regimes detectados</span></div>
+                <div class="analytics-card-list" id="analyticsRegimePerformance"><div class="history-empty">Sem regimes suficientes.</div></div>
+              </article>
+
+              <article class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Signal Breakdown</strong><span>sinal selecionado / atual</span></div>
+                <div class="analytics-breakdown" id="analyticsSignalBreakdown"><div class="history-empty">Selecione ou aguarde um sinal.</div></div>
+              </article>
+
+              <article class="institutional-subpanel">
+                <div class="subpanel-title"><strong>Blocker Statistics</strong><span>bloqueadores e near activations</span></div>
+                <div class="analytics-card-list" id="analyticsBlockerStats"><div class="history-empty">Sem bloqueios registrados.</div></div>
+              </article>
+            </div>
+          </section>
+        </section>
 
         <section class="dashboard-tab-panel" data-tab-panel="technical" hidden>
           <section class="panel advanced-hub-panel secondary-details-panel premium-card">

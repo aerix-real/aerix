@@ -225,7 +225,15 @@ const el = {
 
   filterPerformancePanel: document.getElementById("filterPerformancePanel"),
   filterPerformanceCards: document.getElementById("filterPerformanceCards"),
-  filterPerformanceUpdated: document.getElementById("filterPerformanceUpdated")
+  filterPerformanceUpdated: document.getElementById("filterPerformanceUpdated"),
+
+  analyticsUpdated: document.getElementById("analyticsUpdated"),
+  analyticsStrategyPerformance: document.getElementById("analyticsStrategyPerformance"),
+  analyticsAssetPerformance: document.getElementById("analyticsAssetPerformance"),
+  analyticsOperationalHeatmap: document.getElementById("analyticsOperationalHeatmap"),
+  analyticsRegimePerformance: document.getElementById("analyticsRegimePerformance"),
+  analyticsSignalBreakdown: document.getElementById("analyticsSignalBreakdown"),
+  analyticsBlockerStats: document.getElementById("analyticsBlockerStats")
 };
 
 
@@ -1955,6 +1963,245 @@ function renderStrategyPerformanceComparison(comparison = {}) {
   }).join("");
 }
 
+
+const ANALYTICS_STRATEGIES = [
+  "trend_continuation",
+  "pullback",
+  "institutional_pullback",
+  "liquidity_sweep_false_breakout",
+  "institutional_first_retest",
+  "breakout",
+  "momentum",
+  "reversal"
+];
+
+const HEZILEX_DISPLAY_NAMES = {
+  BTC: "BITCOIN",
+  BTCUSD: "BITCOIN",
+  ETH: "ETHEREUM",
+  ETHUSD: "ETHEREUM",
+  SOL: "SOLANA",
+  SOLUSD: "SOLANA",
+  XRP: "XRP",
+  ADA: "CARDANO",
+  BNB: "BNB",
+  LTC: "LITECOIN",
+  AVAX: "AVAX",
+  DOGE: "DOGE",
+  SUI: "SUI",
+  LINK: "LINK"
+};
+
+function normalizeAnalyticsKey(value, fallback = "UNKNOWN") {
+  return String(value || fallback).trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+}
+
+function getAnalyticsStrategy(signal = {}) {
+  return String(signal.strategy || signal.strategyName || signal.strategy_name || signal.setup || "unknown").trim().toLowerCase();
+}
+
+function getAnalyticsSymbol(signal = {}) {
+  const raw = String(signal.displayName || signal.display_name || signal.symbol || signal.asset || "UNKNOWN").trim().toUpperCase();
+  const compact = raw.replace(/[^A-Z0-9]/g, "");
+  return HEZILEX_DISPLAY_NAMES[compact] || HEZILEX_DISPLAY_NAMES[compact.replace(/USD$/, "")] || raw;
+}
+
+function getAnalyticsResult(signal = {}) {
+  const result = String(signal.result || signal.outcome || "").trim().toUpperCase();
+  return ["WIN", "LOSS", "DRAW"].includes(result) ? result : "PENDING";
+}
+
+function getAnalyticsRegime(signal = {}) {
+  return normalizeAnalyticsKey(signal.marketRegime || signal.market_regime || signal.regime || signal.context?.marketRegime || "UNKNOWN");
+}
+
+function getAnalyticsHour(signal = {}) {
+  const source = signal.created_at || signal.createdAt || signal.timestamp || signal.time;
+  const date = source ? new Date(source) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getUTCHours() : null;
+}
+
+function sampleLabel(total) {
+  if (total < 30) return "Amostra inicial";
+  if (total < 100) return "Amostra em desenvolvimento";
+  return "Amostra validada";
+}
+
+function buildBucket() {
+  return { total: 0, wins: 0, losses: 0, draws: 0, scoreSum: 0, confidenceSum: 0, scored: 0, confidenceCount: 0, assets: {}, hours: {}, regimes: {}, strategies: {} };
+}
+
+function addToBucket(bucket, signal = {}) {
+  const result = getAnalyticsResult(signal);
+  const score = getOperationalScore(signal);
+  const confidence = Number(signal.confidence ?? signal.aiConfidence ?? signal.confidence_score ?? score);
+  const asset = getAnalyticsSymbol(signal);
+  const strategy = getAnalyticsStrategy(signal);
+  const regime = getAnalyticsRegime(signal);
+  const hour = getAnalyticsHour(signal);
+
+  bucket.total += 1;
+  if (result === "WIN") bucket.wins += 1;
+  if (result === "LOSS") bucket.losses += 1;
+  if (result === "DRAW") bucket.draws += 1;
+  if (Number.isFinite(score)) { bucket.scoreSum += score; bucket.scored += 1; }
+  if (Number.isFinite(confidence)) { bucket.confidenceSum += confidence; bucket.confidenceCount += 1; }
+  [bucket.assets, bucket.regimes, bucket.strategies].forEach((map, index) => {
+    const key = index === 0 ? asset : index === 1 ? regime : strategy;
+    map[key] = map[key] || buildBucket();
+    if (map[key] !== bucket) addToBucketShallow(map[key], signal);
+  });
+  if (hour !== null) {
+    bucket.hours[hour] = bucket.hours[hour] || buildBucket();
+    addToBucketShallow(bucket.hours[hour], signal);
+  }
+}
+
+function addToBucketShallow(bucket, signal = {}) {
+  const result = getAnalyticsResult(signal);
+  const score = getOperationalScore(signal);
+  const confidence = Number(signal.confidence ?? signal.aiConfidence ?? signal.confidence_score ?? score);
+  bucket.total += 1;
+  if (result === "WIN") bucket.wins += 1;
+  if (result === "LOSS") bucket.losses += 1;
+  if (result === "DRAW") bucket.draws += 1;
+  if (Number.isFinite(score)) { bucket.scoreSum += score; bucket.scored += 1; }
+  if (Number.isFinite(confidence)) { bucket.confidenceSum += confidence; bucket.confidenceCount += 1; }
+}
+
+function bucketWinrate(bucket = {}) {
+  const decided = Number(bucket.wins || 0) + Number(bucket.losses || 0);
+  return decided ? (Number(bucket.wins || 0) / decided) * 100 : 0;
+}
+
+function bucketAverage(sum, count) {
+  return count ? sum / count : 0;
+}
+
+function bestEntry(map = {}) {
+  return Object.entries(map).sort(([, a], [, b]) => bucketWinrate(b) - bucketWinrate(a) || b.total - a.total)[0] || null;
+}
+
+function bucketFromApiRow(row = {}) {
+  return {
+    total: Number(row.totalSignals ?? row.total ?? row.signals ?? 0),
+    wins: Number(row.wins ?? 0),
+    losses: Number(row.losses ?? 0),
+    draws: Number(row.draws ?? 0),
+    scoreSum: Number(row.averageScore ?? row.avgScore ?? 0) * Number(row.totalSignals ?? row.total ?? 0),
+    confidenceSum: Number(row.averageConfidence ?? row.avgConfidence ?? row.confidence ?? 0) * Number(row.totalSignals ?? row.total ?? 0),
+    scored: Number(row.totalSignals ?? row.total ?? 0),
+    confidenceCount: Number(row.totalSignals ?? row.total ?? 0),
+    assets: {}, hours: {}, regimes: {}, strategies: {}
+  };
+}
+
+function getAnalyticsSignals() {
+  return [state.activeSignal, ...state.history].filter(Boolean).slice(0, MAX_HISTORY_ITEMS);
+}
+
+function renderAnalyticsWorkspace() {
+  const signals = getAnalyticsSignals();
+  const strategyRows = {};
+  const assetRows = {};
+  const hourRows = {};
+  const regimeRows = {};
+
+  signals.forEach((signal) => {
+    const strategy = getAnalyticsStrategy(signal);
+    const asset = getAnalyticsSymbol(signal);
+    const regime = getAnalyticsRegime(signal);
+    const hour = getAnalyticsHour(signal);
+    strategyRows[strategy] = strategyRows[strategy] || buildBucket();
+    assetRows[asset] = assetRows[asset] || buildBucket();
+    regimeRows[regime] = regimeRows[regime] || buildBucket();
+    addToBucket(strategyRows[strategy], signal);
+    addToBucket(assetRows[asset], signal);
+    addToBucket(regimeRows[regime], signal);
+    if (hour !== null) {
+      hourRows[hour] = hourRows[hour] || buildBucket();
+      addToBucketShallow(hourRows[hour], signal);
+    }
+  });
+
+  (state.performanceDashboard?.strategyPerformanceComparison?.strategies || []).forEach((row) => {
+    const key = String(row.strategyName || row.strategy || "").toLowerCase();
+    if (key && !strategyRows[key]) strategyRows[key] = bucketFromApiRow(row);
+  });
+
+  if (el.analyticsUpdated) el.analyticsUpdated.textContent = signals.length ? `${signals.length} registros carregados · ${sampleLabel(signals.length)}` : "dados vazios";
+
+  if (el.analyticsStrategyPerformance) {
+    const rows = ANALYTICS_STRATEGIES.map((name) => [name, strategyRows[name] || buildBucket()]);
+    el.analyticsStrategyPerformance.innerHTML = rows.map(([name, bucket]) => {
+      const bestAsset = bestEntry(bucket.assets);
+      const bestHour = bestEntry(bucket.hours);
+      const bestRegime = bestEntry(bucket.regimes);
+      return `<div class="analytics-row analytics-strategy-row"><strong>${escapeHtml(name)}</strong><span>${bucket.total}</span><span>${bucket.wins}/${bucket.losses}/${bucket.draws}</span><span>${formatPercent(bucketWinrate(bucket))}</span><span>${formatPercent(bucketAverage(bucket.scoreSum, bucket.scored))}</span><span>${formatPercent(bucketAverage(bucket.confidenceSum, bucket.confidenceCount))}</span><span>${bestAsset ? escapeHtml(bestAsset[0]) : "Não disponível"}</span><span>${bestHour ? `${String(bestHour[0]).padStart(2, "0")}h` : "Não disponível"}</span><span>${bestRegime ? escapeHtml(bestRegime[0]) : "Não disponível"}</span><em>${sampleLabel(bucket.total)}</em></div>`;
+    }).join("");
+  }
+
+  if (el.analyticsAssetPerformance) {
+    const rows = Object.entries(assetRows).sort(([, a], [, b]) => b.total - a.total).slice(0, 16);
+    el.analyticsAssetPerformance.innerHTML = rows.length ? rows.map(([asset, bucket]) => {
+      const bestStrategy = bestEntry(bucket.strategies);
+      const bestHour = bestEntry(bucket.hours);
+      const bestRegime = bestEntry(bucket.regimes);
+      return `<div class="analytics-row analytics-asset-row"><strong>${escapeHtml(asset)}</strong><span>${bucket.total}</span><span>${formatPercent(bucketWinrate(bucket))}</span><span>${bestStrategy ? escapeHtml(bestStrategy[0]) : "Não disponível"}</span><span>${bestHour ? `${String(bestHour[0]).padStart(2, "0")}h` : "Não disponível"}</span><span>${bestRegime ? escapeHtml(bestRegime[0]) : "Não disponível"}</span><em>${sampleLabel(bucket.total)}</em></div>`;
+    }).join("") : `<div class="history-empty">Sem estatística por ativo disponível.</div>`;
+  }
+
+  if (el.analyticsOperationalHeatmap) {
+    const rows = Object.entries(hourRows).sort(([a], [b]) => Number(a) - Number(b));
+    el.analyticsOperationalHeatmap.innerHTML = rows.length ? rows.map(([hour, bucket]) => `<div class="analytics-hour-cell" style="--heat:${Math.max(0.08, bucketWinrate(bucket) / 100)}"><strong>${String(hour).padStart(2, "0")}h</strong><span>${bucket.total} sinais</span><small>${formatPercent(bucketWinrate(bucket))} · conf. ${formatPercent(bucketAverage(bucket.confidenceSum, bucket.confidenceCount))}</small></div>`).join("") : `<div class="history-empty">Sem heatmap operacional disponível.</div>`;
+  }
+
+  if (el.analyticsRegimePerformance) {
+    const preferred = ["TRENDING", "LOW_VOLATILITY", "RANGE", "BREAKOUT", "PULLBACK", "LIQUIDITY_SWEEP"];
+    const keys = [...new Set([...preferred, ...Object.keys(regimeRows)])];
+    el.analyticsRegimePerformance.innerHTML = keys.map((regime) => {
+      const bucket = regimeRows[regime] || buildBucket();
+      return `<div class="analytics-mini-card"><strong>${escapeHtml(regime)}</strong><span>${bucket.total} sinais · ${formatPercent(bucketWinrate(bucket))}</span><small>${sampleLabel(bucket.total)}</small></div>`;
+    }).join("");
+  }
+
+  renderAnalyticsSignalBreakdown(state.activeSignal || signals[0] || {});
+  renderAnalyticsBlockers();
+}
+
+function extractSignalComponent(signal = {}, keys = []) {
+  for (const key of keys) {
+    const value = key.split(".").reduce((acc, part) => acc && acc[part], signal);
+    if (value !== undefined && value !== null && value !== "") return normalizeDisplayValue(value, "Não disponível");
+  }
+  return "Não disponível";
+}
+
+function renderAnalyticsSignalBreakdown(signal = {}) {
+  if (!el.analyticsSignalBreakdown) return;
+  const rows = [
+    ["Trend", ["breakdown.trend", "components.trend", "trendScore", "trend"]],
+    ["Momentum", ["breakdown.momentum", "components.momentum", "momentumScore", "momentum"]],
+    ["Liquidity", ["breakdown.liquidity", "components.liquidity", "liquidityScore", "liquidity"]],
+    ["Volatility", ["breakdown.volatility", "components.volatility", "volatilityScore", "volatility"]],
+    ["Historical", ["breakdown.historical", "components.historical", "historicalScore", "historical"]],
+    ["Predictive AI", ["breakdown.predictiveAI", "components.predictiveAI", "predictiveAiScore", "aiScore"]],
+    ["Final Score", ["finalScore", "final_score", "adjustedScore", "adjusted_score", "score"]]
+  ];
+  el.analyticsSignalBreakdown.innerHTML = rows.map(([label, keys]) => `<div class="analytics-breakdown-row"><span>${label}</span><strong>${escapeHtml(extractSignalComponent(signal, keys))}</strong></div>`).join("");
+}
+
+function renderAnalyticsBlockers() {
+  if (!el.analyticsBlockerStats) return;
+  const blocks = Array.isArray(state.filterAnalytics?.blocksByFilter) ? state.filterAnalytics.blocksByFilter : Array.isArray(state.filterAnalytics?.ranking) ? state.filterAnalytics.ranking : [];
+  const total = blocks.reduce((sum, item) => sum + Number(item.total || item.total_blocks || 0), 0);
+  el.analyticsBlockerStats.innerHTML = blocks.length ? blocks.slice(0, 10).map((item) => {
+    const count = Number(item.total || item.total_blocks || 0);
+    const pct = total ? (count / total) * 100 : Number(item.percent || item.percentage || 0);
+    return `<div class="analytics-mini-card"><strong>${escapeHtml(item.filterLabel || item.filter_label || item.filterName || item.filter_name || "blocker")}</strong><span>${count} · ${formatPercent(pct)}</span><small>${escapeHtml(item.affectedStrategies || item.affected_strategies || item.strategies || "estratégias não disponíveis")} · near activations ${escapeHtml(item.nearActivations || item.near_activations || item.watchlist || "Não disponível")}</small></div>`;
+  }).join("") : `<div class="history-empty">Sem bloqueios registrados.</div>`;
+}
+
 function renderPerformanceDashboard(data = {}) {
   if (!data || typeof data !== "object") data = {};
 
@@ -2005,6 +2252,7 @@ function renderPerformanceDashboard(data = {}) {
   renderHourStats(data.hourStats || data.winrateByHour || []);
   renderStrategyPerformanceComparison(data.strategyPerformanceComparison || state.analytics?.strategyPerformanceComparison || {});
   renderHealthScore(lastApproved || {}, state.engineSnapshot?.monitor || {});
+  renderAnalyticsWorkspace();
 }
 
 async function loadPerformanceDashboard() {
@@ -2125,6 +2373,7 @@ function renderFilterAnalytics(data = {}) {
     blocksByHour,
     recentBlocks
   });
+  renderAnalyticsBlockers();
 }
 
 async function loadFilterAnalytics() {
@@ -2232,6 +2481,7 @@ function renderHistory() {
 
   renderHistoryPagination();
   renderPremiumHistory();
+  renderAnalyticsWorkspace();
 }
 
 
@@ -2435,6 +2685,8 @@ function renderSignal(signal) {
   renderOperationalHeatmap(signal);
   renderAIInsights(signal);
   renderProLogs(signal);
+  renderAnalyticsSignalBreakdown(signal);
+  renderAnalyticsWorkspace();
   pushTimelineEvent(`${direction} ${signal.symbol || signal.asset || "ativo"} · score ${Math.round(confidence)}%`);
   scheduleEquityDraw();
 
@@ -2571,6 +2823,7 @@ async function bootPanel() {
   updateOperationalMonitor({});
   renderOperationalHeatmap();
   renderAIInsights();
+  renderAnalyticsWorkspace();
   drawEquityCurve();
   pushTimelineEvent("Centro de Operações IA sincronizado.");
   if (!state.proLogs.length) {
@@ -2729,6 +2982,7 @@ function setupDashboardTabs() {
       });
 
       if (target === "history") scheduleHistoryRender();
+      if (target === "analytics") renderAnalyticsWorkspace();
       if (target === "technical") {
         renderOperationalHeatmap();
         renderAIInsights();
@@ -2930,6 +3184,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateRealtimeMetrics();
   renderOperationalHeatmap();
   renderAIInsights();
+  renderAnalyticsWorkspace();
   drawEquityCurve();
   startChartLoop();
   startAIEngine();
