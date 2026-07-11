@@ -55,8 +55,11 @@ const state = {
   performanceDashboardTimer: null,
   entryWindow: {
     signalKey: null,
-    approvedAt: null,
-    timer: null
+    signalTime: null,
+    expiresAt: null,
+    timer: null,
+    phase: "waiting",
+    releaseAlertedFor: null
   }
 };
 
@@ -104,6 +107,7 @@ const el = {
   bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
   entryWindowTimer: document.getElementById("entryWindowTimer"),
+  entryWindowLabel: document.getElementById("entryWindowLabel"),
   entryWindowCountdown: document.getElementById("entryWindowCountdown"),
   entryWindowClassification: document.getElementById("entryWindowClassification"),
   entryWindowTimestamp: document.getElementById("entryWindowTimestamp"),
@@ -605,6 +609,7 @@ async function logout() {
     }
   } catch (_) {}
 
+  clearEntryWindow("waiting");
   clearSession();
   renderHistory();
   setLoginVisible(true);
@@ -885,81 +890,187 @@ function getActivationReason(signal = {}) {
 }
 
 
-function getSignalApprovedTimestamp(signal = {}) {
-  const raw = signal.approvedAt ||
-    signal.approved_at ||
-    signal.created_at ||
-    signal.createdAt ||
-    signal.timestamp ||
-    signal.updated_at ||
-    signal.updatedAt;
+function parseSignalDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
 
+  if (typeof value === "number") {
+    const normalized = value < 100000000000 ? value * 1000 : value;
+    const parsedNumber = new Date(normalized);
+    return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+  }
+
+  const raw = String(value).trim();
   if (!raw) return null;
 
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function getSignalTimingTimestamp(signal = {}) {
+  return parseSignalDate(
+    signal.approved_at ||
+    signal.approvedAt ||
+    signal.generated_at ||
+    signal.generatedAt ||
+    signal.created_at ||
+    signal.createdAt ||
+    signal.timestamp
+  );
+}
+
+function getSignalExpirationTimestamp(signal = {}) {
+  return parseSignalDate(
+    signal.expires_at ||
+    signal.expiresAt ||
+    signal.expiry ||
+    signal.expiration ||
+    signal.expiration_at ||
+    signal.expirationAt
+  );
+}
+
 function getEntryWindowSignalKey(signal = {}) {
-  return String(signal.id || [
+  const direction = String(signal.direction || signal.signal || "WAIT").toUpperCase();
+  const timing = getSignalTimingTimestamp(signal);
+  const expiresAt = getSignalExpirationTimestamp(signal);
+  const stableParts = [
+    signal.id || signal.signalId || signal.signal_id || signal.uuid || "no-id",
     signal.symbol || signal.asset || "ENGINE",
-    signal.signal || signal.direction || "WAIT",
-    signal.created_at || signal.createdAt || signal.timestamp || "live"
-  ].join(":"));
+    direction,
+    timing ? timing.toISOString() : signal.approved_at || signal.generated_at || signal.created_at || signal.timestamp || "no-timestamp",
+    expiresAt ? expiresAt.toISOString() : signal.expires_at || signal.expiry || signal.expiration || "no-expiry"
+  ];
+
+  return stableParts.map((part) => String(part || "--")).join(":");
 }
 
-function classifyEntryWindow(elapsedSeconds = 0) {
-  if (elapsedSeconds < 5) return { label: "🟡 Preparando entrada", tone: "preparing" };
-  if (elapsedSeconds < 60) return { label: "🟢 Entrada liberada", tone: "ideal" };
-  if (elapsedSeconds < 120) return { label: "🟡 Entrada aceitável", tone: "acceptable" };
-  return { label: "🔴 Entrada tardia", tone: "late" };
-}
+function setEntryWindowVisual(phase, label, counter, detail) {
+  const toneByPhase = {
+    waiting: "neutral",
+    unavailable: "neutral",
+    preparing: "preparing",
+    released: "ideal",
+    acceptable: "acceptable",
+    late: "late",
+    expired: "expired"
+  };
+  const tone = toneByPhase[phase] || "neutral";
 
-function formatEntryWindowCounter(elapsedSeconds = 0) {
-  const safeElapsed = Math.max(0, elapsedSeconds);
-  if (safeElapsed < 5) return String(5 - safeElapsed);
-  const releasedElapsed = safeElapsed - 5;
-  const minutes = Math.floor(releasedElapsed / 60);
-  const seconds = releasedElapsed % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function renderEntryWindowTimer() {
-  const approvedAt = state.entryWindow.approvedAt;
-
-  if (!approvedAt) {
-    setTextContent(el.entryWindowCountdown, "--");
-    setTextContent(el.entryWindowClassification, "--");
-    setTextContent(el.entryWindowTimestamp, "--");
-    if (el.entryWindowClassification) el.entryWindowClassification.className = "entry-window-classification neutral";
-    if (el.entryWindowTimer) el.entryWindowTimer.className = "entry-window-timer neutral";
-    return;
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - approvedAt.getTime()) / 1000));
-  const classification = classifyEntryWindow(elapsedSeconds);
-
-  setTextContent(el.entryWindowCountdown, formatEntryWindowCounter(elapsedSeconds));
-  setTextContent(el.entryWindowClassification, classification.label);
-  setTextContent(el.entryWindowTimestamp, `Aprovado ${formatTime(approvedAt)}`);
+  state.entryWindow.phase = phase;
+  setTextContent(el.entryWindowLabel, phase === "preparing" ? "PREPARANDO ENTRADA" : "ENTRY WINDOW");
+  setTextContent(el.entryWindowCountdown, counter);
+  setTextContent(el.entryWindowClassification, label);
+  setTextContent(el.entryWindowTimestamp, detail);
 
   if (el.entryWindowClassification) {
-    el.entryWindowClassification.className = `entry-window-classification ${classification.tone}`;
+    el.entryWindowClassification.className = `entry-window-classification ${tone}`;
   }
 
   if (el.entryWindowTimer) {
-    el.entryWindowTimer.className = `entry-window-timer ${classification.tone}`;
+    el.entryWindowTimer.className = `entry-window-timer ${tone}`;
+  }
+}
+
+function clearEntryWindow(phase = "waiting") {
+  if (state.entryWindow.timer) {
+    clearInterval(state.entryWindow.timer);
+  }
+
+  state.entryWindow.signalKey = null;
+  state.entryWindow.signalTime = null;
+  state.entryWindow.expiresAt = null;
+  state.entryWindow.timer = null;
+  state.entryWindow.releaseAlertedFor = null;
+
+  if (phase === "expired") {
+    setEntryWindowVisual("expired", "Sinal expirado", "--", "Janela operacional encerrada");
+    return;
+  }
+
+  setEntryWindowVisual("waiting", "Aguardando oportunidade", "--", "WAIT");
+}
+
+function classifyEntryWindow(elapsedSeconds = 0) {
+  if (elapsedSeconds < 5) return { phase: "preparing", label: "Preparando entrada" };
+  if (elapsedSeconds < 60) return { phase: "released", label: "Entrada liberada" };
+  if (elapsedSeconds < 120) return { phase: "acceptable", label: "Entrada aceitável" };
+  return { phase: "late", label: "Entrada tardia" };
+}
+
+function formatElapsedClock(elapsedSeconds = 0) {
+  const safeElapsed = Math.max(0, elapsedSeconds);
+  const minutes = Math.floor(safeElapsed / 60);
+  const seconds = safeElapsed % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatEntryPreparationCounter(elapsedSeconds = 0) {
+  return String(Math.max(1, 5 - Math.max(0, elapsedSeconds))).padStart(2, "0");
+}
+
+function renderEntryWindowTimer() {
+  const signalTime = state.entryWindow.signalTime;
+  const expiresAt = state.entryWindow.expiresAt;
+
+  if (!signalTime) {
+    setEntryWindowVisual("unavailable", "Timing indisponível", "--", "Timestamp do sinal ausente ou inválido");
+    return;
+  }
+
+  const now = Date.now();
+
+  if (expiresAt && now >= expiresAt.getTime()) {
+    clearEntryWindow("expired");
+    return;
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - signalTime.getTime()) / 1000));
+  const classification = classifyEntryWindow(elapsedSeconds);
+  const counter = classification.phase === "preparing"
+    ? formatEntryPreparationCounter(elapsedSeconds)
+    : formatElapsedClock(elapsedSeconds);
+  const detail = `Transcorrido desde geração: ${formatElapsedClock(elapsedSeconds)} · Sinal ${formatTime(signalTime)}`;
+
+  setEntryWindowVisual(classification.phase, classification.label, counter, detail);
+
+  if (classification.phase === "released" && state.entryWindow.releaseAlertedFor !== state.entryWindow.signalKey) {
+    state.entryWindow.releaseAlertedFor = state.entryWindow.signalKey;
   }
 }
 
 function registerEntryWindow(signal = {}) {
-  if (!isConfirmedOperationalSignal(signal)) return;
+  if (!isConfirmedOperationalSignal(signal)) {
+    clearEntryWindow("waiting");
+    return;
+  }
 
   const signalKey = getEntryWindowSignalKey(signal);
+  const signalTime = getSignalTimingTimestamp(signal);
+  const expiresAt = getSignalExpirationTimestamp(signal);
+
+  if (expiresAt && Date.now() >= expiresAt.getTime()) {
+    clearEntryWindow("expired");
+    return;
+  }
+
+  if (!signalTime) {
+    if (state.entryWindow.signalKey !== signalKey) {
+      clearEntryWindow("waiting");
+      state.entryWindow.signalKey = signalKey;
+    }
+    setEntryWindowVisual("unavailable", "Timing indisponível", "--", "Timestamp do sinal ausente ou inválido");
+    return;
+  }
 
   if (state.entryWindow.signalKey !== signalKey) {
+    clearEntryWindow("waiting");
     state.entryWindow.signalKey = signalKey;
-    state.entryWindow.approvedAt = new Date();
+    state.entryWindow.signalTime = signalTime;
+    state.entryWindow.expiresAt = expiresAt;
+  } else {
+    state.entryWindow.signalTime = signalTime;
+    state.entryWindow.expiresAt = expiresAt;
   }
 
   renderEntryWindowTimer();
@@ -976,7 +1087,11 @@ function updateCompactOperations(signal = {}, source = "engine") {
   const hasDisplaySignal = Boolean(signal.symbol || signal.asset || ["CALL", "PUT"].includes(direction));
   state.activeSignal = hasDisplaySignal ? signal : null;
   const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Preparando" : "Aguardando";
-  if (!blocked && isConfirmedOperationalSignal(signal)) registerEntryWindow(signal);
+  if (!blocked && isConfirmedOperationalSignal(signal)) {
+    registerEntryWindow(signal);
+  } else if (blocked || direction === "WAIT") {
+    clearEntryWindow("waiting");
+  }
   const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
   const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
   const release = entryStatus === "Preparando" ? "IA Online" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";

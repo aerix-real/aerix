@@ -144,12 +144,12 @@
               <div><span>Estratégia</span><strong id="bestStrategy">--</strong></div>
               <div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div>
             </div>
-            <div class="entry-window-timer neutral" id="entryWindowTimer" aria-label="Janela de entrada do sinal atual">
+            <div class="entry-window-timer neutral" id="entryWindowTimer" aria-label="Janela de entrada do sinal atual" aria-live="polite" aria-atomic="true">
               <div>
-                <span>ENTRY WINDOW</span>
+                <span id="entryWindowLabel">ENTRY WINDOW</span>
                 <strong id="entryWindowCountdown">--</strong>
               </div>
-              <div class="entry-window-classification neutral" id="entryWindowClassification">--</div>
+              <div class="entry-window-classification neutral" id="entryWindowClassification">Aguardando oportunidade</div>
               <small id="entryWindowTimestamp">--</small>
             </div>
           </article>
