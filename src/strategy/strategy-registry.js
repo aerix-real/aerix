@@ -159,10 +159,46 @@ function getEnabledStrategyDefinitions() {
     .sort((left, right) => left.priority - right.priority);
 }
 
-function getStrategyModeWeights(mode = "balanced") {
+const CRYPTO_MODE_WEIGHTS = Object.freeze({
+  conservative: Object.freeze({
+    institutional_pullback: 1.34,
+    liquidity_sweep_false_breakout: 1.18,
+    institutional_first_retest: 1.12,
+    trend_continuation: 1.08,
+    breakout: 0.94,
+    momentum: 0.86,
+    reversal: 0.7,
+    pullback: 0.98
+  }),
+  balanced: Object.freeze({
+    institutional_pullback: 1.28,
+    liquidity_sweep_false_breakout: 1.22,
+    institutional_first_retest: 1.14,
+    trend_continuation: 1.06,
+    breakout: 1,
+    momentum: 0.96,
+    reversal: 0.78,
+    pullback: 1
+  }),
+  aggressive: Object.freeze({
+    institutional_pullback: 1.18,
+    liquidity_sweep_false_breakout: 1.24,
+    institutional_first_retest: 1.1,
+    trend_continuation: 1.04,
+    breakout: 1.06,
+    momentum: 1.08,
+    reversal: 0.86,
+    pullback: 0.96
+  })
+});
+
+function getStrategyModeWeights(mode = "balanced", marketMode = process.env.MARKET_MODE || "FOREX") {
+  const normalizedMarketMode = String(marketMode || "FOREX").toUpperCase();
+  const cryptoWeights = normalizedMarketMode === "HEZILEX_CRYPTO" ? CRYPTO_MODE_WEIGHTS[mode] || CRYPTO_MODE_WEIGHTS.balanced : null;
+
   return STRATEGY_REGISTRY.reduce((weights, strategy) => ({
     ...weights,
-    [strategy.strategyName]: Number(strategy.modeWeights?.[mode] ?? 1)
+    [strategy.strategyName]: Number(cryptoWeights?.[strategy.strategyName] ?? strategy.modeWeights?.[mode] ?? 1)
   }), {});
 }
 

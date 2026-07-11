@@ -138,11 +138,12 @@ async function insertSignal(data) {
       minimum_score,
       adjusted_score,
       historical_strategy_weight,
-      historical_adjustment
+      historical_adjustment,
+      meta
     )
     VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31
+      $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
     )
     RETURNING *;
   `;
@@ -180,7 +181,14 @@ async function insertSignal(data) {
     normalizeNumber(data.minimum_score ?? data.minimumScore, 0),
     normalizeNumber(data.adjusted_score ?? data.adjustedScore ?? data.final_score ?? data.finalScore, 0),
     normalizeNumber(data.historical_strategy_weight ?? data.historicalStrategyWeight, 0),
-    normalizeNumber(data.historical_adjustment ?? data.historicalAdjustment, 0)
+    normalizeNumber(data.historical_adjustment ?? data.historicalAdjustment, 0),
+    {
+      ...(data.meta || {}),
+      ...(data.display_name || data.displayName ? { display_name: data.display_name || data.displayName } : {}),
+      ...(data.provider_symbol || data.providerSymbol ? { provider_symbol: data.provider_symbol || data.providerSymbol } : {}),
+      ...(data.market_mode || data.marketMode ? { market_mode: data.market_mode || data.marketMode } : {}),
+      ...(data.timeframe ? { timeframe: data.timeframe } : {})
+    }
   ];
 
   const result = await db.query(query, values);

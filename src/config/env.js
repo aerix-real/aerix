@@ -67,6 +67,16 @@ const env = {
   },
 
   market: {
+    mode: process.env.MARKET_MODE || "FOREX",
+    cryptoProvider: process.env.CRYPTO_PROVIDER || "",
+    cryptoMaxSymbolsPerCycle: toNumber(process.env.CRYPTO_MAX_SYMBOLS_PER_CYCLE, 5),
+    cryptoMinVolume: toNumber(process.env.CRYPTO_MIN_VOLUME, 0),
+    cryptoMaxSpread: toNumber(process.env.CRYPTO_MAX_SPREAD, 999),
+    cryptoMinCandles: toNumber(process.env.CRYPTO_MIN_CANDLES, 120),
+    cryptoTimeframes: String(process.env.CRYPTO_TIMEFRAMES || "5min,15min,1h")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
     symbols: String(process.env.SYMBOLS || "EUR/USD,GBP/USD,USD/JPY")
       .split(",")
       .map((item) => item.trim())
