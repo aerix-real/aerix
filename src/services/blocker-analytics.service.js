@@ -24,7 +24,13 @@ const BLOCKER_COUNTERS = [
   "closeBackInsideRange",
   "rejectionWickConfirmed",
   "continuationFailureConfirmed",
-  "tradableLocalVolatility"
+  "tradableLocalVolatility",
+  "candlestickPatternMissing",
+  "confirmationCandleMissing",
+  "patternDirectionConflict",
+  "weakRejectionWick",
+  "invalidPatternContext",
+  "candleNotClosed"
 ];
 
 const COUNTER_ALIASES = {
@@ -143,6 +149,17 @@ function emitReport() {
   }));
 }
 
+function recordCandlestickEvents(events = []) {
+  (Array.isArray(events) ? events : []).forEach((event) => incrementBlocker(event));
+
+  return {
+    cycleCount: state.cycleCount,
+    blockerStatistics: { ...state.counters, Outros: state.others },
+    nearActivationCount: state.nearActivationCount,
+    closestBlocker: state.closestBlocker
+  };
+}
+
 function recordFinalGates(finalSignal = {}) {
   (finalSignal.filterBlocks || []).forEach((block) => incrementBlocker(block.filterName || block.reason));
   if (finalSignal.predictiveAi?.blocked || finalSignal.preCheck?.blocked) incrementBlocker("predictiveGate");
@@ -185,5 +202,6 @@ function recordCycle({ candidates = [], context = {}, finalSignal = {} } = {}) {
 module.exports = {
   BLOCKER_COUNTERS,
   recordCycle,
+  recordCandlestickEvents,
   recordFinalGates
 };
