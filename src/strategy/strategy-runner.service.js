@@ -4,6 +4,7 @@ const {
 } = require("./index");
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
+const { analyzeCandlestickPatterns, emitCandlestickPatternAudit } = require("../services/candlestick-pattern.service");
 
 function normalizeMode(mode = "balanced") {
   const normalized = String(mode || "balanced").toLowerCase();
@@ -1112,6 +1113,31 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     ? (normalizeMode(mode) === "aggressive" ? 94 : 92)
     : 99;
   confidence = Math.min(fallbackConfidenceCap, Math.max(0, Number(confidence.toFixed(2))));
+  const candlestickAnalysis = analyzeCandlestickPatterns({
+    candles: snapshot?.timeframes?.m5?.candles || [],
+    context: {
+      symbol: snapshot?.symbol || snapshot?.asset || null,
+      marketRegime: effectiveMarketRegime,
+      mtf,
+      trendContext: mtf,
+      volatility: Number(snapshot?.timeframes?.m5?.volatilityPercent || 0),
+      lowVolatility: marketValidation.isLowVolatility,
+      supportResistanceContext: best.context?.supportResistance || best.context?.supportResistanceContext || null,
+      liquidityContext: best.context?.liquidity || best.context?.liquidityContext || null,
+      structureContext: best.context?.structure || best.context?.structureContext || null,
+      retracementDetected: best.context?.retracementDetected,
+      structurePreserved: best.context?.structurePreserved,
+      momentumReturning: best.context?.momentumReturning,
+      firstRetestDetected: best.context?.firstRetestDetected,
+      afterLiquiditySweep: best.context?.afterLiquiditySweep || best.context?.sweepDetected
+    },
+    strategy: { name: best.name, direction: best.direction, rawScore: confidence },
+    mode: normalizeMode(mode),
+    timeframe: "m5"
+  });
+  emitCandlestickPatternAudit({ ...candlestickAnalysis.audit, finalDecision: candlestickAnalysis.conflicts.hardBlock ? "hard_block" : "strategy_score_adjusted" });
+  blockerAnalytics.recordCandlestickEvents(candlestickAnalysis.blockerAnalytics);
+  confidence = Math.min(fallbackConfidenceCap, Math.max(0, Number((confidence + candlestickAnalysis.candlestickAdjustment).toFixed(2))));
   const dynamicScoreGap = effectiveDynamicMinScore - confidence;
   const dynamicScoreTolerance = getDynamicScoreTolerance(mode);
   const isCriticalDynamicGap = dynamicScoreGap > dynamicScoreTolerance;
@@ -1197,6 +1223,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       `Confirmação: ${sameDirection.length} estratégias`,
       ...marketValidation.penaltyReasons,
       ...(fallbackSignal?.eligible ? ["Classificação FALLBACK_SIGNAL liberada por confluência forte."] : []),
+      ...(candlestickAnalysis.detectedPatterns.length ? [`Confirmação de candles: ${candlestickAnalysis.dominantPatternDirection} (${candlestickAnalysis.candlestickConfirmationScore})`] : []),
       ...dynamicPenaltyReasons
     ]),
     blocks: [],
@@ -1211,7 +1238,15 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       penaltyScore: marketValidation.penaltyScore + (dynamicScoreGap > 0 ? Number(dynamicScoreGap.toFixed(2)) : 0),
       penaltyReasons: [...marketValidation.penaltyReasons, ...dynamicPenaltyReasons],
       hardBlocks: [],
-      fallbackSignal
+      fallbackSignal,
+      candlestick: {
+        rawStrategyScore: candlestickAnalysis.rawStrategyScore,
+        candlestickConfirmationScore: candlestickAnalysis.candlestickConfirmationScore,
+        candlestickAdjustment: candlestickAnalysis.candlestickAdjustment,
+        scoreAfterCandlestickAdjustment: candlestickAnalysis.scoreAfterCandlestickAdjustment,
+        dominantPatternDirection: candlestickAnalysis.dominantPatternDirection,
+        conflicts: candlestickAnalysis.conflicts
+      }
     },
     metrics: {
       balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
@@ -1219,7 +1254,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         evaluated,
         best,
         systemOutcome: "released_to_signal"
-      })
+      }),
+      candlestickPatternIntelligence: candlestickAnalysis
     }
   };
 
