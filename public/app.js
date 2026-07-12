@@ -109,6 +109,8 @@ const el = {
   entryWindowClassification: document.getElementById("entryWindowClassification"),
   entryWindowTimestamp: document.getElementById("entryWindowTimestamp"),
   marketRegime: document.getElementById("marketRegime"),
+  marketStructureHeroLine: document.getElementById("marketStructureHeroLine"),
+  marketStructureTechnical: document.getElementById("marketStructureTechnical"),
   techStrategy: document.getElementById("techStrategy"),
   techVolatility: document.getElementById("techVolatility"),
   techDynamicThresholds: document.getElementById("techDynamicThresholds"),
@@ -1954,6 +1956,61 @@ function renderHealthScore(signal = {}, monitor = state.engineSnapshot?.monitor 
   }
 }
 
+
+function getPrimaryMarketStructure(signal = {}) {
+  const structure = signal.marketStructure || signal.market_structure || {};
+  return structure.m5Structure || structure.m15Structure || structure.h1Structure || structure;
+}
+
+function buildMarketStructureHeroLine(signal = {}) {
+  const primary = getPrimaryMarketStructure(signal);
+  const mtf = signal.marketStructure || signal.market_structure || {};
+  if (primary?.firstRetest?.isFirstRetest || mtf.operationalContext === "FIRST_RETEST") return "Contexto: Primeiro reteste";
+  if ((primary?.liquiditySweeps || []).length || mtf.operationalContext === "LIQUIDITY_SWEEP") return "Contexto: Varredura de liquidez";
+  if (primary?.structuralTrend === "BULLISH") return "Estrutura: Alta — HH/HL";
+  if (primary?.structuralTrend === "BEARISH") return "Estrutura: Baixa — LH/LL";
+  if (primary?.structuralTrend === "RANGE") return "Estrutura: Lateral";
+  return "Estrutura: --";
+}
+
+function buildMarketStructureReasons(signal = {}) {
+  const primary = getPrimaryMarketStructure(signal);
+  const reasons = [];
+  if (primary?.structurePreserved?.CALL && getOperationalDirection(signal) === "CALL") reasons.push("✓ Estrutura bullish preservada");
+  if (primary?.structurePreserved?.PUT && getOperationalDirection(signal) === "PUT") reasons.push("✓ Estrutura bearish preservada");
+  if (primary?.bos?.detected) reasons.push("✓ BOS confirmado");
+  if (primary?.firstRetest?.isFirstRetest) reasons.push("✓ Primeiro reteste validado");
+  if ((primary?.liquiditySweeps || []).length) reasons.push("✓ Liquidez varrida");
+  if ((primary?.swingLows || []).some((point) => point.classification === "HL")) reasons.push("✓ Fundo mais alto confirmado");
+  if ((primary?.swingHighs || []).some((point) => point.classification === "LH")) reasons.push("✓ Topo mais baixo confirmado");
+  return reasons;
+}
+
+function renderMarketStructureTechnical(signal = {}) {
+  if (!el.marketStructureTechnical) return;
+  const structure = signal.marketStructure || signal.market_structure || {};
+  const primary = getPrimaryMarketStructure(signal);
+  if (!primary || (!primary.structuralTrend && !structure.h1Structure)) {
+    el.marketStructureTechnical.innerHTML = `<div class="history-empty">Sem leitura estrutural disponível.</div>`;
+    return;
+  }
+  const formatPoint = (point) => point ? `${point.classification || "SW"} ${Number(point.price || 0).toFixed(5)}` : "--";
+  const rows = [
+    ["H1/M15/M5", structure.structuralAlignment || "--"],
+    ["Direção", structure.dominantDirection || primary.dominantDirection || "--"],
+    ["Contexto", structure.operationalContext || primary.structureState || "--"],
+    ["Últimos topos", (primary.swingHighs || []).slice(-3).map(formatPoint).join(" · ") || "--"],
+    ["Últimos fundos", (primary.swingLows || []).slice(-3).map(formatPoint).join(" · ") || "--"],
+    ["BOS", primary.bos?.detected ? `${primary.bos.direction} @ ${primary.bos.brokenLevel}` : "Não confirmado"],
+    ["MSS", primary.mss?.detected ? `${primary.mss.probableNewTrend} @ ${primary.mss.brokenStructureLevel}` : "Não confirmado"],
+    ["Liquidez", `${(primary.liquidityLevels || []).length} níveis / ${(primary.liquiditySweeps || []).length} sweeps`],
+    ["First Retest", primary.firstRetest?.detected ? `${primary.firstRetest.retestCount} retorno(s)` : "Não detectado"],
+    ["Score estrutural", String(primary.marketStructureScore ?? structure.marketStructureScore ?? "--")],
+    ["Conflitos", structure.conflict ? "Sim" : "Não"]
+  ];
+  el.marketStructureTechnical.innerHTML = rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+}
+
 function buildWhySignal(signal = {}) {
   const direction = getOperationalDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
   const score = getOperationalScore(signal);
@@ -1961,6 +2018,7 @@ function buildWhySignal(signal = {}) {
   const aiApproved = signal.aiApproved !== false && signal.ai_approved !== false && !signal.blocked;
   const reasons = [];
 
+  reasons.push(...buildMarketStructureReasons(signal));
   if (direction !== "WAIT") reasons.push("✓ Tendência alinhada");
   if (score >= 70) reasons.push("✓ Score aprovado");
   if (strategy && strategy !== "--") reasons.push("✓ Estratégia aprovada");
@@ -2638,6 +2696,8 @@ function renderSignal(signal) {
       "Sinal detectado com leitura operacional.";
   }
   setTextContent(el.bestScore, `${confidence}%`);
+  setTextContent(el.marketStructureHeroLine, buildMarketStructureHeroLine(signal));
+  renderMarketStructureTechnical(signal);
   updateCompactOperations(signal, "signal");
 
   let card = state.domCache.get("signalCard");

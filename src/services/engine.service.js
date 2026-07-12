@@ -141,6 +141,8 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     antiLoss: strategyResult.antiLoss || {},
     preCheck: strategyResult.preCheck || {},
     predictiveAi: strategyResult.predictiveAi || null,
+    marketStructure: strategyResult.marketStructure || null,
+    marketStructureScoring: strategyResult.marketStructureScoring || null,
     preSignalScore: strategyResult.preSignalScore || 0,
     blocked: strategyResult.blocked || false,
     blockReason: strategyResult.blockReason || null,
@@ -181,6 +183,8 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       antiLoss: strategyResult.antiLoss || {},
       preCheck: strategyResult.preCheck || {},
       predictiveAi: strategyResult.predictiveAi || null,
+      marketStructure: strategyResult.marketStructure || null,
+      marketStructureScoring: strategyResult.marketStructureScoring || null,
       preSignalScore: strategyResult.preSignalScore || 0,
       market: {
         h1: snapshot.timeframes.h1,

@@ -37,6 +37,68 @@
     return "Observação";
   }
 
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function getPrimaryStructure(signal = {}) {
+    const structure = signal.marketStructure || {};
+    return structure.m5Structure || structure.m15Structure || structure.h1Structure || structure;
+  }
+
+  function buildMarketStructureHeroLine(signal = {}) {
+    const primary = getPrimaryStructure(signal);
+    const mtf = signal.marketStructure || {};
+    if (primary?.firstRetest?.isFirstRetest || mtf.operationalContext === "FIRST_RETEST") return "Contexto: Primeiro reteste";
+    if ((primary?.liquiditySweeps || []).length || mtf.operationalContext === "LIQUIDITY_SWEEP") return "Contexto: Varredura de liquidez";
+    if (primary?.structuralTrend === "BULLISH") return "Estrutura: Alta — HH/HL";
+    if (primary?.structuralTrend === "BEARISH") return "Estrutura: Baixa — LH/LL";
+    if (primary?.structuralTrend === "RANGE") return "Estrutura: Lateral";
+    return "Estrutura: --";
+  }
+
+  function buildStructureReasons(signal = {}) {
+    const primary = getPrimaryStructure(signal);
+    const reasons = [];
+    if (primary?.structurePreserved?.CALL && signal.signal === "CALL") reasons.push("Estrutura bullish preservada");
+    if (primary?.structurePreserved?.PUT && signal.signal === "PUT") reasons.push("Estrutura bearish preservada");
+    if (primary?.bos?.detected) reasons.push("BOS confirmado");
+    if (primary?.firstRetest?.isFirstRetest) reasons.push("Primeiro reteste validado");
+    if ((primary?.liquiditySweeps || []).length) reasons.push("Liquidez varrida");
+    if ((primary?.swingLows || []).some((point) => point.classification === "HL")) reasons.push("Fundo mais alto confirmado");
+    if ((primary?.swingHighs || []).some((point) => point.classification === "LH")) reasons.push("Topo mais baixo confirmado");
+    return reasons.slice(0, 4);
+  }
+
+  function renderMarketStructureTechnical(signal = {}) {
+    const structure = signal.marketStructure || {};
+    const primary = getPrimaryStructure(signal);
+    if (!primary || (!primary.structuralTrend && !structure.h1Structure)) {
+      return `<div class="mini-empty">Sem leitura estrutural disponível.</div>`;
+    }
+    const formatPoint = (point) => point ? `${point.classification || "SW"} ${Number(point.price || 0).toFixed(5)}` : "--";
+    const rows = [
+      ["H1/M15/M5", structure.structuralAlignment || "--"],
+      ["Direção dominante", structure.dominantDirection || primary.dominantDirection || "--"],
+      ["Contexto", structure.operationalContext || primary.structureState || "--"],
+      ["Topo atual", formatPoint(primary.lastSwingHigh)],
+      ["Fundo atual", formatPoint(primary.lastSwingLow)],
+      ["BOS", primary.bos?.detected ? `${primary.bos.direction} @ ${primary.bos.brokenLevel}` : "Não confirmado"],
+      ["MSS", primary.mss?.detected ? `${primary.mss.probableNewTrend} @ ${primary.mss.brokenStructureLevel}` : "Não confirmado"],
+      ["Liquidez", `${(primary.liquidityLevels || []).length} níveis / ${(primary.liquiditySweeps || []).length} sweeps`],
+      ["First Retest", primary.firstRetest?.detected ? `${primary.firstRetest.retestCount} retorno(s)` : "Não detectado"],
+      ["Score estrutural", String(primary.marketStructureScore ?? structure.marketStructureScore ?? "--")],
+      ["Conflito", structure.conflict ? "Sim" : "Não"]
+    ];
+    return rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+  }
+
   function buildMarketStatus(bestOpportunity, engineRunning) {
     if (!engineRunning) return "Engine parada";
     if (!bestOpportunity) return "Monitorando mercado";
@@ -142,8 +204,8 @@
       return `<div class="mini-empty">Sem justificativas disponíveis no momento.</div>`;
     }
 
-    return reasons
-      .slice(0, 5)
+    return [...buildStructureReasons(window.__aerixBestSignal || {}), ...reasons]
+      .slice(0, 4)
       .map((reason) => `<div class="reason-item">${reason}</div>`)
       .join("");
   }
@@ -218,6 +280,7 @@
     if (!data) return;
 
     const best = resolvePrimaryDisplaySignal(data);
+    window.__aerixBestSignal = best || {};
     const connection = data.connection || {};
     const userPreferences = data.user?.preferences || {};
     const stats = data.analytics?.historyStats || {};
@@ -230,6 +293,7 @@
     setText("heroConfidence", formatConfidence(best?.confidence || 0));
     setText("heroPriority", buildPriority(best?.confidence || 0));
     setText("heroMode", userPreferences.mode_config?.label || "Equilibrado");
+    setText("marketStructureHeroLine", buildMarketStructureHeroLine(best || {}));
     setText("lastCycleAt", formatTime(connection.lastCycleAt));
     setText(
       "rateLimitInfo",
@@ -243,6 +307,7 @@
     setText("avgConfidence", formatConfidence(stats.avgConfidence || 0));
 
     setHTML("reasonsList", renderReasons(best?.reasons || []));
+    setHTML("marketStructureTechnical", renderMarketStructureTechnical(best || {}));
     setHTML("rankingList", renderRanking(data.ranking || []));
     setHTML("historyList", renderHistory(data.history || []));
 

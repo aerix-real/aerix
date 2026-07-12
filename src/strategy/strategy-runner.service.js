@@ -4,6 +4,11 @@ const {
 } = require("./index");
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
+const {
+  analyzeMarketStructure,
+  analyzeMultiTimeframeStructure,
+  applyMarketStructureScore
+} = require("../services/market-structure.service");
 
 function normalizeMode(mode = "balanced") {
   const normalized = String(mode || "balanced").toLowerCase();
@@ -929,6 +934,38 @@ function emitBalancedCandidatesReleasedMetric(payload) {
 
 function runStrategies({ snapshot, mode = "balanced" }) {
   const rules = getModeRules(mode);
+  const normalizedMode = normalizeMode(mode);
+  const h1Structure = analyzeMarketStructure({
+    candles: snapshot?.timeframes?.h1?.candles || [],
+    timeframe: "h1",
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    mode: normalizedMode,
+    volatility: snapshot?.timeframes?.h1?.volatilityPercent || null
+  });
+  const m15Structure = analyzeMarketStructure({
+    candles: snapshot?.timeframes?.m15?.candles || [],
+    timeframe: "m15",
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    mode: normalizedMode,
+    volatility: snapshot?.timeframes?.m15?.volatilityPercent || null
+  });
+  const m5Structure = analyzeMarketStructure({
+    candles: snapshot?.timeframes?.m5?.candles || [],
+    timeframe: "m5",
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    mode: normalizedMode,
+    volatility: snapshot?.timeframes?.m5?.volatilityPercent || null
+  });
+  const marketStructure = analyzeMultiTimeframeStructure({
+    h1: h1Structure,
+    m15: m15Structure,
+    m5: m5Structure
+  });
+  marketStructure.audit.forEach((entry) => console.log(JSON.stringify({
+    ...entry,
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    operationalMode: normalizedMode
+  })));
   const mtf = buildMtfContext(snapshot);
   const marketRegime = classifyMarketRegime(snapshot, mtf);
   const dynamicMinScore = getDynamicMinScore(rules, marketRegime, mode);
@@ -938,7 +975,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     m15: snapshot?.timeframes?.m15?.candles || [],
     h1: snapshot?.timeframes?.h1?.candles || [],
     mtf,
-    mode: normalizeMode(mode)
+    mode: normalizedMode,
+    marketStructure
   };
 
   const strategies = createEnabledStrategies();
@@ -1048,6 +1086,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
           ? marketValidation.blocks
           : ["Nenhuma estratégia válida encontrada."],
       strategies: evaluated,
+      marketStructure,
       strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
       mtf,
       marketRegime: effectiveMarketRegime,
@@ -1102,7 +1141,25 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     (item) => item.direction === best.direction
   );
 
-  let confidence = best.weightedScore;
+  const structureScoreAudit = applyMarketStructureScore({
+    rawStrategyScore: best.weightedScore,
+    strategyDirection: best.direction,
+    marketStructure: marketStructure.m5Structure || marketStructure.m15Structure || marketStructure.h1Structure,
+    mode: normalizedMode
+  });
+  console.log(JSON.stringify({
+    scope: "aerix_market_structure_audit",
+    event: "structure_score_applied",
+    timestamp: new Date().toISOString(),
+    symbol: snapshot?.symbol || snapshot?.asset || null,
+    operationalMode: normalizedMode,
+    rawStrategyScore: structureScoreAudit.rawStrategyScore,
+    marketStructureScore: structureScoreAudit.marketStructureScore,
+    marketStructureAdjustment: structureScoreAudit.marketStructureAdjustment,
+    scoreAfterStructureAdjustment: structureScoreAudit.scoreAfterStructureAdjustment
+  }));
+
+  let confidence = structureScoreAudit.scoreAfterStructureAdjustment;
 
   if (mtf.isAligned) confidence += 6;
   confidence += Math.min(10, (sameDirection.length - 1) * 3);
@@ -1131,6 +1188,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       ]),
       blocks: [`Score ${confidence} abaixo do mínimo dinâmico crítico ${effectiveDynamicMinScore}.`],
       strategies: evaluated,
+      marketStructure,
       strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
       mtf,
       marketRegime: effectiveMarketRegime,
@@ -1201,6 +1259,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     ]),
     blocks: [],
     strategies: evaluated,
+    marketStructure,
+    marketStructureScoring: structureScoreAudit,
     strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
     mtf,
     marketRegime: effectiveMarketRegime,
