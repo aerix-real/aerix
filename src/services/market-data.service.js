@@ -5,9 +5,9 @@ const signalRepository = require("../repositories/signal.repository");
 const API_KEY = process.env.TWELVE_DATA_API_KEY;
 const BASE_URL = "https://api.twelvedata.com";
 
-// =========================
+// -------------------------
 // 🔥 CONTROLE GLOBAL
-// =========================
+// -------------------------
 
 let DAILY_LIMIT_REACHED = false;
 let lastStatsCache = null;
@@ -355,9 +355,9 @@ function buildTwelveDataConsumptionReport(options = {}) {
   };
 }
 
-// =========================
+// -------------------------
 // 🧠 OTIMIZAÇÃO DE STATS
-// =========================
+// -------------------------
 
 async function getCachedStats() {
   const now = Date.now();
@@ -372,9 +372,9 @@ async function getCachedStats() {
   return lastStatsCache;
 }
 
-// =========================
+// -------------------------
 // 🧠 IA OFFLINE INTELIGENTE
-// =========================
+// -------------------------
 
 async function generateSmartFakeCandles(symbol, outputsize = 120) {
   const stats = await getCachedStats();
@@ -410,9 +410,9 @@ async function generateSmartFakeCandles(symbol, outputsize = 120) {
   return candles;
 }
 
-// =========================
+// -------------------------
 // 🔥 FALLBACK CONTROL
-// =========================
+// -------------------------
 
 function markDailyLimit(apiResponse = null) {
   DAILY_LIMIT_REACHED = true;
@@ -435,9 +435,9 @@ function shouldUseFallback() {
   );
 }
 
-// =========================
+// -------------------------
 // 🚀 FETCH PRINCIPAL
-// =========================
+// -------------------------
 
 async function resolveTimeSeriesRequest(symbol, normalized, interval = "5min", outputsize = 120, cacheKey) {
   const cacheTtlMs = getTimeframeCacheTtlMs(interval);
@@ -698,9 +698,9 @@ async function fetchTimeSeries(symbol, interval = "5min", outputsize = 120) {
   return request;
 }
 
-// =========================
+// -------------------------
 // 🧠 SNAPSHOT HELPERS
-// =========================
+// -------------------------
 
 function safeGet(candles) {
   if (!candles || candles.length === 0) return null;
@@ -742,9 +742,9 @@ function getVolatilityPercent(candles) {
   return total / candles.length;
 }
 
-// =========================
+// -------------------------
 // 🚀 SNAPSHOT FINAL
-// =========================
+// -------------------------
 
 async function resolveMarketSnapshot(symbol, normalized, cacheKey) {
   const snapshotStartedAt = Date.now();
@@ -902,9 +902,9 @@ async function getMarketSnapshot(symbol) {
   return request;
 }
 
-// =========================
+// -------------------------
 // 🔧 UTIL
-// =========================
+// -------------------------
 
 function normalizeSymbol(symbol) {
   const safeSymbol = String(symbol || "").trim();

@@ -5,6 +5,7 @@ const {
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
 const { analyzeCandlestickPatterns, emitCandlestickPatternAudit } = require("../services/candlestick-pattern.service");
+const MarketStructureService = require("../services/market-structure.service");
 
 function normalizeMode(mode = "balanced") {
   const normalized = String(mode || "balanced").toLowerCase();
@@ -595,7 +596,7 @@ function validateMarketConditions(snapshot, mtf, mode = "balanced", candidate = 
 }
 
 
-function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinScore, evaluated, validStrategies, best, marketValidation, confidence, result, absenceReason, mode }) {
+function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinScore, evaluated, validStrategies, best, marketValidation, marketStructure, confidence, result, absenceReason, mode }) {
   const h1 = snapshot?.timeframes?.h1 || {};
   const m15 = snapshot?.timeframes?.m15 || {};
   const m5 = snapshot?.timeframes?.m5 || {};
@@ -637,6 +638,7 @@ function buildStrategyAuditSnapshot({ snapshot, mtf, marketRegime, dynamicMinSco
     },
     volatility: Number(m5.volatilityPercent || 0),
     volatilityAudit: marketValidation?.volatilityAudit || null,
+    marketStructure: marketStructure || result?.marketStructure || null,
     marketRegime,
     provider: snapshot?.dataQuality?.provider || null,
     providerStatus: snapshot?.dataQuality?.providerStatus || null,
@@ -976,6 +978,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   }));
 
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
+  const marketStructure = MarketStructureService.analyze(snapshot, best || { signal: "WAIT" });
+  console.log(JSON.stringify(marketStructure.audit));
   const blockerAnalyticsContext = {
     symbol: snapshot?.symbol || snapshot?.asset || null,
     mode: normalizeMode(mode),
@@ -1053,17 +1057,20 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       mtf,
       marketRegime: effectiveMarketRegime,
       dynamicMinScore: effectiveDynamicMinScore,
+      marketStructure,
       operationalTuning: {
         mode: normalizeMode(mode),
         targetApprovalRate: rules.targetApprovalRate,
         penaltyScore: marketValidation.penaltyScore,
         penaltyReasons: marketValidation.penaltyReasons,
+        marketStructureAdjustment: marketStructure.marketStructureAdjustment,
         hardBlocks: fallbackGraceBlocked
           ? ["Fallback sem confluência mínima para FALLBACK_SIGNAL."]
           : marketValidation.blocks,
         fallbackSignal
       },
       metrics: {
+        marketStructure,
         balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
           mode,
           evaluated,
@@ -1084,6 +1091,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       validStrategies,
       best,
       marketValidation,
+      marketStructure,
       confidence: 0,
       result,
       absenceReason,
@@ -1108,6 +1116,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   if (mtf.isAligned) confidence += 6;
   confidence += Math.min(10, (sameDirection.length - 1) * 3);
   confidence -= marketValidation.penaltyScore;
+  confidence += marketStructure.marketStructureAdjustment;
 
   const fallbackConfidenceCap = fallbackSignal?.eligible
     ? (normalizeMode(mode) === "aggressive" ? 94 : 92)
@@ -1161,6 +1170,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       mtf,
       marketRegime: effectiveMarketRegime,
       dynamicMinScore: effectiveDynamicMinScore,
+      marketStructure,
       operationalTuning: {
         mode: normalizeMode(mode),
         targetApprovalRate: rules.targetApprovalRate,
@@ -1169,6 +1179,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         hardBlocks: []
       },
       metrics: {
+        marketStructure,
         balancedCandidatesReleased: buildBalancedCandidatesReleasedMetric({
           mode,
           evaluated,
@@ -1189,6 +1200,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       validStrategies,
       best,
       marketValidation,
+      marketStructure,
       confidence,
       result,
       absenceReason,
@@ -1224,6 +1236,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
       ...marketValidation.penaltyReasons,
       ...(fallbackSignal?.eligible ? ["Classificação FALLBACK_SIGNAL liberada por confluência forte."] : []),
       ...(candlestickAnalysis.detectedPatterns.length ? [`Confirmação de candles: ${candlestickAnalysis.dominantPatternDirection} (${candlestickAnalysis.candlestickConfirmationScore})`] : []),
+      `Estrutura: ${marketStructure.summary} (${marketStructure.marketStructureScore})`,
       ...dynamicPenaltyReasons
     ]),
     blocks: [],
@@ -1232,11 +1245,13 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     mtf,
     marketRegime: effectiveMarketRegime,
     dynamicMinScore: effectiveDynamicMinScore,
+    marketStructure,
     operationalTuning: {
       mode: normalizeMode(mode),
       targetApprovalRate: rules.targetApprovalRate,
       penaltyScore: marketValidation.penaltyScore + (dynamicScoreGap > 0 ? Number(dynamicScoreGap.toFixed(2)) : 0),
       penaltyReasons: [...marketValidation.penaltyReasons, ...dynamicPenaltyReasons],
+      marketStructureAdjustment: marketStructure.marketStructureAdjustment,
       hardBlocks: [],
       fallbackSignal,
       candlestick: {
@@ -1255,7 +1270,8 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         best,
         systemOutcome: "released_to_signal"
       }),
-      candlestickPatternIntelligence: candlestickAnalysis
+      candlestickPatternIntelligence: candlestickAnalysis,
+      marketStructure
     }
   };
 
@@ -1270,6 +1286,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
     validStrategies,
     best,
     marketValidation,
+    marketStructure,
     confidence,
     result,
     absenceReason: null,

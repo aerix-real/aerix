@@ -4,9 +4,9 @@ const authMiddleware = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-// =========================
+// -------------------------
 // 🔥 STRIPE WEBHOOK
-// =========================
+// -------------------------
 // ⚠️ IMPORTANTE:
 // - precisa ser express.raw
 // - NÃO usar express.json aqui
@@ -16,18 +16,18 @@ router.post(
   billingController.handleWebhook // ✅ corrigido (antes estava webhook)
 );
 
-// =========================
+// -------------------------
 // 💳 CREATE CHECKOUT
-// =========================
+// -------------------------
 router.post(
   "/create-checkout",
   authMiddleware,
   billingController.createCheckout
 );
 
-// =========================
+// -------------------------
 // 📊 BILLING STATUS
-// =========================
+// -------------------------
 router.get(
   "/status",
   authMiddleware,

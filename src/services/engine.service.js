@@ -141,6 +141,7 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
     antiLoss: strategyResult.antiLoss || {},
     preCheck: strategyResult.preCheck || {},
     predictiveAi: strategyResult.predictiveAi || null,
+    marketStructure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null,
     preSignalScore: strategyResult.preSignalScore || 0,
     blocked: strategyResult.blocked || false,
     blockReason: strategyResult.blockReason || null,
@@ -181,6 +182,7 @@ function buildSignalCenter(symbol, strategyResult, snapshot) {
       antiLoss: strategyResult.antiLoss || {},
       preCheck: strategyResult.preCheck || {},
       predictiveAi: strategyResult.predictiveAi || null,
+      marketStructure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null,
       preSignalScore: strategyResult.preSignalScore || 0,
       market: {
         h1: snapshot.timeframes.h1,
@@ -311,7 +313,8 @@ function normalizeStrategyResult(strategyResult = {}, marketContext = {}, strate
     mtf: strategyResult.mtf || {},
     operationalTuning: strategyResult.operationalTuning || {},
     marketRegime: strategyResult.marketRegime || "NORMAL",
-    dynamicMinScore: strategyResult.dynamicMinScore || null
+    dynamicMinScore: strategyResult.dynamicMinScore || null,
+    marketStructure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null
   };
 
   const finalScore = calculateFinalScore(safeResult, marketContext, strategyMode);
@@ -470,6 +473,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
 
   marketContext.marketRegime = strategyResult.marketRegime || "NORMAL";
   marketContext.dynamicMinScore = strategyResult.dynamicMinScore || null;
+  marketContext.marketStructure = strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null;
 
   const adaptiveContext = {
     symbol: displaySymbol,
@@ -651,6 +655,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     antiLoss,
     preCheck: preCheckMetrics,
     predictiveAi: predictiveDecision,
+    marketStructure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null,
     preSignalScore: preCheckMetrics.preScore,
     preSignalMinimum: preCheckMetrics.minimum,
     preSignalScoreAdjustment: preCheckMetrics.scoreAdjustment,
@@ -732,6 +737,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
     activationReason: finalResult.activationReason || null,
     strategies: finalResult.strategies,
     mtf: finalResult.mtf,
+    marketStructure: finalResult.marketStructure || finalResult.metrics?.marketStructure || null,
     adaptiveAdjustment: finalResult.adaptiveAdjustment,
     adaptive_adjustment: finalResult.adaptiveAdjustment,
     historicalStrategyWeight: finalResult.historicalStrategyWeight,
@@ -785,6 +791,7 @@ async function executeSymbolAnalysis(userId, symbol, providedSnapshot = null) {
       antiLoss: finalResult.antiLoss,
       preCheck: finalResult.preCheck,
       predictiveAi: finalResult.predictiveAi,
+      marketStructure: finalResult.marketStructure || finalResult.metrics?.marketStructure || null,
       preSignalScore: finalResult.preSignalScore,
       preSignalMinimum: finalResult.preSignalMinimum,
       opportunityClass: finalResult.opportunityClass,

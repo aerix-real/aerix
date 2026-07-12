@@ -807,6 +807,8 @@ class EngineRunnerService {
       strategies: strategyResult.strategies || [],
       metrics: strategyResult.metrics || {},
       mtf: strategyResult.mtf || {},
+      marketStructure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null,
+      market_structure: strategyResult.marketStructure || strategyResult.metrics?.marketStructure || null,
       market: snapshot?.timeframes || {},
       dataQuality: snapshot?.dataQuality || {
         source: snapshot?.source || "unknown",

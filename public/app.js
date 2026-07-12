@@ -102,6 +102,7 @@ const el = {
   bestConfidence: document.getElementById("bestConfidence"),
   bestExpiry: document.getElementById("bestExpiry"),
   bestStrategy: document.getElementById("bestStrategy"),
+  marketStructureLine: document.getElementById("marketStructureLine"),
   bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
   entryWindowTimer: document.getElementById("entryWindowTimer"),
@@ -114,6 +115,7 @@ const el = {
   techDynamicThresholds: document.getElementById("techDynamicThresholds"),
   techBlockReason: document.getElementById("techBlockReason"),
   techActivationReason: document.getElementById("techActivationReason"),
+  techMarketStructure: document.getElementById("techMarketStructure"),
   currentRisk: document.getElementById("currentRisk"),
   decisionReason: document.getElementById("decisionReason"),
   aiReleaseStatus: document.getElementById("aiReleaseStatus"),
@@ -2576,6 +2578,26 @@ function auditSignalFlow(event, signal = {}, context = {}) {
   }));
 }
 
+function getMarketStructure(signal = {}) {
+  return signal.marketStructure || signal.market_structure || signal.metrics?.marketStructure || signal.finalResult?.marketStructure || null;
+}
+
+function formatMarketStructureLine(signal = {}) {
+  const structure = getMarketStructure(signal);
+  if (!structure) return "--";
+  if (structure.summary) return structure.summary;
+  const direction = structure.multiTimeframeStructure;
+  if (direction === "bullish") return "Alta HH/HL";
+  if (direction === "bearish") return "Baixa LH/LL";
+  return "Neutra --";
+}
+
+function renderMarketStructure(signal = {}) {
+  const label = formatMarketStructureLine(signal);
+  setTextContent(el.marketStructureLine, label);
+  setTextContent(el.techMarketStructure, label);
+}
+
 function renderSignal(signal) {
   if (!signal || !isConfirmedOperationalSignal(signal)) return;
 
@@ -2638,6 +2660,7 @@ function renderSignal(signal) {
       "Sinal detectado com leitura operacional.";
   }
   setTextContent(el.bestScore, `${confidence}%`);
+  renderMarketStructure(signal);
   updateCompactOperations(signal, "signal");
 
   let card = state.domCache.get("signalCard");

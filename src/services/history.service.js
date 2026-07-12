@@ -60,9 +60,9 @@ class HistoryService {
     return await signalRepository.getLatestConfirmed(limit);
   }
 
-  // ==============================
+  // -------------------------=====
   // 🧠 IA REAL (AGORA FUNCIONA)
-  // ==============================
+  // -------------------------=====
   async getStats() {
     const rows = await signalRepository.getStats();
 
