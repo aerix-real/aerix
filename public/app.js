@@ -1098,14 +1098,19 @@ function registerEntryWindow(signal = {}) {
 }
 
 function updateCompactOperations(signal = {}, source = "engine") {
-  const direction = getOperationalDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
-  const score = getOperationalScore(signal);
+  const preSignal = isPreSignalOpportunity(signal);
+  const direction = getDisplayDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
+  const score = preSignal ? Number(signal.preliminaryConfidence || signal.preSignalScore || signal.confidence || 0) : getOperationalScore(signal);
   const blocked = Boolean(signal.blocked || direction === "WAIT" || signal.executionAllowed === false || signal.execution_allowed === false);
   const hasDisplaySignal = Boolean(signal.symbol || signal.asset || ["CALL", "PUT"].includes(direction));
   state.activeSignal = hasDisplaySignal ? signal : null;
-  const entryStatus = blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Preparando" : "Aguardando";
+  const entryStatus = preSignal ? (signal.preSignalStatus === "QUASE_CONFIRMADO" ? "Quase confirmado" : "Monitorando") : blocked ? "Bloqueada" : direction && direction !== "WAIT" ? "Preparando" : "Aguardando";
   if (!blocked && isConfirmedOperationalSignal(signal)) {
     registerEntryWindow(signal);
+  } else if (preSignal) {
+    const suggested = parseSignalDate(signal.suggestedEntryAt || signal.suggested_entry_at);
+    const expires = parseSignalDate(signal.preSignalExpiresAt || signal.pre_signal_expires_at);
+    setEntryWindowVisual("possibility", signal.preSignalStatus === "QUASE_CONFIRMADO" ? "QUASE CONFIRMADO" : "POSSIBILIDADE OPERACIONAL", suggested ? `Possível ${formatTime(suggested)}` : "--", expires ? `Expira ${formatTime(expires)}` : "Aguardando confirmação");
   } else if (direction === "WAIT") {
     clearEntryWindow("AGUARDANDO OPORTUNIDADE", "neutral");
   } else if (blocked) {
@@ -1113,18 +1118,18 @@ function updateCompactOperations(signal = {}, source = "engine") {
   }
   const cycleTime = formatTime(signal.updated_at || signal.updatedAt || signal.created_at || signal.createdAt || signal.timestamp || new Date());
   const rateLimit = signal.rateLimited || signal.rate_limited || signal.rateLimit?.limited ? "Limitado" : "OK";
-  const release = entryStatus === "Preparando" ? "IA Online" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
+  const release = preSignal ? "Pré-sinal" : entryStatus === "Preparando" ? "IA Online" : entryStatus === "Bloqueada" ? "Sinal bloqueado" : "Aguardando";
   const strategyLabel = getStrategyLabel(signal);
   const marketRegime = getMarketRegime(signal);
   const blockReason = getBlockReason(signal);
   const activationReason = getActivationReason(signal);
 
-  setTextContent(el.bestDirection, direction || "WAIT");
+  setTextContent(el.bestDirection, preSignal ? direction : (direction || "WAIT"));
   if (el.bestDirection) {
-    el.bestDirection.className = `signal-direction ${direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
+    el.bestDirection.className = `signal-direction ${preSignal ? "possibility" : direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
   }
   setTextContent(el.bestConfidence, `${Math.round(score || Number(signal.confidence || 0))}%`);
-  setTextContent(el.bestExpiry, formatPanelDate(signal.expiry || signal.expiration || signal.countdown));
+  setTextContent(el.bestExpiry, preSignal ? formatPanelDate(signal.preSignalExpiresAt || signal.pre_signal_expires_at) : formatPanelDate(signal.expiry || signal.expiration || signal.countdown));
   setTextContent(el.bestStrategy, strategyLabel);
   setTextContent(el.bestAiStatus, release);
   setTextContent(el.bestEntryStatus, entryStatus);
@@ -1155,7 +1160,11 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(el.rateLimitStatus, rateLimit);
   setTextContent(el.websocketStatus, socket.connected ? "Online" : "Reconectando");
   const card = document.getElementById("currentSignalCard");
-  if (card) card.classList.toggle("execution-allowed", entryStatus === "Liberada");
+  if (card) {
+    card.classList.toggle("execution-allowed", entryStatus === "Liberada");
+    card.classList.toggle("pre-signal-card", preSignal);
+  }
+  setTextContent(document.querySelector(".wait-copy"), preSignal ? `${signal.preSignalMessage || "POSSIBILIDADE OPERACIONAL"} · Possível entrada: ${formatTime(signal.suggestedEntryAt || signal.suggested_entry_at)}` : (direction === "WAIT" ? "Aguardando oportunidade válida" : "Sinal confirmado pela IA operacional"));
   renderWhySignal(signal);
   renderHealthScore(signal, state.engineSnapshot?.monitor || {});
 }
@@ -1248,7 +1257,7 @@ function drawEquityCurve() {
   const points = [base];
 
   state.history.slice().reverse().forEach((signal) => {
-    const result = String(signal.result || "PENDING").toUpperCase();
+    const result = isPreSignalOpportunity(signal) ? "POSSIBILIDADE" : String(signal.result || "PENDING").toUpperCase();
     const score = Math.max(1, getOperationalScore(signal) / 100);
     const last = points[points.length - 1];
     const delta = result === "WIN" ? 7 * score : result === "LOSS" ? -5 * score : 1.8 * score;
@@ -1955,12 +1964,19 @@ function renderHealthScore(signal = {}, monitor = state.engineSnapshot?.monitor 
 }
 
 function buildWhySignal(signal = {}) {
-  const direction = getOperationalDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
-  const score = getOperationalScore(signal);
+  const preSignal = isPreSignalOpportunity(signal);
+  const direction = getDisplayDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
+  const score = preSignal ? Number(signal.preliminaryConfidence || signal.preSignalScore || 0) : getOperationalScore(signal);
   const strategy = getStrategyLabel(signal);
   const aiApproved = signal.aiApproved !== false && signal.ai_approved !== false && !signal.blocked;
   const reasons = [];
 
+  if (preSignal) {
+    reasons.push(signal.preSignalReason || "Cenário técnico relevante aguardando confirmação");
+    (signal.pendingConfirmations || []).slice(0, 2).forEach((item) => reasons.push(`Aguardando: ${item}`));
+    if (signal.suggestedEntryAt) reasons.push(`Possível entrada: ${formatTime(signal.suggestedEntryAt)}`);
+    return reasons.slice(0, 4);
+  }
   if (direction !== "WAIT") reasons.push("✓ Tendência alinhada");
   if (score >= 70) reasons.push("✓ Score aprovado");
   if (strategy && strategy !== "--") reasons.push("✓ Estratégia aprovada");
@@ -1988,8 +2004,8 @@ function renderPremiumHistory() {
     return;
   }
   el.premiumHistoryList.innerHTML = items.map((signal) => {
-    const direction = getOperationalDirection(signal) || "WAIT";
-    const result = String(signal.result || "PENDING").toUpperCase();
+    const direction = getDisplayDirection(signal) || "WAIT";
+    const result = isPreSignalOpportunity(signal) ? "POSSIBILIDADE" : String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
     return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span>${escapeHtml(getStrategyLabel(signal))}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result === "PENDING" ? "PENDENTE" : result)}</span></div>`;
@@ -2437,9 +2453,9 @@ function renderHistory() {
     const row = document.createElement("div");
     row.className = "history-table-row compact-history-item";
 
-    const direction = getOperationalDirection(signal) || "WAIT";
+    const direction = getDisplayDirection(signal) || "WAIT";
     const score = Math.round(getOperationalScore(signal));
-    const result = String(signal.result || "PENDING").toUpperCase();
+    const result = isPreSignalOpportunity(signal) ? "POSSIBILIDADE" : String(signal.result || "PENDING").toUpperCase();
     const normalizedResult = result === "DRAW" ? "draw" : result === "WIN" ? "win" : result === "LOSS" ? "loss" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
     const signalId = Number(signal.id);
@@ -2472,6 +2488,18 @@ function renderHistory() {
 function normalizeOperationalDirection(value) {
   const direction = String(value || "").trim().toUpperCase();
   return ["CALL", "PUT"].includes(direction) ? direction : "";
+}
+
+function isPreSignalOpportunity(signal = {}) {
+  return Boolean(signal?.preSignal || signal?.signalState === "POSSIBILITY" || signal?.signal_state === "POSSIBILITY");
+}
+
+function getPreSignalDirection(signal = {}) {
+  return normalizeOperationalDirection(signal.preSignalDirection || signal.pre_signal_direction || signal.direction);
+}
+
+function getDisplayDirection(signal = {}) {
+  return isPreSignalOpportunity(signal) ? getPreSignalDirection(signal) : getOperationalDirection(signal);
 }
 
 function getOperationalDirection(signal = {}) {
