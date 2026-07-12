@@ -238,6 +238,166 @@ function emitVolatilityAuditLog(payload) {
   }));
 }
 
+
+const PRE_SIGNAL_EXPIRATION_WINDOW_MS = Math.max(0, Number(process.env.PRE_SIGNAL_EXPIRATION_WINDOW_MS || 60 * 1000));
+const preSignalMemory = new Map();
+
+function isClosedCandle(candle = {}, now = new Date()) {
+  if (!candle || typeof candle !== "object") return false;
+  if (candle.closed === true || candle.isClosed === true || candle.complete === true) return true;
+  if (candle.closed === false || candle.isClosed === false || candle.complete === false) return false;
+
+  const rawTime = candle.closeTime || candle.close_time || candle.endTime || candle.end_time || candle.datetime || candle.time || candle.timestamp;
+  const parsed = rawTime ? new Date(rawTime) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return true;
+
+  return parsed.getTime() <= now.getTime() - 1000;
+}
+
+function getNextCandleOpen(date = new Date(), timeframeMinutes = 5) {
+  const base = new Date(date);
+  const minutes = base.getUTCMinutes();
+  const nextMinutes = Math.ceil((minutes + (base.getUTCSeconds() || base.getUTCMilliseconds() ? 1 : 0)) / timeframeMinutes) * timeframeMinutes;
+  const next = new Date(base);
+  next.setUTCSeconds(0, 0);
+  next.setUTCMinutes(nextMinutes);
+  return next;
+}
+
+function getPreSignalRules(mode = "balanced") {
+  const normalizedMode = normalizeMode(mode);
+  if (normalizedMode === "conservative") return { minScore: 75, maxPending: 1, minAlignment: 2, minConfidence: 75, requireStructure: true };
+  if (normalizedMode === "aggressive") return { minScore: 60, maxPending: 2, minAlignment: 1, minConfidence: 60, requireStructure: false };
+  return { minScore: 68, maxPending: 2, minAlignment: 1, minConfidence: 68, requireStructure: true };
+}
+
+function humanizeStrategyName(name = "") {
+  const labels = {
+    institutional_pullback: "Institutional Pullback",
+    institutional_first_retest: "First Retest",
+    liquidity_sweep_false_breakout: "Liquidity Sweep",
+    trend_continuation: "Trend Continuation",
+    breakout: "Breakout",
+    momentum: "Momentum",
+    reversal: "Reversal",
+    pullback: "Pullback"
+  };
+  return labels[name] || String(name || "Estratégia técnica").replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function preSignalScoreLabel(score = 0) {
+  if (score >= 90) return "Quase confirmado";
+  if (score >= 80) return "Próximo da confirmação";
+  if (score >= 70) return "Possibilidade relevante";
+  return "Possibilidade inicial";
+}
+
+function getPendingConfirmations(item = {}) {
+  const audit = item.eligibilityAudit || {};
+  const criteria = Array.isArray(audit.criteria) ? audit.criteria : [];
+  const failed = criteria
+    .filter((criterion) => criterion && criterion.passed === false)
+    .map((criterion) => criterion.label || criterion.name || criterion.reason)
+    .filter(Boolean);
+  const blockedBy = audit.blockedBy || item.explanation || null;
+  return unique(failed.length ? failed : [blockedBy || "aguardando confirmação final"], 2);
+}
+
+function estimatePreSignalScore({ partialScore, pendingCount, mtf, candlestickContext }) {
+  let score = Number(partialScore || 0);
+  score += Math.max(0, 2 - Number(pendingCount || 0)) * 4;
+  score += Math.min(8, Number(mtf?.alignment || 0) * 3);
+  if (candlestickContext?.dominantPatternDirection) score += 3;
+  return Math.max(0, Math.min(99, Number(score.toFixed(2))));
+}
+
+function buildPreSignalKey({ symbol, direction, strategy, suggestedEntryAt }) {
+  return [symbol || "UNKNOWN", direction, strategy || "strategy", suggestedEntryAt].join(":");
+}
+
+function emitPreSignalAuditLog(event, payload = {}) {
+  console.log(JSON.stringify({ scope: "aerix_pre_signal_audit", event, timestamp: new Date().toISOString(), ...payload }));
+}
+
+function buildPreSignalOpportunity({ snapshot, mode, evaluated, mtf, marketRegime, marketValidation, candlestickContext = null, bestConfirmed = null }) {
+  const symbol = snapshot?.symbol || snapshot?.asset || null;
+  const displayName = snapshot?.displayName || symbol;
+  const lastM5 = (snapshot?.timeframes?.m5?.candles || []).slice(-1)[0] || null;
+  const now = new Date(snapshot?.timestamp || Date.now());
+  const rules = getPreSignalRules(mode);
+  const hardBlock = Boolean(marketValidation?.shouldBlock || marketValidation?.hasInsufficientCandles);
+  const marketDataValid = Boolean(snapshot && !snapshot?.isFallback && !snapshot?.dataQuality?.isFallback && !marketValidation?.hasInsufficientCandles);
+  const candleClosed = isClosedCandle(lastM5, now);
+
+  if (bestConfirmed?.direction) {
+    return { signalState: "CONFIRMED", preSignal: false };
+  }
+
+  const candidates = (Array.isArray(evaluated) ? evaluated : [])
+    .map((item) => {
+      const partialScore = Number(item?.eligibilityAudit?.score ?? item?.rawScore ?? item?.score ?? 0);
+      const pendingConfirmations = getPendingConfirmations(item);
+      const direction = item?.direction || item?.eligibilityAudit?.direction || null;
+      const preSignalScore = estimatePreSignalScore({ partialScore, pendingCount: pendingConfirmations.length, mtf, candlestickContext });
+      return { item, partialScore, pendingConfirmations, direction, preSignalScore };
+    })
+    .filter((candidate) => candidate.direction && ["CALL", "PUT"].includes(candidate.direction) && candidate.partialScore >= rules.minScore);
+
+  const candidateDirections = unique(candidates.map((candidate) => candidate.direction), 3);
+  if (candidateDirections.length > 1) {
+    emitPreSignalAuditLog("pre_signal_direction_conflict", { symbol, displayName, mode: normalizeMode(mode), marketMode: snapshot?.marketMode || null, direction: null, strategy: null, partialScore: Math.max(...candidates.map((candidate) => candidate.partialScore)), hardBlock, finalState: "WAIT", failedCriteria: ["Estratégias conflitantes"], marketRegime });
+    return { signalState: "WAIT", preSignal: false, directionConflict: true, blockReason: "Estratégias conflitantes" };
+  }
+
+  const candidate = candidates
+    .filter((entry) => entry.pendingConfirmations.length <= rules.maxPending)
+    .filter((entry) => !rules.requireStructure || Number(mtf?.alignment || 0) >= rules.minAlignment)
+    .filter((entry) => entry.preSignalScore >= rules.minConfidence)
+    .sort((a, b) => b.preSignalScore - a.preSignalScore)[0] || null;
+
+  if (!candidate || hardBlock || !marketDataValid || !candleClosed) {
+    return { signalState: "WAIT", preSignal: false, blockReason: hardBlock ? "Hard block ativo" : !marketDataValid ? "Dados de mercado inválidos" : !candleClosed ? "Candle aberto" : null };
+  }
+
+  const suggestedEntryAtDate = getNextCandleOpen(now, 5);
+  const expiresAtDate = new Date(suggestedEntryAtDate.getTime() + PRE_SIGNAL_EXPIRATION_WINDOW_MS);
+  const strategy = candidate.item.name;
+  const pendingConfirmations = candidate.pendingConfirmations.slice(0, 2);
+  const preSignalKey = buildPreSignalKey({ symbol, direction: candidate.direction, strategy, suggestedEntryAt: suggestedEntryAtDate.toISOString() });
+  const previous = preSignalMemory.get(symbol);
+  const preSignalStatus = pendingConfirmations.length <= 1 || candidate.preSignalScore >= 90 ? "QUASE_CONFIRMADO" : "MONITORANDO";
+  const event = previous?.preSignalKey === preSignalKey ? "pre_signal_updated" : preSignalStatus === "QUASE_CONFIRMADO" ? "pre_signal_near_confirmation" : "pre_signal_created";
+  const opportunity = {
+    signalState: "POSSIBILITY",
+    signalStateLabel: "Possibilidade operacional",
+    preSignal: true,
+    executionAllowed: false,
+    direction: candidate.direction,
+    preSignalDirection: candidate.direction,
+    strategyName: strategy,
+    strategyLabel: humanizeStrategyName(strategy),
+    preSignalStatus,
+    preSignalStatusLabel: preSignalStatus === "QUASE_CONFIRMADO" ? "CALL próximo da confirmação".replace("CALL", candidate.direction) : `Possibilidade ${candidate.direction}`,
+    preSignalMessage: candidate.direction === "CALL" ? "POSSIBILIDADE DE COMPRA" : "POSSIBILIDADE DE VENDA",
+    preSignalReason: candidate.item.activationReason || candidate.item.explanation || `${humanizeStrategyName(strategy)} próximo da confirmação.`,
+    partialScore: candidate.partialScore,
+    preSignalScore: candidate.preSignalScore,
+    preSignalScoreLabel: preSignalScoreLabel(candidate.preSignalScore),
+    preliminaryConfidence: Math.round(candidate.preSignalScore),
+    preSignalCreatedAt: previous?.preSignalKey === preSignalKey ? previous.preSignalCreatedAt : now.toISOString(),
+    suggestedEntryAt: suggestedEntryAtDate.toISOString(),
+    preSignalExpiresAt: expiresAtDate.toISOString(),
+    pendingConfirmations,
+    confirmedCriteria: Number(candidate.item.eligibilityAudit?.criteriaPassed || 0),
+    failedCriteria: pendingConfirmations,
+    preSignalKey,
+    directionConflict: false
+  };
+  preSignalMemory.set(symbol, opportunity);
+  emitPreSignalAuditLog(event, { symbol, displayName, marketMode: snapshot?.marketMode || null, mode: normalizeMode(mode), direction: opportunity.direction, strategy, partialScore: opportunity.partialScore, preSignalScore: opportunity.preSignalScore, pendingConfirmations, confirmedCriteria: opportunity.confirmedCriteria, failedCriteria: pendingConfirmations, blocker: candidate.item.eligibilityAudit?.blockedBy || null, hardBlock, currentCandleTime: lastM5?.time || lastM5?.timestamp || null, suggestedEntryAt: opportunity.suggestedEntryAt, expiresAt: opportunity.preSignalExpiresAt, structuralContext: mtf, candlestickContext, marketRegime, finalState: "POSSIBILITY" });
+  return opportunity;
+}
+
 function buildMtfContext(snapshot) {
   const h1 = snapshot?.timeframes?.h1 || {};
   const m15 = snapshot?.timeframes?.m15 || {};
@@ -976,6 +1136,15 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   }));
 
   const marketValidation = validateMarketConditions(snapshot, mtf, mode, best);
+  let preSignalOpportunity = buildPreSignalOpportunity({
+    snapshot,
+    mode,
+    evaluated,
+    mtf,
+    marketRegime,
+    marketValidation,
+    bestConfirmed: best
+  });
   const blockerAnalyticsContext = {
     symbol: snapshot?.symbol || snapshot?.asset || null,
     mode: normalizeMode(mode),
@@ -1037,17 +1206,20 @@ function runStrategies({ snapshot, mode = "balanced" }) {
         ? `Fallback sem elegibilidade operacional: alinhamento ${fallbackSignal.trendAlignment}/3, score ${fallbackSignal.strategyScore}, direção esperada ${fallbackSignal.expectedDirection || "indefinida"}.`
         : `Market validation bloqueou direção: ${marketValidation.blocks.join(" | ")}`;
     const result = {
+      ...preSignalOpportunity,
       signal: "WAIT",
       confidence: 0,
       entryQuality: "weak",
-      strategyName: null,
-      explanation: "Mercado sem qualidade suficiente para entrada.",
-      reasons: marketValidation.penaltyReasons,
-      blocks: fallbackGraceBlocked
-        ? ["Fallback permitido apenas com alinhamento >= 3, score estratégico >= 90 e direção consistente."]
-        : marketValidation.blocks.length
-          ? marketValidation.blocks
-          : ["Nenhuma estratégia válida encontrada."],
+      strategyName: preSignalOpportunity.preSignal ? preSignalOpportunity.strategyName : null,
+      explanation: preSignalOpportunity.preSignal ? preSignalOpportunity.preSignalReason : "Mercado sem qualidade suficiente para entrada.",
+      reasons: preSignalOpportunity.preSignal ? unique([preSignalOpportunity.preSignalReason, ...(preSignalOpportunity.pendingConfirmations || []).map((item) => `Aguardando: ${item}`)]) : marketValidation.penaltyReasons,
+      blocks: preSignalOpportunity.preSignal
+        ? []
+        : fallbackGraceBlocked
+          ? ["Fallback permitido apenas com alinhamento >= 3, score estratégico >= 90 e direção consistente."]
+          : marketValidation.blocks.length
+            ? marketValidation.blocks
+            : ["Nenhuma estratégia válida encontrada."],
       strategies: evaluated,
       strategyEligibilityReport: buildStrategyEligibilityReport(evaluated),
       mtf,
@@ -1145,6 +1317,7 @@ function runStrategies({ snapshot, mode = "balanced" }) {
   if (isCriticalDynamicGap) {
     const absenceReason = `Score ${confidence} ficou ${Number(dynamicScoreGap.toFixed(2))} pontos abaixo do mínimo dinâmico ${effectiveDynamicMinScore}, excedendo tolerância ${dynamicScoreTolerance}.`;
     const result = {
+      ...preSignalOpportunity,
       signal: "WAIT",
       confidence,
       entryQuality: buildEntryQuality(confidence),
@@ -1292,5 +1465,7 @@ module.exports = {
   validateMarketConditions,
   getLowVolatilityReleaseThreshold,
   buildVolatilityAudit,
-  buildBalancedCandidatesReleasedMetric
+  buildBalancedCandidatesReleasedMetric,
+  buildPreSignalOpportunity,
+  getNextCandleOpen
 };
