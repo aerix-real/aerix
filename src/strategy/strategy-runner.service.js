@@ -329,8 +329,50 @@ function buildPreSignalOpportunity({ snapshot, mode, evaluated, mtf, marketRegim
   const marketDataValid = Boolean(snapshot && !snapshot?.isFallback && !snapshot?.dataQuality?.isFallback && !marketValidation?.hasInsufficientCandles);
   const candleClosed = isClosedCandle(lastM5, now);
 
+  const previous = preSignalMemory.get(symbol);
+  if (previous?.preSignalExpiresAt && new Date(previous.preSignalExpiresAt).getTime() <= now.getTime()) {
+    preSignalMemory.delete(symbol);
+    emitPreSignalAuditLog("pre_signal_expired", {
+      symbol,
+      displayName,
+      marketMode: snapshot?.marketMode || null,
+      mode: normalizeMode(mode),
+      direction: previous.direction || previous.preSignalDirection || null,
+      strategy: previous.strategyName || null,
+      partialScore: previous.partialScore || 0,
+      preSignalScore: previous.preSignalScore || 0,
+      pendingConfirmations: previous.pendingConfirmations || [],
+      hardBlock,
+      currentCandleTime: lastM5?.time || lastM5?.timestamp || null,
+      suggestedEntryAt: previous.suggestedEntryAt || null,
+      expiresAt: previous.preSignalExpiresAt,
+      marketRegime,
+      finalState: "EXPIRADO"
+    });
+  }
+
   if (bestConfirmed?.direction) {
-    return { signalState: "CONFIRMED", preSignal: false };
+    if (previous) {
+      emitPreSignalAuditLog("pre_signal_confirmed", {
+        symbol,
+        displayName,
+        marketMode: snapshot?.marketMode || null,
+        mode: normalizeMode(mode),
+        direction: bestConfirmed.direction,
+        strategy: bestConfirmed.name || previous.strategyName || null,
+        partialScore: Number(bestConfirmed?.eligibilityAudit?.score ?? bestConfirmed?.rawScore ?? bestConfirmed?.score ?? 0),
+        preSignalScore: previous.preSignalScore || 0,
+        pendingConfirmations: [],
+        hardBlock,
+        currentCandleTime: lastM5?.time || lastM5?.timestamp || null,
+        suggestedEntryAt: previous.suggestedEntryAt || null,
+        expiresAt: previous.preSignalExpiresAt || null,
+        marketRegime,
+        finalState: "CONFIRMED"
+      });
+      preSignalMemory.delete(symbol);
+    }
+    return { signalState: "CONFIRMED", signalStateLabel: "Sinal confirmado", preSignal: false, executionAllowed: true };
   }
 
   const candidates = (Array.isArray(evaluated) ? evaluated : [])
@@ -356,7 +398,29 @@ function buildPreSignalOpportunity({ snapshot, mode, evaluated, mtf, marketRegim
     .sort((a, b) => b.preSignalScore - a.preSignalScore)[0] || null;
 
   if (!candidate || hardBlock || !marketDataValid || !candleClosed) {
-    return { signalState: "WAIT", preSignal: false, blockReason: hardBlock ? "Hard block ativo" : !marketDataValid ? "Dados de mercado inválidos" : !candleClosed ? "Candle aberto" : null };
+    const blockReason = hardBlock ? "Hard block ativo" : !marketDataValid ? "Dados de mercado inválidos" : !candleClosed ? "Candle aberto" : "Sem candidato elegível";
+    if (previous && previous.preSignalKey) {
+      preSignalMemory.delete(symbol);
+      emitPreSignalAuditLog("pre_signal_cancelled", {
+        symbol,
+        displayName,
+        marketMode: snapshot?.marketMode || null,
+        mode: normalizeMode(mode),
+        direction: previous.direction || previous.preSignalDirection || null,
+        strategy: previous.strategyName || null,
+        partialScore: previous.partialScore || 0,
+        preSignalScore: previous.preSignalScore || 0,
+        pendingConfirmations: previous.pendingConfirmations || [],
+        blocker: blockReason,
+        hardBlock,
+        currentCandleTime: lastM5?.time || lastM5?.timestamp || null,
+        suggestedEntryAt: previous.suggestedEntryAt || null,
+        expiresAt: previous.preSignalExpiresAt || null,
+        marketRegime,
+        finalState: "CANCELADO"
+      });
+    }
+    return { signalState: "WAIT", signalStateLabel: "Aguardando oportunidade", preSignal: false, executionAllowed: false, blockReason };
   }
 
   const suggestedEntryAtDate = getNextCandleOpen(now, 5);
@@ -364,7 +428,6 @@ function buildPreSignalOpportunity({ snapshot, mode, evaluated, mtf, marketRegim
   const strategy = candidate.item.name;
   const pendingConfirmations = candidate.pendingConfirmations.slice(0, 2);
   const preSignalKey = buildPreSignalKey({ symbol, direction: candidate.direction, strategy, suggestedEntryAt: suggestedEntryAtDate.toISOString() });
-  const previous = preSignalMemory.get(symbol);
   const preSignalStatus = pendingConfirmations.length <= 1 || candidate.preSignalScore >= 90 ? "QUASE_CONFIRMADO" : "MONITORANDO";
   const event = previous?.preSignalKey === preSignalKey ? "pre_signal_updated" : preSignalStatus === "QUASE_CONFIRMADO" ? "pre_signal_near_confirmation" : "pre_signal_created";
   const opportunity = {
