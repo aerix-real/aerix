@@ -104,6 +104,10 @@ const el = {
   bestStrategy: document.getElementById("bestStrategy"),
   bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
+  preSignalCompact: document.getElementById("preSignalCompact"),
+  preSignalTitle: document.getElementById("preSignalTitle"),
+  preSignalEntry: document.getElementById("preSignalEntry"),
+  preSignalPending: document.getElementById("preSignalPending"),
   entryWindowTimer: document.getElementById("entryWindowTimer"),
   entryWindowCountdown: document.getElementById("entryWindowCountdown"),
   entryWindowClassification: document.getElementById("entryWindowClassification"),
@@ -1164,6 +1168,15 @@ function updateCompactOperations(signal = {}, source = "engine") {
     card.classList.toggle("execution-allowed", entryStatus === "Liberada");
     card.classList.toggle("pre-signal-card", preSignal);
   }
+  if (el.preSignalCompact) {
+    el.preSignalCompact.hidden = !preSignal;
+  }
+  const pendingConfirmation = Array.isArray(signal.pendingConfirmations) && signal.pendingConfirmations.length
+    ? signal.pendingConfirmations[0]
+    : signal.pending_confirmation || "Aguardando confirmação";
+  setTextContent(el.preSignalTitle, preSignal ? (signal.preSignalMessage || "POSSIBILIDADE OPERACIONAL") : "POSSIBILIDADE OPERACIONAL");
+  setTextContent(el.preSignalEntry, preSignal ? `Possível entrada: ${formatTime(signal.suggestedEntryAt || signal.suggested_entry_at)}` : "--");
+  setTextContent(el.preSignalPending, preSignal ? `Aguardando: ${pendingConfirmation}` : "Aguardando confirmação");
   setTextContent(document.querySelector(".wait-copy"), preSignal ? `${signal.preSignalMessage || "POSSIBILIDADE OPERACIONAL"} · Possível entrada: ${formatTime(signal.suggestedEntryAt || signal.suggested_entry_at)}` : (direction === "WAIT" ? "Aguardando oportunidade válida" : "Sinal confirmado pela IA operacional"));
   renderWhySignal(signal);
   renderHealthScore(signal, state.engineSnapshot?.monitor || {});
