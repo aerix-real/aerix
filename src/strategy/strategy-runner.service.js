@@ -5,6 +5,7 @@ const {
 const { getLastATR } = require("../indicators/atr.indicator");
 const blockerAnalytics = require("../services/blocker-analytics.service");
 const { analyzeCandlestickPatterns, emitCandlestickPatternAudit } = require("../services/candlestick-pattern.service");
+const { getNextCandleOpen: resolveNextCandleOpen, emitTimezoneAudit } = require("../utils/timezone");
 
 function normalizeMode(mode = "balanced") {
   const normalized = String(mode || "balanced").toLowerCase();
@@ -255,12 +256,8 @@ function isClosedCandle(candle = {}, now = new Date()) {
 }
 
 function getNextCandleOpen(date = new Date(), timeframeMinutes = 5) {
-  const base = new Date(date);
-  const minutes = base.getUTCMinutes();
-  const nextMinutes = Math.ceil((minutes + (base.getUTCSeconds() || base.getUTCMilliseconds() ? 1 : 0)) / timeframeMinutes) * timeframeMinutes;
-  const next = new Date(base);
-  next.setUTCSeconds(0, 0);
-  next.setUTCMinutes(nextMinutes);
+  const next = resolveNextCandleOpen(date, timeframeMinutes);
+  emitTimezoneAudit("candle_time_resolved", { rawTimestamp: String(date), normalizedUtc: next?.toISOString(), timeframe: `M${timeframeMinutes}`, source: "strategy_runner" });
   return next;
 }
 
@@ -425,6 +422,7 @@ function buildPreSignalOpportunity({ snapshot, mode, evaluated, mtf, marketRegim
 
   const suggestedEntryAtDate = getNextCandleOpen(now, 5);
   const expiresAtDate = new Date(suggestedEntryAtDate.getTime() + PRE_SIGNAL_EXPIRATION_WINDOW_MS);
+  emitTimezoneAudit("signal_expiration_resolved", { normalizedUtc: expiresAtDate.toISOString(), symbol, timeframe: "M5", source: "strategy_runner" });
   const strategy = candidate.item.name;
   const pendingConfirmations = candidate.pendingConfirmations.slice(0, 2);
   const preSignalKey = buildPreSignalKey({ symbol, direction: candidate.direction, strategy, suggestedEntryAt: suggestedEntryAtDate.toISOString() });

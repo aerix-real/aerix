@@ -4,6 +4,7 @@ const executionService = require("./execution.service");
 const filterAnalyticsService = require("./filter-analytics.service");
 const { registerAudit } = require("./audit.service");
 const strategyIntelligenceService = require("./strategy-intelligence.service");
+const { toUtcIso, emitTimezoneAudit } = require("../utils/timezone");
 
 class ResultCheckerService {
   constructor() {
@@ -50,13 +51,14 @@ class ResultCheckerService {
       resultPrice: this.normalizePrice(saved.result_price ?? resultPrice),
       result: finalResult || saved.result || null,
       createdAt: saved.created_at || signal.created_at || null,
-      checkedAt: saved.checked_at || new Date().toISOString(),
+      checkedAt: toUtcIso(saved.checked_at || new Date()),
       marketRegime: saved.market_regime || signal.market_regime || signal.marketRegime || "NORMAL"
     };
   }
 
   async registerOutcomeAudit(signal, saved, finalResult, resultPrice) {
     const payload = this.buildOutcomeAuditPayload(signal, saved, finalResult, resultPrice);
+    emitTimezoneAudit("result_time_resolved", { normalizedUtc: payload.checkedAt, signalId: saved?.id || signal?.id, symbol: payload.symbol, source: "result_checker" });
 
     console.log(JSON.stringify({
       scope: "aerix_signal_outcome_audit",

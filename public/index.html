@@ -35,7 +35,7 @@
         <span class="status-pill"><i></i><b>IA</b> <strong id="aiTopStatus">Sincronizando</strong></span>
         <span class="status-pill mode"><b>Modo</b> <strong id="topCurrentMode">Equilibrado</strong></span>
         <span class="status-pill"><b>Ciclo</b> <strong id="lastCycleCompact">--</strong></span>
-        <span class="status-pill clock"><strong id="liveClock">00:00:00</strong></span>
+        <span class="status-pill clock" title="America/Sao_Paulo"><b>TEMPO REAL</b> <strong id="liveClock">00:00:00</strong></span>
       </div>
       <span class="connection-badge connecting" id="connectionBadge" title="Socket"></span><span id="panelSyncStatus" class="sr-only">Painel sincronizando</span><span id="connectionText" class="sr-only">Conectando</span>
     </header>
@@ -105,6 +105,7 @@
             <div class="technical-grid">
               <article class="panel"><div class="panel-header"><h2>Provider diagnostics</h2><span id="engineOnlineStatus">Sincronizando</span></div><div class="compact-status-grid"><div><span>Processo</span><strong id="engineProcessStatus">Aguardando</strong></div><div><span>Último ciclo</span><strong id="lastCycleTime">--</strong></div><div><span>Rate limit</span><strong id="rateLimitStatus">OK</strong></div><div><span>WebSocket</span><strong id="websocketStatus">Conectando</strong></div><div><span>Risco</span><strong id="currentRisk">--</strong></div><div><span>Liberação IA</span><strong id="aiReleaseStatus">Aguardando</strong></div></div><p id="aiExplanation">IA operacional será exibida conforme a engine sincronizar dados.</p></article>
               <article class="panel"><div class="panel-header"><h2>Strategy diagnostics</h2><span id="techStrategy">--</span></div><div class="compact-status-grid"><div><span>Volatilidade</span><strong id="techVolatility">--</strong></div><div><span>Adaptive Threshold</span><strong id="techDynamicThresholds">--</strong></div><div><span>Blocker</span><strong id="techBlockReason">--</strong></div><div><span>Release</span><strong id="techActivationReason">--</strong></div></div></article>
+              <article class="panel"><div class="panel-header"><h2>Timezone</h2><span id="timezoneSync">AGUARDANDO</span></div><div class="compact-status-grid"><div><span>Timezone de exibição</span><strong>America/Sao_Paulo</strong></div><div><span>Timezone interno</span><strong>UTC</strong></div><div><span>Horário do servidor</span><strong id="timezoneServer">--</strong></div><div><span>Horário convertido</span><strong id="timezoneBrasilia">--</strong></div><div><span>Diferença servidor/navegador</span><strong id="timezoneDrift">--</strong></div></div></article>
               <article class="panel health-panel"><div class="panel-header"><h2>AERIX Health</h2><span id="healthUpdated">live</span></div><strong id="healthScoreDetail">0%</strong><div id="healthChecklist"></div></article>
               <article class="panel"><div class="panel-header"><h2>Monitor</h2><span id="monitorLastStatus">standby</span></div><div class="compact-status-grid"><div><span>Uptime</span><strong id="monitorUptime">--</strong></div><div><span>Requests</span><strong id="monitorTwelveDataRequests">0</strong><small id="monitorTwelveDataBudget"></small></div><div><span>Cache</span><strong id="monitorCacheHitRate">0%</strong><small id="monitorCacheLookups"></small></div><div><span>Analisados</span><strong id="monitorAnalyzedSignals">0</strong></div><div><span>Aprovados</span><strong id="monitorApprovedSignals">0</strong></div><div><span>Última execução</span><strong id="monitorLastExecution">--</strong></div></div></article>
               <article class="panel filter-analytics-panel"><div class="panel-header"><h2>Blocker Analytics</h2><span id="filterAnalyticsUpdated">sem dados</span></div><div class="filter-summary-grid"><div><span>Aprovação</span><strong id="filterApprovalRate">0%</strong></div><div><span>Total</span><strong id="filterTotalSignals">0</strong></div><div><span>Confirmados</span><strong id="filterApprovedSignals">0</strong></div><div><span>Bloqueados</span><strong id="filterBlockedSignals">0</strong></div><div><span>Watchlist</span><strong id="filterWatchlistRate">0%</strong></div><div><span>Alta confiança</span><strong id="filterHighConfidenceRate">0%</strong></div><div><span>Média confiança</span><strong id="filterMediumConfidenceRate">0%</strong></div><div><span>Penalizações</span><strong id="filterPenaltySignals">0</strong></div></div><div id="filterRankingList"></div><div id="filterAssetList"></div><div id="filterHourList"></div><div id="filterBlockList"></div></article>
@@ -120,6 +121,7 @@
     </main>
   </div>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/timezone.js?v=brasilia-v1"></script>
   <script src="/app.js?v=institutional-terminal"></script>
 </body>
 </html>
