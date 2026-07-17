@@ -704,6 +704,13 @@ class EngineRunnerService {
 
           emitToAll("signal", signal, { cacheLatest: true });
           emitToAll("bestOpportunity", signal, { cacheLatest: true });
+          emitToAll("signal:approved", signal, { cacheLatest: true });
+          emitToAll("operation:opened", {
+            ...signal,
+            operationId: signal.id,
+            signalId: signal.id,
+            status: "OPEN"
+          }, { cacheLatest: true });
           logSignalFlow("SIGNAL_BROADCAST", signal, { events: ["signal", "bestOpportunity"] });
 
           await this.auditDecision("signal_generated", signal);

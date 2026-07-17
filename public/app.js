@@ -58,6 +58,25 @@ const state = {
     approvedAt: null,
     expiresAt: null,
     timer: null
+  },
+  liveState: {
+    connectionStatus: "SINCRONIZANDO",
+    engineStatus: "SINCRONIZANDO",
+    feedStatus: "SINCRONIZANDO",
+    aiStatus: "SINCRONIZANDO",
+    lastServerHeartbeatAt: null,
+    lastMarketUpdateAt: null,
+    lastSignalUpdateAt: null,
+    lastHistoryUpdateAt: null,
+    lastResultUpdateAt: null,
+    currentSignal: null,
+    currentPreSignal: null,
+    currentOperation: null,
+    serverTimeOffsetMs: 0,
+    uiTimer: null,
+    fallbackTimer: null,
+    seenEventIds: new Set(),
+    sequenceBySymbol: new Map()
   }
 };
 
@@ -616,6 +635,11 @@ async function logout() {
     }
   } catch (_) {}
 
+  if (state.liveState.uiTimer) clearInterval(state.liveState.uiTimer);
+  if (state.liveState.fallbackTimer) clearInterval(state.liveState.fallbackTimer);
+  state.liveState.uiTimer = null;
+  state.liveState.fallbackTimer = null;
+
   clearEntryWindow("AGUARDANDO OPORTUNIDADE", "neutral");
   clearSession();
   renderHistory();
@@ -1081,11 +1105,6 @@ function registerEntryWindow(signal = {}) {
   const signalKey = getSignalKey(signal);
 
   if (state.entryWindow.signalKey !== signalKey) {
-    if (state.entryWindow.timer) {
-      clearInterval(state.entryWindow.timer);
-      state.entryWindow.timer = null;
-    }
-
     state.entryWindow.signalKey = signalKey;
     state.entryWindow.approvedAt = approvedAt;
     state.entryWindow.expiresAt = expiresAt;
@@ -1096,9 +1115,6 @@ function registerEntryWindow(signal = {}) {
 
   renderEntryWindowTimer();
 
-  if (!state.entryWindow.timer && !(expiresAt && Date.now() >= expiresAt.getTime())) {
-    state.entryWindow.timer = setInterval(renderEntryWindowTimer, 1000);
-  }
 }
 
 function updateCompactOperations(signal = {}, source = "engine") {
@@ -2768,14 +2784,20 @@ function setConnection(status) {
 }
 
 function startClock() {
+  if (state.liveState.uiTimer) return;
   const tick = () => {
-    if (el.liveClock) {
-      el.liveClock.textContent = new Date().toLocaleTimeString("pt-BR");
+    const now = Date.now() + state.liveState.serverTimeOffsetMs;
+    if (el.liveClock) el.liveClock.textContent = new Date(now).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    renderEntryWindowTimer();
+    const heartbeatAge = state.liveState.lastServerHeartbeatAt ? now - state.liveState.lastServerHeartbeatAt : Infinity;
+    const status = !socket.connected || heartbeatAge > 60000 ? "Offline" : heartbeatAge > 10000 ? "Sincronizando" : "Online";
+    if (status.toUpperCase() !== state.liveState.connectionStatus) {
+      state.liveState.connectionStatus = status.toUpperCase();
+      setConnection(status);
     }
   };
-
   tick();
-  setInterval(tick, 1000);
+  state.liveState.uiTimer = setInterval(tick, 1000);
 }
 
 function startChartLoop() {
@@ -3089,8 +3111,52 @@ const handleExecutionUpdate = throttle((payload) => {
   loadPerformanceDashboard();
 }, 420);
 
+function unwrapRealtimeEvent(envelope, eventName) {
+  if (!envelope?.eventId) return envelope;
+  const live = state.liveState;
+  if (live.seenEventIds.has(envelope.eventId)) {
+    auditSignalFlow("duplicate_event_ignored", envelope.payload || {}, { eventName, eventId: envelope.eventId });
+    return null;
+  }
+  const key = envelope.symbol || "system";
+  const previousSequence = live.sequenceBySymbol.get(key) || 0;
+  if (Number(envelope.sequenceNumber) <= previousSequence) {
+    auditSignalFlow("stale_event_ignored", envelope.payload || {}, { eventName, eventId: envelope.eventId });
+    return null;
+  }
+  live.seenEventIds.add(envelope.eventId);
+  if (live.seenEventIds.size > 500) live.seenEventIds.delete(live.seenEventIds.values().next().value);
+  live.sequenceBySymbol.set(key, Number(envelope.sequenceNumber));
+  return envelope.payload;
+}
+
+function startFallbackPolling() {
+  if (state.liveState.fallbackTimer || !state.accessToken) return;
+  state.liveState.fallbackTimer = setInterval(() => {
+    if (!socket.connected) loadRuntimeIntegrations().catch(() => {});
+  }, 10000);
+}
+
+function stopFallbackPolling() {
+  if (state.liveState.fallbackTimer) clearInterval(state.liveState.fallbackTimer);
+  state.liveState.fallbackTimer = null;
+}
+
+function applyTerminalSnapshot(snapshot = {}) {
+  state.liveState.currentSignal = snapshot.activeSignal || null;
+  state.liveState.currentOperation = snapshot.activeOperation || null;
+  if (snapshot.serverTimestamp) state.liveState.serverTimeOffsetMs = new Date(snapshot.serverTimestamp).getTime() - Date.now();
+  if (Array.isArray(snapshot.recentHistory)) {
+    state.history = filterConfirmedOperationalSignals(snapshot.recentHistory).slice(0, MAX_HISTORY_ITEMS);
+    scheduleHistoryRender();
+  }
+  if (snapshot.activeSignal) renderSignal(snapshot.activeSignal);
+}
+
 socket.on("connect", () => {
   setConnection("Online");
+  stopFallbackPolling();
+  socket.emit("terminal:snapshot");
   updateInstitutionalCards();
   renderShadowMode(null, "connect");
   renderProLogs({}, "Socket.IO conectado ao barramento em tempo real.");
@@ -3110,10 +3176,67 @@ socket.on("disconnect", () => {
   renderShadowMode(null, "disconnect");
   renderProLogs({}, "Socket.IO desconectado; camada visual em modo de proteção.");
   pushTimelineEvent("Socket.IO desconectado; modo de proteção visual ativo.");
+  startFallbackPolling();
 });
 
 socket.on("connect_error", () => {
   setConnection("Reconectando");
+  startFallbackPolling();
+});
+
+socket.on("system:heartbeat", (event) => {
+  const payload = unwrapRealtimeEvent(event, "system:heartbeat");
+  if (!payload) return;
+  state.liveState.lastServerHeartbeatAt = new Date(payload.serverTimestamp).getTime();
+  state.liveState.serverTimeOffsetMs = state.liveState.lastServerHeartbeatAt - Date.now();
+  state.liveState.engineStatus = payload.engineOnline ? "ONLINE" : "OFFLINE";
+  state.liveState.feedStatus = payload.feedOnline ? "ONLINE" : "SINCRONIZANDO";
+  state.liveState.aiStatus = payload.aiOnline ? "ONLINE" : "OFFLINE";
+});
+
+socket.on("terminal:snapshot", (event) => {
+  const payload = unwrapRealtimeEvent(event, "terminal:snapshot");
+  if (payload) applyTerminalSnapshot(payload);
+});
+
+socket.on("signal:approved", (event) => {
+  const signal = unwrapRealtimeEvent(event, "signal:approved");
+  if (!signal) return;
+  state.liveState.currentSignal = signal;
+  state.liveState.lastSignalUpdateAt = Date.now();
+  renderSignal(signal);
+});
+
+socket.on("operation:opened", (event) => {
+  const operation = unwrapRealtimeEvent(event, "operation:opened");
+  if (!operation) return;
+  state.liveState.currentOperation = operation;
+  registerEntryWindow(operation);
+});
+
+socket.on("signal:result", (event) => {
+  const signal = unwrapRealtimeEvent(event, "signal:result");
+  if (!signal) return;
+  state.liveState.lastResultUpdateAt = Date.now();
+  state.liveState.currentOperation = { ...(state.liveState.currentOperation || {}), ...signal, status: String(signal.result).toUpperCase() };
+  const index = state.history.findIndex((item) => String(item.id) === String(signal.id));
+  if (index >= 0) state.history[index] = signal;
+  else state.history.unshift(signal);
+  renderSignal(signal);
+  scheduleHistoryRender();
+  loadStats();
+  loadPerformanceDashboard();
+  auditSignalFlow("result_rendered", signal, { source: "signal:result" });
+});
+
+socket.on("history:updated", (event) => {
+  const signal = unwrapRealtimeEvent(event, "history:updated");
+  if (!signal) return;
+  state.liveState.lastHistoryUpdateAt = Date.now();
+});
+
+socket.on("analytics:updated", (event) => {
+  if (unwrapRealtimeEvent(event, "analytics:updated")) loadPerformanceDashboard();
 });
 
 socket.on("signal", (signal) => {

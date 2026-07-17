@@ -5,7 +5,9 @@ require("dotenv").config();
 const { Server } = require("socket.io");
 const createApp = require("./app");
 const engineRunner = require("./services/engine-runner.service");
-const { initializeSocket } = require("./websocket/socket");
+const { initializeSocket, setSnapshotProvider } = require("./websocket/socket");
+const realtimeTerminalService = require("./services/realtime-terminal.service");
+const resultCheckerService = require("./services/result-checker.service");
 const { bootstrapDatabase } = require("./bootstrap/database-bootstrap");
 
 const app = createApp();
@@ -26,6 +28,7 @@ const io = new Server(server, {
   }
 });
 
+setSnapshotProvider(realtimeTerminalService.buildSnapshot);
 initializeSocket(io);
 
 const PORT = process.env.PORT || 3000;
@@ -44,6 +47,7 @@ async function startServer() {
     if (String(process.env.AUTO_START_ENGINE).toLowerCase() === "true") {
       engineRunner.start();
     }
+    resultCheckerService.start();
   });
 }
 

@@ -4,10 +4,33 @@ const executionService = require("./execution.service");
 const filterAnalyticsService = require("./filter-analytics.service");
 const { registerAudit } = require("./audit.service");
 const strategyIntelligenceService = require("./strategy-intelligence.service");
+const { emitToAll } = require("../websocket/socket");
+
+const RESULT_RETRY_DELAYS_MS = [0, 1000, 3000, 5000, 10000];
+const RESULT_SCAN_INTERVAL_MS = Math.max(1000, Number(process.env.RESULT_SCAN_INTERVAL_MS || 1000));
+const RESULT_TIMEFRAME_MS = 5 * 60 * 1000;
+
+function realtimeAudit(event, fields = {}) {
+  console.log(JSON.stringify({ scope: "aerix_realtime_terminal_audit", event, timestamp: new Date().toISOString(), ...fields }));
+}
 
 class ResultCheckerService {
   constructor() {
     this.isChecking = false;
+    this.timer = null;
+    this.retryState = new Map();
+  }
+
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.checkPendingSignals().catch(() => {}), RESULT_SCAN_INTERVAL_MS);
+    this.timer.unref?.();
+  }
+
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    this.retryState.clear();
   }
 
   normalizePrice(value) {
@@ -22,7 +45,12 @@ class ResultCheckerService {
       return "loss";
     }
 
-    if (resultPrice === entryPrice) {
+    const configuredTolerance = Number(signal.meta?.price_tolerance ?? signal.meta?.tick_size);
+    const tolerance = Number.isFinite(configuredTolerance) && configuredTolerance >= 0
+      ? configuredTolerance
+      : Math.max(Number.EPSILON * Math.abs(entryPrice) * 8, 1 / (10 ** Math.max(2, Number(signal.meta?.provider_precision || 8))));
+
+    if (Math.abs(resultPrice - entryPrice) <= tolerance) {
       return "draw";
     }
 
@@ -37,6 +65,27 @@ class ResultCheckerService {
     }
 
     return "loss";
+  }
+
+  getConfirmedExpirationCandle(signal, candles = [], now = Date.now()) {
+    const expiresAt = new Date(signal.expires_at).getTime();
+    if (!Number.isFinite(expiresAt)) return null;
+    return candles.find((candle) => {
+      const candleAt = new Date(candle.datetime || candle.timestamp || candle.time).getTime();
+      const duration = Number(candle.durationMs || candle.intervalMs || RESULT_TIMEFRAME_MS);
+      const closesAt = candleAt + duration;
+      const explicitlyOpen = candle.closed === false || candle.isClosed === false || candle.complete === false;
+      return Number.isFinite(candleAt) && !explicitlyOpen && closesAt <= now && expiresAt > candleAt && expiresAt <= closesAt;
+    }) || null;
+  }
+
+  shouldAttempt(signal, now = Date.now()) {
+    const expiresAt = new Date(signal.expires_at).getTime();
+    const state = this.retryState.get(signal.id) || { retryNumber: 0 };
+    const delay = RESULT_RETRY_DELAYS_MS[state.retryNumber];
+    if (delay === undefined || now < expiresAt + delay) return false;
+    this.retryState.set(signal.id, { retryNumber: state.retryNumber + 1 });
+    return true;
   }
 
   buildOutcomeAuditPayload(signal = {}, saved = {}, finalResult = null, resultPrice = null) {
@@ -101,13 +150,28 @@ class ResultCheckerService {
       const updated = [];
 
       for (const signal of pendingSignals) {
+        if (!this.shouldAttempt(signal)) continue;
+        const retryNumber = (this.retryState.get(signal.id)?.retryNumber || 1) - 1;
         try {
+          realtimeAudit("result_check_started", { signalId: signal.id, operationId: signal.id, symbol: signal.symbol, retryNumber });
           const snapshot = await getMarketSnapshot(signal.symbol);
           const candles = snapshot?.timeframes?.m5?.candles || [];
-          const lastCandle = candles[candles.length - 1] || null;
+          const lastCandle = this.getConfirmedExpirationCandle(signal, candles);
+
+          if (!lastCandle) {
+            const exhausted = retryNumber >= RESULT_RETRY_DELAYS_MS.length - 1;
+            realtimeAudit(exhausted ? "result_check_failed" : "result_check_retry", {
+              signalId: signal.id, operationId: signal.id, symbol: signal.symbol, retryNumber,
+              expiresAt: signal.expires_at, candleClosed: false
+            });
+            continue;
+          }
 
           const resultPrice = this.normalizePrice(lastCandle?.close);
+          if (resultPrice === null) continue;
           const finalResult = this.resolveSignalResult(signal, resultPrice);
+          realtimeAudit("result_price_received", { signalId: signal.id, symbol: signal.symbol, resultPrice, provider: snapshot?.provider, candleTimestamp: lastCandle.datetime, candleClosed: true });
+          realtimeAudit("result_calculated", { signalId: signal.id, symbol: signal.symbol, entryPrice: signal.entry_price, resultPrice, result: finalResult });
 
           const saved = await signalRepository.finalizeSignalResult(signal.id, {
             result: finalResult,
@@ -115,6 +179,8 @@ class ResultCheckerService {
           });
 
           if (saved) {
+            this.retryState.delete(signal.id);
+            realtimeAudit("result_persisted", { signalId: signal.id, operationId: signal.id, symbol: signal.symbol, result: finalResult, persistenceStatus: "persisted" });
             const learningSignal = this.buildLearningSignal(signal, finalResult);
 
             // 🧠 IA aprende com WIN/LOSS
@@ -132,6 +198,15 @@ class ResultCheckerService {
               learned: true,
               learningKey: executionService.getKey(learningSignal)
             });
+
+            const resultEvent = emitToAll("signal:result", saved, { cacheLatest: true });
+            emitToAll("operation:closed", saved);
+            emitToAll("history:updated", saved, { cacheLatest: true });
+            const analytics = { reason: "signal_result", signalId: saved.id, updatedAt: new Date().toISOString() };
+            emitToAll("analytics:updated", analytics, { cacheLatest: true });
+            // Backward compatibility for deployed terminals.
+            emitToAll("signal-result-updated", saved);
+            realtimeAudit("result_broadcast", { eventId: resultEvent.eventId, signalId: saved.id, operationId: saved.id, symbol: saved.symbol, result: finalResult, broadcastStatus: "sent" });
           }
         } catch (error) {
           console.error(
