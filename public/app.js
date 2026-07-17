@@ -85,6 +85,10 @@ const el = {
   aiTopStatus: document.getElementById("aiTopStatus"),
   panelSyncStatus: document.getElementById("panelSyncStatus"),
   liveClock: document.getElementById("liveClock"),
+  timezoneSync: document.getElementById("timezoneSync"),
+  timezoneServer: document.getElementById("timezoneServer"),
+  timezoneBrasilia: document.getElementById("timezoneBrasilia"),
+  timezoneDrift: document.getElementById("timezoneDrift"),
   headlineText: document.getElementById("headlineText"),
 
   signalAsset: document.getElementById("signalAsset"),
@@ -263,7 +267,7 @@ function normalizeDisplayValue(value, fallback = "--") {
   }
 
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? fallback : value.toLocaleString("pt-BR");
+    return Number.isNaN(value.getTime()) ? fallback : AerixTime.formatBrasiliaDateTime(value);
   }
 
   if (typeof value === "object") {
@@ -275,12 +279,7 @@ function normalizeDisplayValue(value, fallback = "--") {
 
   const isoDate = /^\d{4}-\d{2}-\d{2}T/.test(text) ? new Date(text) : null;
   if (isoDate && !Number.isNaN(isoDate.getTime())) {
-    return isoDate.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return AerixTime.formatBrasiliaDateTime(isoDate);
   }
 
   return text;
@@ -898,6 +897,7 @@ function getActivationReason(signal = {}) {
 
 
 function parseSignalDate(value) {
+  if (window.AerixTime) return AerixTime.parseUtcTimestamp(value);
   if (value === null || value === undefined || value === "") return null;
 
   if (value instanceof Date) {
@@ -2770,8 +2770,15 @@ function setConnection(status) {
 function startClock() {
   const tick = () => {
     if (el.liveClock) {
-      el.liveClock.textContent = new Date().toLocaleTimeString("pt-BR");
+      el.liveClock.textContent = AerixTime.formatBrasiliaTime(new Date());
     }
+    const serverRaw = state.engineSnapshot?.timestamp || state.dashboardSnapshot?.timestamp || state.engineSnapshot?.lastCycleAt;
+    const server = AerixTime.parseUtcTimestamp(serverRaw);
+    const driftSeconds = server ? Math.round((Date.now() - server.getTime()) / 1000) : null;
+    setTextContent(el.timezoneServer, server?.toISOString() || "--");
+    setTextContent(el.timezoneBrasilia, server ? AerixTime.formatBrasiliaDateTime(server) : "--");
+    setTextContent(el.timezoneDrift, driftSeconds === null ? "--" : `${driftSeconds}s`);
+    setTextContent(el.timezoneSync, driftSeconds === null ? "AGUARDANDO" : Math.abs(driftSeconds) <= 30 ? "OK" : "DIVERGENTE");
   };
 
   tick();
@@ -2817,6 +2824,21 @@ async function loadRuntimeIntegrations() {
   state.dashboardSnapshot = dashboardData?.data || null;
   state.engineSnapshot = runtimeData?.data || null;
   state.premiumSnapshot = premiumData?.data || premiumData || null;
+
+  const serverTimestamp = state.engineSnapshot?.timestamp || state.dashboardSnapshot?.timestamp;
+  const parsedServerTimestamp = AerixTime.parseUtcTimestamp(serverTimestamp);
+  if (parsedServerTimestamp) {
+    const driftSeconds = Math.round((Date.now() - parsedServerTimestamp.getTime()) / 1000);
+    console.info(JSON.stringify({
+      scope: "aerix_timezone_audit",
+      event: "server_browser_time_drift",
+      operationalTimezone: AerixTime.OPERATIONAL_TIMEZONE,
+      serverTimestamp: parsedServerTimestamp.toISOString(),
+      browserTimestamp: new Date().toISOString(),
+      driftSeconds,
+      source: "runtime_dashboard"
+    }));
+  }
 
   syncRuntimeDashboard(dashboardData);
 
@@ -2889,12 +2911,7 @@ function formatPanelDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return normalizeDisplayValue(value);
 
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return AerixTime.formatBrasiliaDateTime(date);
 }
 
 function formatTime(value) {
@@ -2906,7 +2923,7 @@ function formatTime(value) {
     return "--";
   }
 
-  return date.toLocaleTimeString("pt-BR");
+  return AerixTime.formatBrasiliaTime(date);
 }
 
 if (el.loginForm) {

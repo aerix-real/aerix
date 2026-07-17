@@ -27,7 +27,7 @@
   function formatTime(value) {
     if (!value) return "--";
     const date = new Date(value);
-    return date.toLocaleTimeString("pt-BR");
+    return window.AerixTime ? window.AerixTime.formatBrasiliaTime(date) : "--";
   }
 
   function buildPriority(confidence = 0) {

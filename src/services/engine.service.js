@@ -98,11 +98,11 @@ function buildLegacySignalShape(symbol, strategyResult, snapshot, strategyMode) 
   const lastM5Candle = getLastCandle(snapshot, "m5");
 
   const now = new Date();
-  const entryTime = now.toLocaleTimeString("pt-BR", { hour12: false });
+  const entryTime = now.toISOString();
 
   const expiryMinutes = 1;
   const expiry = new Date(now.getTime() + expiryMinutes * 60 * 1000);
-  const expiryTime = expiry.toLocaleTimeString("pt-BR", { hour12: false });
+  const expiryTime = expiry.toISOString();
 
   return {
     asset: symbol,
