@@ -30,14 +30,12 @@
         <strong>AERIX</strong>
       </div>
       <div class="topbar-status" aria-label="Status operacional">
-        <span class="status-pill"><i></i><b>Engine</b> <strong id="engineTopStatus">Sincronizando</strong></span>
-        <span class="status-pill"><i></i><b>Feed</b> <strong id="feedTopStatus">Sincronizando</strong></span>
-        <span class="status-pill"><i></i><b>IA</b> <strong id="aiTopStatus">Sincronizando</strong></span>
-        <span class="status-pill mode"><b>Modo</b> <strong id="topCurrentMode">Equilibrado</strong></span>
-        <span class="status-pill"><b>Ciclo</b> <strong id="lastCycleCompact">--</strong></span>
-        <span class="status-pill clock" title="America/Sao_Paulo"><b>TEMPO REAL</b> <strong id="liveClock">00:00:00</strong></span>
+        <button class="live-status" id="liveStatus" type="button" aria-describedby="statusDetails"><i class="connection-badge connecting" id="connectionBadge"></i><strong id="connectionText">SINCRONIZANDO</strong><span class="status-popover" id="statusDetails" role="tooltip"><b>Engine</b><span id="engineTopStatus">Sincronizando</span><b>Feed</b><span id="feedTopStatus">Sincronizando</span><b>IA</b><span id="aiTopStatus">Sincronizando</span><b>Socket</b><span id="websocketStatusHeader">Conectando</span><b>Heartbeat</b><span id="lastHeartbeat">Aguardando dados</span></span></button>
+        <span class="header-mode" id="topCurrentMode">Equilibrado</span>
+        <span class="header-clock" title="America/Sao_Paulo"><strong id="liveClock">00:00:00</strong><small>Brasília</small></span>
+        <span class="header-freshness" id="lastCycleCompact">Sincronizando</span>
       </div>
-      <span class="connection-badge connecting" id="connectionBadge" title="Socket"></span><span id="panelSyncStatus" class="sr-only">Painel sincronizando</span><span id="connectionText" class="sr-only">Conectando</span>
+      <button class="user-menu" type="button" aria-label="Menu do usuário" title="Conta"><span id="userInitial">A</span></button><span id="panelSyncStatus" class="sr-only">Painel sincronizando</span>
     </header>
 
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -57,30 +55,24 @@
       </aside>
 
       <section class="content-panel">
-        <section class="dashboard-tab-panel active" data-tab-panel="operation">
-          <p class="terminal-kicker">OPERAÇÃO</p>
-          <h1 id="headlineText">Terminal institucional ativo. IA operacional monitorando mercado em tempo real.</h1>
-          <section class="operation-grid">
-            <article class="hero-signal" id="currentSignalCard">
-              <div class="hero-top"><span id="signalMode">sinal atual</span><span id="marketRegime">NEUTRO</span></div>
-              <div class="hero-main"><strong id="bestAsset">Mercado em análise</strong><div class="signal-direction neutral" id="bestDirection">WAIT</div></div>
-              <p class="wait-copy">Aguardando oportunidade válida</p>
-              <div class="pre-signal-compact" id="preSignalCompact" hidden><span id="preSignalTitle">POSSIBILIDADE OPERACIONAL</span><strong id="preSignalEntry">--</strong><small id="preSignalPending">Aguardando confirmação</small></div>
-              <div class="hero-metrics"><div><span>Confiança</span><strong id="bestConfidence">0%</strong></div><div><span>Score final</span><strong id="bestScore">0%</strong></div><div><span>Estratégia vencedora</span><strong id="bestStrategy">--</strong></div><div><span>Status IA</span><strong id="bestAiStatus">Aguardando</strong></div><div><span>Horário</span><strong id="signalTime">--</strong></div><div><span>Expiração</span><strong id="bestExpiry">--</strong></div></div>
-              <div class="entry-window-timer neutral" id="entryWindowTimer" aria-live="polite" aria-atomic="true"><span>Timing de entrada</span><strong id="entryWindowClassification">AGUARDANDO OPORTUNIDADE</strong><b id="entryWindowCountdown">--</b><small id="entryWindowTimestamp">--</small></div>
-            </article>
-            <aside class="summary-card-grid">
-              <article class="stat-card"><span>Winrate 24h</span><strong id="summaryWinrate24h">0%</strong><small>resultado recente</small></article>
-              <article class="stat-card"><span>Sinais hoje</span><strong id="summarySignalsToday">0</strong><small>volume aprovado</small></article>
-              <article class="stat-card health-kpi-card"><span>Health Score</span><strong id="healthScore">0%</strong><small id="healthSummary">0/5 serviços ativos</small><div class="health-mini-list" id="healthChecklistCompact"></div></article>
-              <article class="stat-card"><span>Última atualização</span><strong id="summaryLastUpdate">--</strong><small>ciclo operacional</small></article>
-            </aside>
-          </section>
-          <section class="decision-grid">
-            <article class="panel"><div class="panel-header"><h2>Por que este sinal?</h2><span>máx. 4</span></div><div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando análise aprovada pela IA.</div></div></article>
-            <article class="panel"><div class="panel-header"><h2>Histórico resumido</h2><span>5 recentes</span></div><div class="premium-history-header"><span>Hora</span><span>Ativo</span><span>Direção</span><span>Estratégia</span><span>Resultado</span></div><div class="premium-history-list" id="premiumHistoryList"><div class="history-empty">Nenhum sinal recente.</div></div></article>
-            <article class="panel ranking-compact"><div class="panel-header"><h2>Ranking de oportunidades</h2><span>top 5</span></div><div class="premium-list-table" id="assetRankingList"><div class="history-empty">Sem oportunidades disponíveis.</div></div></article>
-          </section>
+        <section class="dashboard-tab-panel active operation-terminal" data-tab-panel="operation">
+          <article class="hero-signal state-wait" id="currentSignalCard" aria-live="polite" aria-atomic="true">
+            <span class="signal-state-label" id="signalStateLabel">MERCADO EM ANÁLISE</span>
+            <div class="hero-main"><strong id="bestAsset">Mercado em análise</strong><div class="signal-direction neutral" id="bestDirection">WAIT</div><p class="wait-copy" id="heroMessage">Nenhuma oportunidade relevante no momento</p></div>
+            <div class="hero-operational-data" id="heroOperationalData" hidden>
+              <div><span id="entryTimingLabel">Possível entrada</span><strong id="heroEntryTime">Aguardando dados</strong></div>
+              <div id="heroCountdownGroup"><span id="countdownLabel">Contador</span><strong id="heroCountdown">Aguardando dados</strong></div>
+            </div>
+            <div class="hero-footer">
+              <div><span>Estratégia</span><strong id="bestStrategy">Aguardando dados</strong></div>
+              <div id="confidenceGroup"><span id="confidenceLabel">Confiança</span><strong id="bestConfidence">Aguardando dados</strong></div>
+              <div id="pendingGroup"><span id="pendingLabel">Aguardando</span><strong id="pendingCondition">Formação de contexto</strong></div>
+            </div>
+            <div class="entry-window-timer neutral" id="entryWindowTimer" aria-live="polite" aria-atomic="true" hidden><span>Timing de entrada</span><strong id="entryWindowClassification">AGUARDANDO OPORTUNIDADE</strong><b id="entryWindowCountdown">Aguardando dados</b><small id="entryWindowTimestamp">Aguardando dados</small></div>
+          </article>
+          <section class="context-summary" aria-label="Contexto resumido"><div><span>Estrutura</span><strong id="contextStructure">Mercado em análise</strong></div><div><span>Estratégia</span><strong id="contextStrategy">Aguardando dados</strong></div><div><span>Contexto</span><strong id="contextMarket">Monitoramento contínuo</strong></div></section>
+          <section class="scenario-section"><div class="section-heading"><h2>Por que este cenário?</h2><button class="text-link" type="button" data-open-tab="technical">Ver análise técnica</button></div><div class="why-signal-list" id="whySignalList"><div class="history-empty">Aguardando uma leitura relevante da engine.</div></div></section>
+          <section class="recent-section"><div class="section-heading"><h2>Histórico recente</h2><button class="text-link" type="button" data-open-tab="history">Ver histórico completo</button></div><div class="premium-history-header"><span>Hora</span><span>Ativo</span><span>Direção</span><span>Resultado</span></div><div class="premium-history-list" id="premiumHistoryList"><div class="history-empty"><strong>Nenhuma operação concluída ainda</strong><span>Assim que houver um sinal, ele aparecerá aqui.</span></div></div></section>
         </section>
 
         <section class="dashboard-tab-panel" data-tab-panel="analytics" hidden>
