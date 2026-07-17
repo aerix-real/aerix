@@ -13,6 +13,23 @@ const HISTORY_PAGE_SIZE = 10;
 const SHADOW_EVENT_LIMIT = 12;
 const TIMELINE_EVENT_LIMIT = 7;
 
+const OPERATIONAL_PRESENTATION = Object.freeze({
+  WAIT: { label: "MERCADO EM ANÁLISE", tone: "neutral", priority: 0, mainMessage: "Nenhuma oportunidade relevante no momento", showDirection: false, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: false, accentType: "muted" },
+  OBSERVATION: { label: "OBSERVAÇÃO", tone: "observation", priority: 1, mainMessage: "Contexto inicial identificado", showDirection: true, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: true, showResult: false, accentType: "amber-soft" },
+  POSSIBILITY: { label: "POSSIBILIDADE OPERACIONAL", tone: "possibility", priority: 2, mainMessage: "Possível oportunidade em formação", showDirection: true, showEntryTime: true, showCountdown: false, showConfidence: true, showPendingCondition: true, showResult: false, accentType: "amber" },
+  NEAR_CONFIRMATION: { label: "PRÓXIMO DA CONFIRMAÇÃO", tone: "near", priority: 3, mainMessage: "Cenário próximo da validação", showDirection: true, showEntryTime: true, showCountdown: false, showConfidence: true, showPendingCondition: true, showResult: false, accentType: "amber" },
+  CONFIRMED: { label: "SINAL CONFIRMADO", tone: "confirmed", priority: 4, mainMessage: "Entrada liberada", showDirection: true, showEntryTime: true, showCountdown: true, showConfidence: true, showPendingCondition: false, showResult: false, accentType: "direction" },
+  PREPARING: { label: "PREPARAÇÃO DE ENTRADA", tone: "confirmed", priority: 5, mainMessage: "Preparando janela operacional", showDirection: true, showEntryTime: true, showCountdown: true, showConfidence: true, showPendingCondition: false, showResult: false, accentType: "direction" },
+  ENTRY_RELEASED: { label: "ENTRADA LIBERADA", tone: "confirmed", priority: 6, mainMessage: "Janela operacional disponível", showDirection: true, showEntryTime: true, showCountdown: true, showConfidence: true, showPendingCondition: false, showResult: false, accentType: "direction" },
+  OPEN: { label: "OPERAÇÃO ATIVA", tone: "open", priority: 7, mainMessage: "Operação em andamento", showDirection: true, showEntryTime: true, showCountdown: true, showConfidence: false, showPendingCondition: false, showResult: false, accentType: "direction" },
+  AWAITING_RESULT: { label: "OPERAÇÃO ENCERRADA", tone: "neutral", priority: 8, mainMessage: "Aguardando confirmação do preço final", showDirection: true, showEntryTime: true, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: false, accentType: "muted" },
+  WIN: { label: "RESULTADO CONFIRMADO", tone: "win", priority: 9, mainMessage: "WIN", showDirection: true, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: true, accentType: "result" },
+  LOSS: { label: "RESULTADO CONFIRMADO", tone: "loss", priority: 9, mainMessage: "LOSS", showDirection: true, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: true, accentType: "result" },
+  DRAW: { label: "RESULTADO CONFIRMADO", tone: "draw", priority: 9, mainMessage: "DRAW", showDirection: true, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: true, accentType: "muted" },
+  CANCELLED: { label: "OPERAÇÃO CANCELADA", tone: "neutral", priority: 8, mainMessage: "Cenário invalidado antes da entrada", showDirection: false, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: false, accentType: "muted" },
+  EXPIRED: { label: "OPORTUNIDADE EXPIRADA", tone: "neutral", priority: 8, mainMessage: "A janela operacional foi encerrada", showDirection: true, showEntryTime: false, showCountdown: false, showConfidence: false, showPendingCondition: false, showResult: false, accentType: "muted" }
+});
+
 const STORAGE_KEYS = {
   accessToken: "aerix_access_token",
   refreshToken: "aerix_refresh_token",
@@ -87,6 +104,8 @@ const el = {
 
   connectionBadge: document.getElementById("connectionBadge"),
   connectionText: document.getElementById("connectionText"),
+  websocketStatusHeader: document.getElementById("websocketStatusHeader"),
+  lastHeartbeat: document.getElementById("lastHeartbeat"),
   feedTopStatus: document.getElementById("feedTopStatus"),
   aiTopStatus: document.getElementById("aiTopStatus"),
   panelSyncStatus: document.getElementById("panelSyncStatus"),
@@ -112,6 +131,19 @@ const el = {
   bestConfidence: document.getElementById("bestConfidence"),
   bestExpiry: document.getElementById("bestExpiry"),
   bestStrategy: document.getElementById("bestStrategy"),
+  signalStateLabel: document.getElementById("signalStateLabel"),
+  heroMessage: document.getElementById("heroMessage"),
+  heroOperationalData: document.getElementById("heroOperationalData"),
+  heroEntryTime: document.getElementById("heroEntryTime"),
+  heroCountdown: document.getElementById("heroCountdown"),
+  heroCountdownGroup: document.getElementById("heroCountdownGroup"),
+  confidenceGroup: document.getElementById("confidenceGroup"),
+  pendingGroup: document.getElementById("pendingGroup"),
+  pendingCondition: document.getElementById("pendingCondition"),
+  confidenceLabel: document.getElementById("confidenceLabel"),
+  contextStructure: document.getElementById("contextStructure"),
+  contextStrategy: document.getElementById("contextStrategy"),
+  contextMarket: document.getElementById("contextMarket"),
   bestAiStatus: document.getElementById("bestAiStatus"),
   bestEntryStatus: document.getElementById("bestEntryStatus"),
   preSignalCompact: document.getElementById("preSignalCompact"),
@@ -1011,6 +1043,7 @@ function setEntryWindowVisual(tone = "neutral", label = "AGUARDANDO OPORTUNIDADE
   setTextContent(el.entryWindowClassification, label);
   setTextContent(el.entryWindowCountdown, counter);
   setTextContent(el.entryWindowTimestamp, timestamp);
+  setTextContent(el.heroCountdown, safeDisplay(counter));
 
   if (el.entryWindowClassification) {
     el.entryWindowClassification.className = `entry-window-classification ${tone}`;
@@ -1107,6 +1140,71 @@ function registerEntryWindow(signal = {}) {
   }
 }
 
+function resolveOperationalPresentationState(signal = {}) {
+  const result = String(signal.result || signal.outcome || "").toUpperCase();
+  if (["WIN", "LOSS", "DRAW"].includes(result)) return result;
+
+  const rawStatus = String(signal.signalState || signal.signal_state || signal.status || signal.executionStatus || "").toUpperCase();
+  if (["CANCELLED", "CANCELED"].includes(rawStatus)) return "CANCELLED";
+  if (rawStatus === "EXPIRED") return "EXPIRED";
+  if (["AWAITING_RESULT", "PENDING_RESULT", "CLOSED"].includes(rawStatus)) return "AWAITING_RESULT";
+  if (["OPEN", "ACTIVE", "IN_PROGRESS"].includes(rawStatus)) return "OPEN";
+  if (["ENTRY_RELEASED", "RELEASED"].includes(rawStatus)) return "ENTRY_RELEASED";
+  if (rawStatus === "PREPARING") return "PREPARING";
+  if (["CONFIRMED", "APPROVED"].includes(rawStatus) || isConfirmedOperationalSignal(signal)) return "CONFIRMED";
+
+  if (isPreSignalOpportunity(signal)) {
+    return signal.preSignalStatus === "QUASE_CONFIRMADO" || rawStatus === "NEAR_CONFIRMATION"
+      ? "NEAR_CONFIRMATION"
+      : "POSSIBILITY";
+  }
+  if (["OBSERVATION", "OBSERVACAO", "WATCHING"].includes(rawStatus)) return "OBSERVATION";
+  return "WAIT";
+}
+
+function safeDisplay(value, fallback = "Aguardando dados") {
+  if (value === null || value === undefined || value === "") return fallback;
+  const text = String(value).trim();
+  return !text || ["undefined", "null", "nan", "invalid date", "--", "---"].includes(text.toLowerCase()) ? fallback : text;
+}
+
+function renderOperationalPresentation(signal = {}) {
+  const stateKey = resolveOperationalPresentationState(signal);
+  const config = OPERATIONAL_PRESENTATION[stateKey] || OPERATIONAL_PRESENTATION.WAIT;
+  const direction = getDisplayDirection(signal);
+  const strategy = safeDisplay(getStrategyLabel(signal));
+  const pending = safeDisplay(
+    signal.pendingConfirmations?.[0] || signal.pending_confirmation || signal.preSignalReason,
+    "Formação de contexto"
+  );
+  const entryValue = signal.suggestedEntryAt || signal.suggested_entry_at || signal.entryTime || signal.entry_time || signal.created_at;
+  const confidence = isPreSignalOpportunity(signal)
+    ? Number(signal.preliminaryConfidence || signal.preSignalScore || signal.confidence)
+    : getOperationalScore(signal);
+  const card = document.getElementById("currentSignalCard");
+
+  if (card) card.className = `hero-signal state-${config.tone} direction-${String(direction || "neutral").toLowerCase()}`;
+  setTextContent(el.signalStateLabel, config.label);
+  setTextContent(el.bestAsset, stateKey === "WAIT" ? "Mercado em análise" : safeDisplay(signal.symbol || signal.asset));
+  setTextContent(el.bestDirection, config.showResult ? stateKey : config.showDirection ? (direction || "VIÉS EM ANÁLISE") : "WAIT");
+  if (el.bestDirection) el.bestDirection.className = `signal-direction ${config.showResult ? `result-${stateKey.toLowerCase()}` : direction === "CALL" ? "buy" : direction === "PUT" ? "sell" : "neutral"}`;
+  setTextContent(el.heroMessage, config.mainMessage);
+  setTextContent(el.bestStrategy, strategy);
+  setTextContent(el.contextStrategy, strategy);
+  setTextContent(el.contextStructure, safeDisplay(signal.marketStructure?.label || signal.structure || signal.trend, "Mercado em análise"));
+  setTextContent(el.contextMarket, safeDisplay(signal.context || signal.marketRegime || signal.regime, stateKey === "WAIT" ? "Monitoramento contínuo" : "Leitura institucional"));
+  setTextContent(el.pendingCondition, pending);
+  setTextContent(el.heroEntryTime, entryValue ? formatTime(entryValue) : "Aguardando dados");
+  setTextContent(el.bestConfidence, Number.isFinite(confidence) && confidence > 0 ? `${Math.round(confidence)}%` : "Aguardando dados");
+  setTextContent(el.confidenceLabel, isPreSignalOpportunity(signal) ? "Confiança preliminar" : "Confiança");
+
+  if (el.heroOperationalData) el.heroOperationalData.hidden = !config.showEntryTime && !config.showCountdown;
+  if (el.heroCountdownGroup) el.heroCountdownGroup.hidden = !config.showCountdown;
+  if (el.confidenceGroup) el.confidenceGroup.hidden = !config.showConfidence;
+  if (el.pendingGroup) el.pendingGroup.hidden = !config.showPendingCondition;
+  if (el.bestStrategy?.parentElement) el.bestStrategy.parentElement.hidden = stateKey === "WAIT";
+}
+
 function updateCompactOperations(signal = {}, source = "engine") {
   const preSignal = isPreSignalOpportunity(signal);
   const direction = getDisplayDirection(signal) || String(signal.direction || signal.signal || "WAIT").toUpperCase();
@@ -1186,6 +1284,7 @@ function updateCompactOperations(signal = {}, source = "engine") {
   setTextContent(document.querySelector(".wait-copy"), preSignal ? `${signal.preSignalMessage || "POSSIBILIDADE OPERACIONAL"} · Possível entrada: ${formatTime(signal.suggestedEntryAt || signal.suggested_entry_at)}` : (direction === "WAIT" ? "Aguardando oportunidade válida" : "Sinal confirmado pela IA operacional"));
   renderWhySignal(signal);
   renderHealthScore(signal, state.engineSnapshot?.monitor || {});
+  renderOperationalPresentation(signal);
 }
 
 function formatDuration(ms = 0) {
@@ -1985,32 +2084,30 @@ function renderHealthScore(signal = {}, monitor = state.engineSnapshot?.monitor 
 function buildWhySignal(signal = {}) {
   const preSignal = isPreSignalOpportunity(signal);
   const direction = getDisplayDirection(signal) || String(signal.direction || "WAIT").toUpperCase();
-  const score = preSignal ? Number(signal.preliminaryConfidence || signal.preSignalScore || 0) : getOperationalScore(signal);
   const strategy = getStrategyLabel(signal);
-  const aiApproved = signal.aiApproved !== false && signal.ai_approved !== false && !signal.blocked;
   const reasons = [];
 
   if (preSignal) {
-    reasons.push(signal.preSignalReason || "Cenário técnico relevante aguardando confirmação");
-    (signal.pendingConfirmations || []).slice(0, 2).forEach((item) => reasons.push(`Aguardando: ${item}`));
-    if (signal.suggestedEntryAt) reasons.push(`Possível entrada: ${formatTime(signal.suggestedEntryAt)}`);
-    return reasons.slice(0, 4);
+    reasons.push({ text: signal.preSignalReason || "Contexto técnico relevante identificado", pending: false });
+    (signal.reasons || []).slice(0, 1).forEach((item) => reasons.push({ text: item, pending: false }));
+    (signal.pendingConfirmations || []).slice(0, 3 - reasons.length).forEach((item) => reasons.push({ text: `Aguardando ${item}`, pending: true }));
+    return reasons.slice(0, 3);
   }
-  if (direction !== "WAIT") reasons.push("✓ Tendência alinhada");
-  if (score >= 70) reasons.push("✓ Score aprovado");
-  if (strategy && strategy !== "--") reasons.push("✓ Estratégia aprovada");
-  if (aiApproved) reasons.push("✓ IA aprovou");
+  (signal.reasons || signal.confirmationReasons || []).slice(0, 3).forEach((item) => reasons.push({ text: item, pending: false }));
+  if (!reasons.length && direction !== "WAIT") reasons.push({ text: "Direção operacional validada", pending: false });
+  if (reasons.length < 3 && strategy && strategy !== "--") reasons.push({ text: `${strategy} identificada`, pending: false });
+  if (reasons.length < 3 && signal.pending_confirmation) reasons.push({ text: `Aguardando ${signal.pending_confirmation}`, pending: true });
 
-  return reasons.slice(0, 4);
+  return reasons.slice(0, 3);
 }
 
 function renderWhySignal(signal = {}) {
   const reasons = buildWhySignal(signal);
   const html = reasons.length
-    ? reasons.map((reason) => `<span class="why-chip">${escapeHtml(reason)}</span>`).join("")
-    : `<div class="history-empty">Aguardando sinal com confluência suficiente.</div>`;
+    ? reasons.map((reason) => `<span class="why-chip ${reason.pending ? "pending" : "confirmed"}">${escapeHtml(reason.text)}</span>`).join("")
+    : `<div class="history-empty">Aguardando uma leitura relevante da engine.</div>`;
   if (el.whySignalList) el.whySignalList.innerHTML = html;
-  if (el.whySignalMini) el.whySignalMini.innerHTML = reasons.length ? reasons.slice(0, 2).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("") : `<span>Aguardando confluência institucional.</span>`;
+  if (el.whySignalMini) el.whySignalMini.innerHTML = reasons.length ? reasons.slice(0, 2).map((reason) => `<span>${escapeHtml(reason.text)}</span>`).join("") : `<span>Aguardando confluência institucional.</span>`;
 }
 
 function renderPremiumHistory() {
@@ -2019,7 +2116,7 @@ function renderPremiumHistory() {
   const seen = new Set(active.map(getEntryWindowSignalKey));
   const items = [...active, ...state.history.filter((item) => !seen.has(getEntryWindowSignalKey(item)))].slice(0, 5);
   if (!items.length) {
-    el.premiumHistoryList.innerHTML = `<div class="history-empty">Nenhum sinal recente.</div>`;
+    el.premiumHistoryList.innerHTML = `<div class="history-empty"><strong>Nenhuma operação concluída ainda</strong><span>Assim que houver um sinal, ele aparecerá aqui.</span></div>`;
     return;
   }
   el.premiumHistoryList.innerHTML = items.map((signal) => {
@@ -2027,7 +2124,7 @@ function renderPremiumHistory() {
     const result = isPreSignalOpportunity(signal) ? "POSSIBILIDADE" : String(signal.result || "PENDING").toUpperCase();
     const resultClass = result === "WIN" ? "win" : result === "LOSS" ? "loss" : result === "DRAW" ? "draw" : "pending";
     const directionClass = direction === "CALL" ? "call" : direction === "PUT" ? "put" : "neutral";
-    return `<div class="premium-history-row"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "---")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span>${escapeHtml(getStrategyLabel(signal))}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result === "PENDING" ? "PENDENTE" : result)}</span></div>`;
+    return `<div class="premium-history-row" title="${escapeHtml(getStrategyLabel(signal))}"><time>${formatTime(signal.created_at || signal.createdAt || signal.time || signal.timestamp || new Date())}</time><strong>${escapeHtml(signal.symbol || signal.asset || "Ativo indisponível")}</strong><span class="badge direction-badge ${directionClass}">${escapeHtml(direction)}</span><span class="badge result-badge ${resultClass}">${escapeHtml(result === "PENDING" ? "PENDENTE" : result)}</span></div>`;
   }).join("");
 }
 
@@ -2752,7 +2849,9 @@ async function setResult(id, result) {
 function setConnection(status) {
   if (!el.connectionBadge) return;
 
-  setTextContent(el.connectionText, status);
+  const publicStatus = status === "Online" ? "AO VIVO" : status === "Offline" ? "OFFLINE" : "SINCRONIZANDO";
+  setTextContent(el.connectionText, publicStatus);
+  setTextContent(el.websocketStatusHeader, status);
   setTextContent(el.panelSyncStatus, status === "Online" ? "Painel Sincronizado" : status === "Offline" ? "Socket Offline" : "Painel Sincronizando");
   setTextContent(el.engineTopStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
   setTextContent(el.feedTopStatus, status === "Online" ? "Online" : status === "Offline" ? "Offline" : "Sincronizando");
@@ -2781,6 +2880,8 @@ function startClock() {
     const serverRaw = state.engineSnapshot?.timestamp || state.dashboardSnapshot?.timestamp || state.engineSnapshot?.lastCycleAt;
     const server = AerixTime.parseUtcTimestamp(serverRaw);
     const driftSeconds = server ? Math.round((Date.now() - server.getTime()) / 1000) : null;
+    setTextContent(el.lastHeartbeat, server ? AerixTime.formatBrasiliaDateTime(server) : "Aguardando dados");
+    setTextContent(el.lastCycleCompact, driftSeconds === null ? "Sincronizando" : Math.abs(driftSeconds) < 2 ? "Atualizado agora" : `Atualizado há ${Math.abs(driftSeconds)}s`);
     setTextContent(el.timezoneServer, server?.toISOString() || "--");
     setTextContent(el.timezoneBrasilia, server ? AerixTime.formatBrasiliaDateTime(server) : "--");
     setTextContent(el.timezoneDrift, driftSeconds === null ? "--" : `${driftSeconds}s`);
@@ -3034,6 +3135,12 @@ function setupDashboardTabs() {
       }
     });
   });
+
+  document.querySelectorAll("[data-open-tab]").forEach((link) => {
+    link.addEventListener("click", () => {
+      document.querySelector(`.dashboard-tab[data-tab="${link.dataset.openTab}"]`)?.click();
+    });
+  });
 }
 
 function setupHistoryControls() {
@@ -3158,6 +3265,8 @@ socket.on("signal", (signal) => {
 
 socket.on("signal-result-updated", (signal) => {
   renderShadowMode(signal, "result");
+  state.activeSignal = signal;
+  updateCompactOperations(signal, "result");
 
   const index = state.history.findIndex((item) => item.id === signal.id);
 
@@ -3173,6 +3282,10 @@ socket.on("signal-result-updated", (signal) => {
     loadStats();
     loadFilterAnalytics();
     loadPerformanceDashboard();
+  } else if (isConfirmedOperationalSignal(signal)) {
+    state.history.unshift(signal);
+    state.history = state.history.slice(0, MAX_HISTORY_ITEMS);
+    scheduleHistoryRender();
   }
 });
 
