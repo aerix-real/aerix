@@ -16,7 +16,7 @@ const RateLimiterService = require("./rate-limiter.service");
 const { auditSignalPipeline } = require("../utils/signal-pipeline-audit");
 
 const signalRepository = require("../repositories/signal.repository");
-const { emitToAll } = require("../websocket/socket");
+const { emitToAll, emitRealtime } = require("../websocket/socket");
 const {
   isConfirmedOperationalSignal,
   filterConfirmedOperationalSignals
@@ -704,6 +704,8 @@ class EngineRunnerService {
 
           emitToAll("signal", signal, { cacheLatest: true });
           emitToAll("bestOpportunity", signal, { cacheLatest: true });
+          emitRealtime("signal:approved", signal, { cacheLatest: true });
+          emitRealtime("operation:opened", signal, { cacheLatest: true });
           logSignalFlow("SIGNAL_BROADCAST", signal, { events: ["signal", "bestOpportunity"] });
 
           await this.auditDecision("signal_generated", signal);

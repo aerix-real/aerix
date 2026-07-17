@@ -61,6 +61,12 @@ const state = {
   }
 };
 
+const realtimeTerminal = typeof RealtimeTerminalClient === "function"
+  ? new RealtimeTerminalClient(socket, {
+      poll: () => state.accessToken ? loadRuntimeIntegrations() : Promise.resolve()
+    })
+  : null;
+
 const el = {
   loginOverlay: document.getElementById("loginOverlay"),
   loginForm: document.getElementById("loginForm"),
@@ -3169,6 +3175,34 @@ socket.on("signal-result-updated", (signal) => {
     loadPerformanceDashboard();
   }
 });
+
+function applyRealtimeResult(signal) {
+  if (!signal?.id) return;
+  const index = state.history.findIndex((item) => String(item.id) === String(signal.id));
+  if (index === -1) state.history.unshift(signal);
+  else state.history[index] = { ...state.history[index], ...signal };
+  state.history = state.history.slice(0, MAX_HISTORY_ITEMS);
+  scheduleHistoryRender();
+  scheduleEquityDraw();
+}
+
+if (realtimeTerminal) {
+  realtimeTerminal.on("signal:approved", (signal) => {
+    renderSignal(signal);
+    updateCompactOperations(signal, "signal:approved");
+  });
+  realtimeTerminal.on("operation:opened", (signal) => renderShadowMode(signal, "operation:opened"));
+  realtimeTerminal.on("signal:result", applyRealtimeResult);
+  realtimeTerminal.on("history:updated", applyRealtimeResult);
+  realtimeTerminal.on("analytics:updated", () => {
+    loadStats();
+    loadFilterAnalytics();
+    loadPerformanceDashboard();
+  });
+  realtimeTerminal.on("terminal:snapshot", (snapshot) => {
+    if (snapshot?.liveState) syncRuntimeDashboard(snapshot.liveState);
+  });
+}
 
 socket.on("bestOpportunity", handleBestOpportunity);
 

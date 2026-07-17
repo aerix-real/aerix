@@ -1,40 +1,6 @@
 let ioInstance = null;
 const latestEvents = new Map();
-
-const HEARTBEAT_TIMESTAMP_REFRESH_MS = 250;
-let sharedTimestamp = new Date().toISOString();
-let cachedSystemStatusPayload = Object.freeze({
-  connected: true,
-  timestamp: sharedTimestamp
-});
-let cachedRuntimePongPayload = Object.freeze({
-  timestamp: sharedTimestamp
-});
-let heartbeatPayloadTimer = null;
-
-function refreshHeartbeatPayloads() {
-  sharedTimestamp = new Date().toISOString();
-  cachedSystemStatusPayload = Object.freeze({
-    connected: true,
-    timestamp: sharedTimestamp
-  });
-  cachedRuntimePongPayload = Object.freeze({
-    timestamp: sharedTimestamp
-  });
-}
-
-function ensureHeartbeatPayloadTimer() {
-  if (heartbeatPayloadTimer) return;
-
-  heartbeatPayloadTimer = setInterval(
-    refreshHeartbeatPayloads,
-    HEARTBEAT_TIMESTAMP_REFRESH_MS
-  );
-
-  if (typeof heartbeatPayloadTimer.unref === "function") {
-    heartbeatPayloadTimer.unref();
-  }
-}
+const realtimeTerminalService = require("../services/realtime-terminal.service");
 
 function canEmitHeartbeat(socket) {
   if (!socket || !socket.connected) return false;
@@ -45,12 +11,11 @@ function canEmitHeartbeat(socket) {
   return true;
 }
 
-function initializeSocket(io) {
+function initializeSocket(io, options = {}) {
   ioInstance = io;
-  ensureHeartbeatPayloadTimer();
 
   io.on("connection", (socket) => {
-    socket.emit("system:status", cachedSystemStatusPayload);
+    socket.emit("system:status", { connected: true, timestamp: new Date().toISOString() });
 
     for (const [event, payload] of latestEvents.entries()) {
       socket.emit(event, payload);
@@ -59,9 +24,11 @@ function initializeSocket(io) {
     socket.on("runtime:ping", () => {
       if (!canEmitHeartbeat(socket)) return;
 
-      socket.volatile.emit("runtime:pong", cachedRuntimePongPayload);
+      socket.volatile.emit("runtime:pong", { timestamp: new Date().toISOString() });
     });
   });
+
+  realtimeTerminalService.configure(io, options);
 
   return ioInstance;
 }
@@ -87,8 +54,13 @@ function emitToAll(event, payload, options = {}) {
   ioInstance.emit(event, payload);
 }
 
+function emitRealtime(event, payload, options = {}) {
+  return realtimeTerminalService.broadcast(event, payload, options);
+}
+
 module.exports = {
   initializeSocket,
   getIO,
-  emitToAll
+  emitToAll,
+  emitRealtime
 };
