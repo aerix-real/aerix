@@ -26,7 +26,12 @@ const io = new Server(server, {
   }
 });
 
-initializeSocket(io);
+initializeSocket(io, {
+  snapshotProvider: async () => ({
+    liveState: engineRunner.getState(),
+    heartbeatStatus: "online"
+  })
+});
 
 const PORT = process.env.PORT || 3000;
 

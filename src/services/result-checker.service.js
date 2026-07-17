@@ -5,10 +5,32 @@ const filterAnalyticsService = require("./filter-analytics.service");
 const { registerAudit } = require("./audit.service");
 const strategyIntelligenceService = require("./strategy-intelligence.service");
 const { toUtcIso, emitTimezoneAudit } = require("../utils/timezone");
+const { emitRealtime } = require("../websocket/socket");
+
+const RESULT_RETRY_DELAYS_MS = Object.freeze([0, 1000, 3000, 5000, 10000]);
 
 class ResultCheckerService {
   constructor() {
     this.isChecking = false;
+  }
+
+  wait(delayMs) {
+    return new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  async getClosedCandle(signal) {
+    for (const delayMs of RESULT_RETRY_DELAYS_MS) {
+      if (delayMs) await this.wait(delayMs);
+      const snapshot = await getMarketSnapshot(signal.symbol);
+      const candles = snapshot?.timeframes?.m5?.candles || [];
+      const expirationMs = new Date(signal.expires_at).getTime();
+      const closed = [...candles].reverse().find((candle) => {
+        const closeTime = new Date(candle.closeTime || candle.close_time || candle.datetime || candle.timestamp).getTime();
+        return Number.isFinite(closeTime) && closeTime >= expirationMs && closeTime <= Date.now();
+      });
+      if (closed && this.normalizePrice(closed.close) !== null) return closed;
+    }
+    return null;
   }
 
   normalizePrice(value) {
@@ -104,9 +126,8 @@ class ResultCheckerService {
 
       for (const signal of pendingSignals) {
         try {
-          const snapshot = await getMarketSnapshot(signal.symbol);
-          const candles = snapshot?.timeframes?.m5?.candles || [];
-          const lastCandle = candles[candles.length - 1] || null;
+          const lastCandle = await this.getClosedCandle(signal);
+          if (!lastCandle) continue;
 
           const resultPrice = this.normalizePrice(lastCandle?.close);
           const finalResult = this.resolveSignalResult(signal, resultPrice);
@@ -134,6 +155,10 @@ class ResultCheckerService {
               learned: true,
               learningKey: executionService.getKey(learningSignal)
             });
+
+            emitRealtime("signal:result", saved, { cacheLatest: true });
+            emitRealtime("history:updated", saved, { cacheLatest: true });
+            emitRealtime("analytics:updated", { refresh: true, signalId: saved.id });
           }
         } catch (error) {
           console.error(
