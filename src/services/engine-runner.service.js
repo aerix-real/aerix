@@ -660,6 +660,29 @@ class EngineRunnerService {
             mode
           });
 
+          const candlestickRealtime = realtimeEngine.process({
+            candles: snapshot?.timeframes?.m5?.candles || [],
+            context: {
+              symbol: snapshot?.symbol || symbol,
+              marketType: String(snapshot?.marketMode || "").includes("CRYPTO") ? "CRYPTO" : "FOREX",
+              mtf: strategyResult.mtf,
+              trendContext: strategyResult.mtf,
+              marketRegime: strategyResult.marketRegime,
+              lowVolatility: strategyResult.operationalTuning?.lowVolatility,
+              supportResistanceContext: strategyResult.operationalTuning?.supportResistanceContext || null,
+              liquidityContext: strategyResult.operationalTuning?.liquidityContext || null,
+              structureContext: strategyResult.operationalTuning?.structureContext || null
+            },
+            strategy: { name: strategyResult.strategyName, direction: strategyResult.signal, rawScore: strategyResult.confidence },
+            mode,
+            timeframe: "m5"
+          });
+          for (const event of candlestickRealtime.events) {
+            const eventName = event.transportEvent || (event.state === "WATCH" ? "candlestick:forming" : event.state === "EXPIRED" ? "candlestick:pattern:expired" : "candlestick:pattern");
+            emitRealtime(eventName, event, { cacheLatest: event.state !== "WATCH", volatile: event.state === "WATCH" });
+            console.log(JSON.stringify({ scope: "aerix_candlestick_realtime_audit", event: event.state === "CONFIRMED" ? "candlestickPatternConfirmed" : event.state === "POSSIBILITY" ? "candlestickPossibilityCreated" : "candlestickPatternDetected", timestamp: event.serverTimestamp, ...event }));
+          }
+          signal.candlestickRealtime = candlestickRealtime.analysis;
           emitEngineDirectionAudit("after_strategy_payload", signal);
 
           signal = this.applyPredictiveDecisionToSignal(signal, predictiveDecision);

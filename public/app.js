@@ -3300,6 +3300,18 @@ function applyRealtimeResult(signal) {
 }
 
 if (realtimeTerminal) {
+  realtimeTerminal.on("candlestick:forming", (pattern) => {
+    state.candlestickPattern = pattern;
+  });
+  realtimeTerminal.on("candlestick:pattern", (pattern) => {
+    state.candlestickPattern = pattern;
+    renderProLogs({}, `${pattern.state}: ${pattern.direction} · ${pattern.symbol || "ativo"} · ${pattern.pattern}. ${pattern.explanation || ""}`);
+    pushTimelineEvent(`${pattern.state}: ${pattern.direction} · ${pattern.pattern}`);
+  });
+  realtimeTerminal.on("candlestick:pattern:update", (pattern) => { state.candlestickPattern = pattern; });
+  realtimeTerminal.on("candlestick:pattern:expired", (pattern) => {
+    if (state.candlestickPattern?.eventId === pattern.eventId) state.candlestickPattern = null;
+  });
   realtimeTerminal.on("signal:approved", (signal) => {
     renderSignal(signal);
     updateCompactOperations(signal, "signal:approved");
