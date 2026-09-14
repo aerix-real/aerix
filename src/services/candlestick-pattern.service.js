@@ -1,176 +1,65 @@
+const crypto = require("crypto");
 const { candlestickPatternRegistry, DIRECTION } = require("../config/candlestick-pattern-registry");
+const { formatBrasiliaTime, getNextCandleOpen, calculateRemainingSeconds } = require("../utils/timezone");
 
-function n(v){ const x = Number(v); return Number.isFinite(x) ? x : 0; }
-function closed(c){ return c && c.closed !== false && c.isClosed !== false && c.complete !== false && c.isFinal !== false; }
-function body(c){ return Math.abs(n(c.close) - n(c.open)); }
-function range(c){ return Math.max(0.0000001, n(c.high) - n(c.low)); }
-function upper(c){ return n(c.high) - Math.max(n(c.open), n(c.close)); }
-function lower(c){ return Math.min(n(c.open), n(c.close)) - n(c.low); }
-function bull(c){ return n(c.close) > n(c.open); }
-function bear(c){ return n(c.close) < n(c.open); }
-function smallBody(c, pct = 0.33){ return body(c) <= range(c) * pct; }
-function strongBody(c, pct = 0.55){ return body(c) >= range(c) * pct; }
-function mid(c){ return (n(c.open) + n(c.close)) / 2; }
-function near(a,b,t){ return Math.abs(n(a)-n(b)) <= Math.max(range({ high: Math.max(n(a),n(b)), low: Math.min(n(a),n(b)) }), Math.abs(n(a))*0.0008, 0.0001) * (t || 1); }
-function last(arr,count){ return arr.slice(Math.max(0, arr.length-count)); }
-function allClosed(cs){ return cs.length > 0 && cs.every(closed); }
-function directionTrend(context, dir){
-  const trend = context.trendContext || context.mtf || {};
-  const h1 = trend.h1?.trend || trend.h1?.direction || trend.h1 || "neutral";
-  const m15 = trend.m15?.trend || trend.m15?.direction || trend.m15 || "neutral";
-  const want = dir === DIRECTION.CALL ? "up" : "down";
-  return [h1,m15].filter((x) => x === want).length;
-}
-function hasContext(context, keys){ return keys.some((k) => Boolean(context[k] || context.supportResistanceContext?.[k] || context.liquidityContext?.[k] || context.structureContext?.[k])); }
-function isSupport(context){ return hasContext(context,["atSupport","nearSupport","support","sweepBelowSupport","afterLiquiditySweep"]); }
-function isResistance(context){ return hasContext(context,["atResistance","nearResistance","resistance","sweepAboveResistance","afterLiquiditySweep"]); }
-
-const detectors = {
-  hammer: ([c]) => smallBody(c) && lower(c) >= body(c)*2 && upper(c) <= range(c)*0.25,
-  invertedHammer: ([c], ctx, next) => smallBody(c) && upper(c) >= body(c)*2 && lower(c) <= range(c)*0.25 && (!next || bull(next)),
-  hangingMan: ([c], ctx) => detectors.hammer([c]) && isResistance(ctx),
-  shootingStar: ([c], ctx) => smallBody(c) && upper(c) >= body(c)*2 && lower(c) <= range(c)*0.25 && isResistance(ctx),
-  bullishPinBar: ([c]) => lower(c) >= range(c)*0.55 && n(c.close) > (n(c.low)+range(c)*0.5),
-  bearishPinBar: ([c]) => upper(c) >= range(c)*0.55 && n(c.close) < (n(c.low)+range(c)*0.5),
-  bullishMarubozu: ([c]) => bull(c) && strongBody(c,0.75) && upper(c) <= range(c)*0.12 && lower(c) <= range(c)*0.12,
-  bearishMarubozu: ([c]) => bear(c) && strongBody(c,0.75) && upper(c) <= range(c)*0.12 && lower(c) <= range(c)*0.12,
-  doji: ([c]) => body(c) <= range(c)*0.1,
-  spinningTop: ([c]) => body(c) > range(c)*0.1 && body(c) <= range(c)*0.33 && upper(c) >= body(c)*0.7 && lower(c) >= body(c)*0.7,
-  bullishEngulfing: ([a,b]) => bear(a) && bull(b) && n(b.open) <= n(a.close) && n(b.close) >= n(a.open),
-  bearishEngulfing: ([a,b]) => bull(a) && bear(b) && n(b.open) >= n(a.close) && n(b.close) <= n(a.open),
-  bullishHarami: ([a,b]) => bear(a) && bull(b) && n(b.open) > n(a.close) && n(b.close) < n(a.open),
-  bearishHarami: ([a,b]) => bull(a) && bear(b) && n(b.open) < n(a.close) && n(b.close) > n(a.open),
-  piercingLine: ([a,b]) => bear(a) && bull(b) && n(b.open) < n(a.close) && n(b.close) > mid(a) && n(b.close) < n(a.open),
-  darkCloudCover: ([a,b]) => bull(a) && bear(b) && n(b.open) > n(a.close) && n(b.close) < mid(a) && n(b.close) > n(a.open),
-  tweezerBottom: ([a,b]) => near(a.low,b.low,1.5) && (lower(a) > body(a) || lower(b) > body(b)),
-  tweezerTop: ([a,b]) => near(a.high,b.high,1.5) && (upper(a) > body(a) || upper(b) > body(b)),
-  bullishOutsideBar: ([a,b]) => bull(b) && n(b.high) > n(a.high) && n(b.low) < n(a.low),
-  bearishOutsideBar: ([a,b]) => bear(b) && n(b.high) > n(a.high) && n(b.low) < n(a.low),
-  bullishInsideBarBreak: ([a,b,c]) => n(b.high) < n(a.high) && n(b.low) > n(a.low) && bull(c) && n(c.close) > n(b.high),
-  bearishInsideBarBreak: ([a,b,c]) => n(b.high) < n(a.high) && n(b.low) > n(a.low) && bear(c) && n(c.close) < n(b.low),
-  morningStar: ([a,b,c]) => bear(a) && smallBody(b,0.4) && bull(c) && n(c.close) > mid(a),
-  eveningStar: ([a,b,c]) => bull(a) && smallBody(b,0.4) && bear(c) && n(c.close) < mid(a),
-  morningDojiStar: (cs) => detectors.morningStar(cs) && detectors.doji([cs[1]]),
-  eveningDojiStar: (cs) => detectors.eveningStar(cs) && detectors.doji([cs[1]]),
-  threeWhiteSoldiers: (cs) => cs.length===3 && cs.every((c)=>bull(c)&&strongBody(c,0.45)) && n(cs[2].close)>n(cs[1].close)&&n(cs[1].close)>n(cs[0].close),
-  threeBlackCrows: (cs) => cs.length===3 && cs.every((c)=>bear(c)&&strongBody(c,0.45)) && n(cs[2].close)<n(cs[1].close)&&n(cs[1].close)<n(cs[0].close),
-  threeInsideUp: ([a,b,c]) => detectors.bullishHarami([a,b]) && bull(c) && n(c.close)>n(a.open),
-  threeInsideDown: ([a,b,c]) => detectors.bearishHarami([a,b]) && bear(c) && n(c.close)<n(a.open),
-  threeOutsideUp: ([a,b,c]) => detectors.bullishEngulfing([a,b]) && bull(c) && n(c.close)>n(b.close),
-  threeOutsideDown: ([a,b,c]) => detectors.bearishEngulfing([a,b]) && bear(c) && n(c.close)<n(b.close),
-  bullishAbandonedBaby: ([a,b,c]) => bear(a) && detectors.doji([b]) && bull(c) && n(b.high)<n(a.low) && n(c.low)>n(b.high),
-  bearishAbandonedBaby: ([a,b,c]) => bull(a) && detectors.doji([b]) && bear(c) && n(b.low)>n(a.high) && n(c.high)<n(b.low),
-  risingThreeMethods: (cs) => cs.length===5 && bull(cs[0]) && bull(cs[4]) && cs.slice(1,4).every(bear) && n(cs[4].close)>n(cs[0].close),
-  fallingThreeMethods: (cs) => cs.length===5 && bear(cs[0]) && bear(cs[4]) && cs.slice(1,4).every(bull) && n(cs[4].close)<n(cs[0].close),
-  bullishFlagCandleSequence: (cs) => bull(cs[0]) && cs.slice(1,4).every((c)=>range(c)<range(cs[0])) && bull(cs[4]) && n(cs[4].close)>Math.max(...cs.slice(1,4).map((c)=>n(c.high))),
-  bearishFlagCandleSequence: (cs) => bear(cs[0]) && cs.slice(1,4).every((c)=>range(c)<range(cs[0])) && bear(cs[4]) && n(cs[4].close)<Math.min(...cs.slice(1,4).map((c)=>n(c.low))),
-  bullishConsolidationBreak: (cs) => bull(cs[4]) && n(cs[4].close)>Math.max(...cs.slice(0,4).map((c)=>n(c.high))),
-  bearishConsolidationBreak: (cs) => bear(cs[4]) && n(cs[4].close)<Math.min(...cs.slice(0,4).map((c)=>n(c.low))),
-  firstRetestBullishConfirmation: ([a,b], ctx) => hasContext(ctx,["firstRetest","firstRetestDetected"]) && bull(b) && n(b.close)>=n(a.close),
-  firstRetestBearishConfirmation: ([a,b], ctx) => hasContext(ctx,["firstRetest","firstRetestDetected"]) && bear(b) && n(b.close)<=n(a.close)
+const STATES = Object.freeze({ WATCH:"WATCH", POSSIBILITY:"POSSIBILITY", CANDIDATE:"CANDIDATE", CONFIRMED:"CONFIRMED", BLOCKED:"BLOCKED", EXPIRED:"EXPIRED" });
+const n = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+const closed = c => Boolean(c) && c.closed !== false && c.isClosed !== false && c.complete !== false && c.isFinal !== false;
+const body = c => Math.abs(n(c.close)-n(c.open));
+const range = c => Math.max(Number.EPSILON, n(c.high)-n(c.low));
+const upper = c => n(c.high)-Math.max(n(c.open),n(c.close));
+const lower = c => Math.min(n(c.open),n(c.close))-n(c.low);
+const bull = c => n(c.close)>n(c.open), bear = c => n(c.close)<n(c.open);
+const doji = c => body(c)<=range(c)*.1, small = (c,p=.33) => body(c)<=range(c)*p, strong=(c,p=.55)=>body(c)>=range(c)*p;
+const midpoint = c => (n(c.open)+n(c.close))/2;
+const near = (a,b,tolerance=.12) => Math.abs(n(a)-n(b)) <= Math.max(range({high:Math.max(n(a),n(b)),low:Math.min(n(a),n(b))})*tolerance, Math.abs(n(a))*0.0008);
+const contextValue = (ctx, keys) => keys.some(key => Boolean(ctx[key] || ctx.supportResistanceContext?.[key] || ctx.liquidityContext?.[key] || ctx.structureContext?.[key]));
+const support = ctx => contextValue(ctx,["atSupport","nearSupport","support","sweepBelowSupport"]);
+const resistance = ctx => contextValue(ctx,["atResistance","nearResistance","resistance","sweepAboveResistance"]);
+const gap = (a,b,ctx={}) => {
+  const distance=Math.abs(n(b.open)-n(a.close)); const normalizer=Math.max(n(ctx.atr)*.15, range(a)*.25, Math.abs(n(a.close))*0.00025);
+  return String(ctx.marketType||"").toUpperCase()==="CRYPTO" ? distance > normalizer*2 : distance > normalizer;
 };
-
-function scorePattern(pattern, context, confirmationCandlePresent){
-  let score = pattern.baseWeight;
-  if (pattern.expectedDirection === DIRECTION.CALL && isSupport(context)) score += 10;
-  if (pattern.expectedDirection === DIRECTION.PUT && isResistance(context)) score += 10;
-  if (hasContext(context,["liquiditySweep","afterLiquiditySweep","sweepDetected"])) score += 8;
-  if (hasContext(context,["firstRetest","firstRetestDetected","retracementDetected","structurePreserved","momentumReturning"])) score += 6;
-  score += directionTrend(context, pattern.expectedDirection) * 6;
-  if (confirmationCandlePresent) score += 6;
-  if (context.lowVolatility || context.marketRegime === "LOW_VOLATILITY") score -= 8;
-  if (!isSupport(context) && !isResistance(context) && !hasContext(context,["liquiditySweep","firstRetest","retracementDetected"])) score -= 6;
-  return Math.max(0, Math.min(40, score));
+const detectors = {
+  hammer:([c])=>small(c)&&lower(c)>=Math.max(body(c)*2,range(c)*.45)&&upper(c)<=range(c)*.28,
+  invertedHammer:([c])=>small(c)&&upper(c)>=Math.max(body(c)*2,range(c)*.45)&&lower(c)<=range(c)*.28,
+  hangingMan:([c],ctx)=>detectors.hammer([c])&&resistance(ctx), shootingStar:([c],ctx)=>detectors.invertedHammer([c])&&resistance(ctx),
+  bullishPinBar:([c])=>lower(c)>=range(c)*.55&&n(c.close)>midpoint({open:c.low,close:c.high}), bearishPinBar:([c])=>upper(c)>=range(c)*.55&&n(c.close)<midpoint({open:c.low,close:c.high}),
+  longLowerShadow:([c])=>lower(c)>=range(c)*.55, longUpperShadow:([c])=>upper(c)>=range(c)*.55,
+  bullishMarubozu:([c])=>bull(c)&&strong(c,.75)&&upper(c)<=range(c)*.12&&lower(c)<=range(c)*.12, bearishMarubozu:([c])=>bear(c)&&strong(c,.75)&&upper(c)<=range(c)*.12&&lower(c)<=range(c)*.12,
+  doji:([c])=>doji(c), longLeggedDoji:([c])=>doji(c)&&upper(c)>=range(c)*.3&&lower(c)>=range(c)*.3, dragonflyDoji:([c])=>doji(c)&&lower(c)>=range(c)*.6, gravestoneDoji:([c])=>doji(c)&&upper(c)>=range(c)*.6,
+  spinningTop:([c])=>!doji(c)&&small(c)&&upper(c)>=body(c)*.7&&lower(c)>=body(c)*.7, spinningTopWhite:([c])=>bull(c)&&detectors.spinningTop([c]), spinningTopBlack:([c])=>bear(c)&&detectors.spinningTop([c]), highWave:([c])=>small(c,.2)&&upper(c)>=range(c)*.35&&lower(c)>=range(c)*.35,
+  bullishEngulfing:([a,b])=>bear(a)&&bull(b)&&n(b.open)<=n(a.close)&&n(b.close)>=n(a.open), bearishEngulfing:([a,b])=>bull(a)&&bear(b)&&n(b.open)>=n(a.close)&&n(b.close)<=n(a.open),
+  bullishHarami:([a,b])=>bear(a)&&bull(b)&&n(b.open)>n(a.close)&&n(b.close)<n(a.open), bearishHarami:([a,b])=>bull(a)&&bear(b)&&n(b.open)<n(a.close)&&n(b.close)>n(a.open),
+  haramiCrossBullish:([a,b])=>bear(a)&&doji(b)&&n(b.high)<n(a.open)&&n(b.low)>n(a.close), haramiCrossBearish:([a,b])=>bull(a)&&doji(b)&&n(b.high)<n(a.close)&&n(b.low)>n(a.open),
+  piercingLine:([a,b])=>bear(a)&&bull(b)&&n(b.open)<n(a.close)&&n(b.close)>midpoint(a)&&n(b.close)<n(a.open), darkCloudCover:([a,b])=>bull(a)&&bear(b)&&n(b.open)>n(a.close)&&n(b.close)<midpoint(a)&&n(b.close)>n(a.open),
+  tweezerBottom:([a,b])=>near(a.low,b.low)&&bear(a)&&bull(b), tweezerTop:([a,b])=>near(a.high,b.high)&&bull(a)&&bear(b), matchingLow:([a,b])=>bear(a)&&bear(b)&&near(a.low,b.low), matchingHigh:([a,b])=>bull(a)&&bull(b)&&near(a.high,b.high),
+  bullishKicker:([a,b],ctx)=>bear(a)&&bull(b)&&gap(a,b,ctx), bearishKicker:([a,b],ctx)=>bull(a)&&bear(b)&&gap(a,b,ctx), onNeck:([a,b])=>bear(a)&&bull(b)&&near(b.close,a.low), inNeck:([a,b])=>bear(a)&&bull(b)&&n(b.close)>n(a.low)&&n(b.close)<midpoint(a), thrustingPattern:([a,b])=>bear(a)&&bull(b)&&n(b.close)<midpoint(a),
+  separatingLinesBullish:([a,b])=>bear(a)&&bull(b)&&near(a.open,b.open), separatingLinesBearish:([a,b])=>bull(a)&&bear(b)&&near(a.open,b.open), counterattackBullish:([a,b])=>bear(a)&&bull(b)&&near(a.close,b.close), counterattackBearish:([a,b])=>bull(a)&&bear(b)&&near(a.close,b.close), insideBarBullish:([a,b])=>bull(b)&&n(b.high)<n(a.high)&&n(b.low)>n(a.low), insideBarBearish:([a,b])=>bear(b)&&n(b.high)<n(a.high)&&n(b.low)>n(a.low),
+  bullishOutsideBar:([a,b])=>bull(b)&&n(b.high)>n(a.high)&&n(b.low)<n(a.low), bearishOutsideBar:([a,b])=>bear(b)&&n(b.high)>n(a.high)&&n(b.low)<n(a.low),
+  morningStar:([a,b,c])=>bear(a)&&small(b,.4)&&bull(c)&&n(c.close)>midpoint(a), eveningStar:([a,b,c])=>bull(a)&&small(b,.4)&&bear(c)&&n(c.close)<midpoint(a), morningDojiStar:cs=>detectors.morningStar(cs)&&doji(cs[1]), eveningDojiStar:cs=>detectors.eveningStar(cs)&&doji(cs[1]),
+  threeWhiteSoldiers:cs=>cs.every(c=>bull(c)&&strong(c,.45))&&n(cs[2].close)>n(cs[1].close)&&n(cs[1].close)>n(cs[0].close), threeBlackCrows:cs=>cs.every(c=>bear(c)&&strong(c,.45))&&n(cs[2].close)<n(cs[1].close)&&n(cs[1].close)<n(cs[0].close),
+  threeInsideUp:([a,b,c])=>detectors.bullishHarami([a,b])&&bull(c)&&n(c.close)>n(a.open), threeInsideDown:([a,b,c])=>detectors.bearishHarami([a,b])&&bear(c)&&n(c.close)<n(a.open), threeOutsideUp:([a,b,c])=>detectors.bullishEngulfing([a,b])&&bull(c)&&n(c.close)>n(b.close), threeOutsideDown:([a,b,c])=>detectors.bearishEngulfing([a,b])&&bear(c)&&n(c.close)<n(b.close),
+  threeLineStrikeBullish:([a,b,c])=>bear(a)&&bear(b)&&bull(c)&&n(c.close)>n(a.open), threeLineStrikeBearish:([a,b,c])=>bull(a)&&bull(b)&&bear(c)&&n(c.close)<n(a.open), threeStarsInSouth:cs=>cs.every(bear)&&lower(cs[2])<lower(cs[1])&&lower(cs[1])<lower(cs[0]), threeAdvancingWhiteSoldiers:cs=>detectors.threeWhiteSoldiers(cs), threeDescendingCrows:cs=>detectors.threeBlackCrows(cs),
+  bullishAbandonedBaby:([a,b,c],ctx)=>bear(a)&&doji(b)&&bull(c)&&gap(a,b,ctx)&&gap(b,c,ctx), bearishAbandonedBaby:([a,b,c],ctx)=>bull(a)&&doji(b)&&bear(c)&&gap(a,b,ctx)&&gap(b,c,ctx), triStarBullish:cs=>cs.every(doji)&&n(cs[2].low)<n(cs[1].low), triStarBearish:cs=>cs.every(doji)&&n(cs[2].high)>n(cs[1].high),
+  risingThreeMethods:cs=>bull(cs[0])&&bull(cs[4])&&cs.slice(1,4).every(bear)&&n(cs[4].close)>n(cs[0].close), fallingThreeMethods:cs=>bear(cs[0])&&bear(cs[4])&&cs.slice(1,4).every(bull)&&n(cs[4].close)<n(cs[0].close), bullishFlagCandleSequence:cs=>bull(cs[0])&&cs.slice(1,4).every(c=>range(c)<range(cs[0]))&&bull(cs[4])&&n(cs[4].close)>Math.max(...cs.slice(1,4).map(c=>n(c.high))), bearishFlagCandleSequence:cs=>bear(cs[0])&&cs.slice(1,4).every(c=>range(c)<range(cs[0]))&&bear(cs[4])&&n(cs[4].close)<Math.min(...cs.slice(1,4).map(c=>n(c.low))), bullishConsolidationBreak:cs=>bull(cs[4])&&n(cs[4].close)>Math.max(...cs.slice(0,4).map(c=>n(c.high))), bearishConsolidationBreak:cs=>bear(cs[4])&&n(cs[4].close)<Math.min(...cs.slice(0,4).map(c=>n(c.low))), fiveCandleBreakoutBullish:cs=>detectors.bullishConsolidationBreak(cs), fiveCandleBreakoutBearish:cs=>detectors.bearishConsolidationBreak(cs),
+  firstRetestBullishConfirmation:([a,b],ctx)=>contextValue(ctx,["firstRetest","firstRetestDetected"])&&bull(b)&&n(b.close)>=n(a.close), firstRetestBearishConfirmation:([a,b],ctx)=>contextValue(ctx,["firstRetest","firstRetestDetected"])&&bear(b)&&n(b.close)<=n(a.close)
+};
+function trendBoost(ctx,direction){ const trend=ctx.trendContext||ctx.mtf||{}; const wanted=direction===DIRECTION.CALL?"up":"down"; return [trend.h1,trend.m15,trend.m5].filter(item=>String(item?.trend||item?.direction||item||"").toLowerCase()===wanted).length*6; }
+function score(pattern,ctx,confirmed){ let value=pattern.baseWeight; if(pattern.expectedDirection===DIRECTION.CALL&&support(ctx))value+=10; if(pattern.expectedDirection===DIRECTION.PUT&&resistance(ctx))value+=10; if(contextValue(ctx,["liquiditySweep","afterLiquiditySweep","sweepDetected"]))value+=8; if(contextValue(ctx,["firstRetest","firstRetestDetected","structurePreserved","rejection"]))value+=6; value+=trendBoost(ctx,pattern.expectedDirection); if(confirmed)value+=6; if(ctx.lowVolatility||ctx.marketRegime==="LOW_VOLATILITY")value-=8; if(!support(ctx)&&!resistance(ctx)&&!contextValue(ctx,["liquiditySweep","firstRetest"]))value-=6; return Math.max(0,Math.min(75,value)); }
+function strength(value){ return value>=70?"VERY_STRONG":value>=50?"STRONG":value>=30?"MEDIUM":"WEAK"; }
+function cluster(patterns,direction){ const relevant=patterns.filter(p=>p.expectedDirection===direction); const families=[...new Set(relevant.map(p=>p.family))]; const ordered=relevant.sort((a,b)=>b.confidence-a.confidence); const weighted=ordered.reduce((sum,p,index)=>sum+p.confidence*(index===0?1:index===1?.35:.15),0); return Math.min(100,Math.round(weighted+Math.max(0,families.length-1)*4)); }
+function analyzeCandlestickPatterns({candles=[],context={},strategy={},mode="balanced",timeframe="m5"}={}) {
+ const finalized=candles.filter(closed), openCandle=candles.length>finalized.length?candles[candles.length-1]:null, patterns=[], formingPatterns=[], auditEvents=[];
+ if(openCandle)auditEvents.push("candleNotClosed");
+ for(const pattern of candlestickPatternRegistry.filter(p=>p.enabled)) { const detector=detectors[pattern.handler]; if(!detector)continue; const source=finalized; if(source.length>=pattern.candleCount){ const sample=source.slice(-pattern.candleCount); const confirmationPresent=!pattern.confirmationRequired||finalized.length>pattern.candleCount; if(detector(sample,context)){ const confidence=score(pattern,context,confirmationPresent); patterns.push({...pattern,confidence,strength:strength(confidence),confirmationCandlePresent:confirmationPresent,candlesUsed:sample.map(c=>c.time||c.timestamp||null)}); } } if(openCandle&&finalized.length+1>=pattern.candleCount&&detector([...finalized,openCandle].slice(-pattern.candleCount),context)) formingPatterns.push({name:pattern.name,displayName:pattern.displayName,expectedDirection:pattern.expectedDirection,family:pattern.family}); }
+ const bullishClusterScore=cluster(patterns,DIRECTION.CALL), bearishClusterScore=cluster(patterns,DIRECTION.PUT), neutralScore=patterns.filter(p=>p.expectedDirection===DIRECTION.NEUTRAL).reduce((s,p)=>s+p.confidence,0); const conflict=(bullishClusterScore>0&&bearishClusterScore>0) || (bullishClusterScore>0&&support(context)&&resistance(context)) || (bearishClusterScore>0&&support(context)&&resistance(context)); let direction="NEUTRAL"; if(bullishClusterScore-bearishClusterScore>=10)direction=DIRECTION.CALL; if(bearishClusterScore-bullishClusterScore>=10)direction=DIRECTION.PUT; const conflictPenalty=conflict?Math.min(30,Math.round(Math.min(bullishClusterScore,bearishClusterScore)*.35)):0; const patternConfidence=Math.max(0,Math.min(100,Math.max(bullishClusterScore,bearishClusterScore)-conflictPenalty)); const strategicConflict=strategy.direction&&direction!=="NEUTRAL"&&direction!==strategy.direction;
+ const caps={conservative:4,balanced:6,aggressive:6}, cap=caps[String(mode).toLowerCase()]||6; let adjustment=!strategy.direction||direction==="NEUTRAL"?0:((direction===strategy.direction?1:-1)*patternConfidence/100*cap); if(strategicConflict)adjustment=Math.min(adjustment,-2); adjustment=Number(Math.max(-cap,Math.min(cap,adjustment)).toFixed(2)); const rawStrategyScore=n(strategy.rawScore??strategy.score);
+ const conflicts={patternConflict:conflict,candlestickDirectionConflict:Boolean(strategicConflict),hardBlock:conflict&&Math.abs(bullishClusterScore-bearishClusterScore)<10,reasons:conflict?["opposing_patterns_detected"]:[]}; if(strategicConflict)conflicts.reasons.push("patternDirectionConflict");
+ const audit={scope:"aerix_candlestick_realtime_audit",timestamp:new Date().toISOString(),symbol:context.symbol||null,marketType:context.marketType||null,timeframe,strategyName:strategy.name||null,detectedPatterns:patterns.map(p=>p.displayName),bullishScore:bullishClusterScore,bearishScore:bearishClusterScore,neutralScore,dominantPatternDirection:direction,patternConfidence,conflicts,candleClosed:!openCandle,candlestickAdjustment:adjustment};
+ return {detectedPatterns:patterns,formingPatterns,bullishScore:bullishClusterScore,bearishScore:bearishClusterScore,bullishClusterScore,bearishClusterScore,neutralScore,dominantPatternDirection:direction,patternConfidence,confirmationQuality:openCandle?"forming":"closed_confirmed",conflicts,candlestickConfirmationScore:bullishClusterScore-bearishClusterScore,candlestickAdjustment:adjustment,rawStrategyScore,scoreAfterCandlestickAdjustment:Math.max(0,Math.min(100,rawStrategyScore+adjustment)),blockerAnalytics:[...new Set(auditEvents)],audit};
 }
-
-function analyzeCandlestickPatterns({ candles = [], context = {}, strategy = {}, mode = "balanced", timeframe = "m5" } = {}){
-  const closedCandles = candles.filter(closed);
-  const hasOpenCandle = candles.length > closedCandles.length;
-  const auditEvents = [];
-  if (hasOpenCandle) auditEvents.push("candleNotClosed");
-  if (closedCandles.length < 2) auditEvents.push("candlestickPatternMissing");
-
-  const detectedPatterns = [];
-  for (const pattern of candlestickPatternRegistry.filter((p)=>p.enabled)) {
-    if (closedCandles.length < pattern.candleCount) continue;
-    const sample = last(closedCandles, pattern.candleCount);
-    const detector = detectors[pattern.handler];
-    const confirmationCandlePresent = pattern.confirmationRequired ? closedCandles.length > pattern.candleCount : true;
-    if (!detector || !allClosed(sample)) continue;
-    if (pattern.confirmationRequired && !confirmationCandlePresent) { auditEvents.push("confirmationCandleMissing"); continue; }
-    if (!detector(sample, context, closedCandles[closedCandles.length - 1])) continue;
-    const patternScore = scorePattern(pattern, context, confirmationCandlePresent);
-    if (patternScore <= 0) auditEvents.push("invalidPatternContext");
-    detectedPatterns.push({
-      name: pattern.name,
-      displayName: pattern.displayName,
-      family: pattern.family,
-      expectedDirection: pattern.expectedDirection,
-      candleCount: pattern.candleCount,
-      confidence: patternScore,
-      confirmationRequired: pattern.confirmationRequired,
-      confirmationCandlePresent,
-      candlesUsed: sample.map((c)=>c.time || c.timestamp || null)
-    });
-  }
-
-  let bullishScore = detectedPatterns.filter((p)=>p.expectedDirection===DIRECTION.CALL).reduce((s,p)=>s+p.confidence,0);
-  let bearishScore = detectedPatterns.filter((p)=>p.expectedDirection===DIRECTION.PUT).reduce((s,p)=>s+p.confidence,0);
-  const neutralScore = detectedPatterns.filter((p)=>p.expectedDirection===DIRECTION.NEUTRAL).reduce((s,p)=>s+p.confidence,0);
-  const conflicts = { patternConflict: bullishScore > 0 && bearishScore > 0, candlestickDirectionConflict: false, hardBlock: false, reasons: [] };
-  if (conflicts.patternConflict) { bullishScore *= 0.65; bearishScore *= 0.65; conflicts.reasons.push("opposing_patterns_detected"); }
-  let dominantPatternDirection = "NEUTRAL";
-  if (bullishScore - bearishScore >= 10) dominantPatternDirection = DIRECTION.CALL;
-  if (bearishScore - bullishScore >= 10) dominantPatternDirection = DIRECTION.PUT;
-  if (strategy.direction && dominantPatternDirection !== "NEUTRAL" && dominantPatternDirection !== strategy.direction) {
-    conflicts.candlestickDirectionConflict = true;
-    conflicts.reasons.push("patternDirectionConflict");
-    auditEvents.push("patternDirectionConflict");
-  }
-  const raw = Math.max(-100, Math.min(100, bullishScore - bearishScore));
-  const patternConfidence = Math.min(100, Math.abs(raw));
-  const caps = { conservative: 4, balanced: 6, aggressive: 6 };
-  const cap = caps[String(mode).toLowerCase()] || 6;
-  const directionalSign = strategy.direction === DIRECTION.PUT ? -1 : 1;
-  let candlestickAdjustment = Number(((raw / 100) * cap * directionalSign).toFixed(2));
-  if (!strategy.direction || detectedPatterns.length === 0) candlestickAdjustment = 0;
-  if (conflicts.candlestickDirectionConflict) candlestickAdjustment = Math.min(candlestickAdjustment, -2);
-  candlestickAdjustment = Math.max(-cap, Math.min(cap, candlestickAdjustment));
-  const rawStrategyScore = n(strategy.rawScore ?? strategy.score);
-  const scoreAfterCandlestickAdjustment = Number(Math.max(0, Math.min(100, rawStrategyScore + candlestickAdjustment)).toFixed(2));
-  const audit = {
-    scope: "aerix_candlestick_pattern_audit",
-    timestamp: new Date().toISOString(),
-    symbol: context.symbol || null,
-    marketMode: mode,
-    timeframe,
-    strategyName: strategy.name || null,
-    strategyDirection: strategy.direction || null,
-    detectedPatterns: detectedPatterns.map((p)=>p.displayName),
-    patternFamily: detectedPatterns.map((p)=>p.family),
-    expectedDirection: detectedPatterns.map((p)=>p.expectedDirection),
-    candleCount: detectedPatterns.map((p)=>p.candleCount),
-    bullishScore: Number(bullishScore.toFixed(2)),
-    bearishScore: Number(bearishScore.toFixed(2)),
-    neutralScore: Number(neutralScore.toFixed(2)),
-    dominantPatternDirection,
-    patternConfidence,
-    supportResistanceContext: context.supportResistanceContext || { support: isSupport(context), resistance: isResistance(context) },
-    liquidityContext: context.liquidityContext || null,
-    trendContext: context.trendContext || context.mtf || null,
-    marketRegime: context.marketRegime || null,
-    candleClosed: !hasOpenCandle,
-    confirmationCandlePresent: !auditEvents.includes("confirmationCandleMissing"),
-    conflicts,
-    candlestickConfirmationScore: Number(raw.toFixed(2)),
-    candlestickAdjustment,
-    scoreBeforeAdjustment: rawStrategyScore,
-    scoreAfterAdjustment: scoreAfterCandlestickAdjustment,
-    finalDecision: conflicts.hardBlock ? "hard_block" : "score_adjustment"
-  };
-  return { detectedPatterns, bullishScore: audit.bullishScore, bearishScore: audit.bearishScore, neutralScore: audit.neutralScore, dominantPatternDirection, patternConfidence, confirmationQuality: audit.confirmationCandlePresent ? "closed_confirmed" : "missing_confirmation", conflicts, candlestickConfirmationScore: audit.candlestickConfirmationScore, candlestickAdjustment, rawStrategyScore, scoreAfterCandlestickAdjustment, blockerAnalytics: [...new Set(auditEvents)], audit };
-}
-
+class CandlestickRealtimeEngine { constructor(){this.events=new Map();this.latestByPattern=new Map();} process(input={}) { const analysis=analyzeCandlestickPatterns(input); const candle=(input.candles||[]).at(-1)||{}; const candleTimestamp=candle.time||candle.timestamp||input.timestamp||new Date().toISOString(); const records=[...analysis.detectedPatterns.map(p=>({...p,candleClosed:true})),...analysis.formingPatterns.map(p=>({...p,candleClosed:false}))]; const output=[]; for(const pattern of records){ const score=pattern.candleClosed?pattern.confidence||0:Math.min(29,pattern.baseWeight||10); const state=!pattern.candleClosed?STATES.WATCH:analysis.conflicts.hardBlock?STATES.BLOCKED:score>=50&&pattern.confirmationCandlePresent?STATES.CONFIRMED:score>=40?STATES.CANDIDATE:STATES.POSSIBILITY; const identity=[input.context?.symbol||input.symbol||"UNKNOWN",input.timeframe||"m5",candleTimestamp,pattern.name,pattern.expectedDirection].join(":"); const key=[identity,state].join(":"); if(this.events.has(key))continue; const previous=this.latestByPattern.get(identity); const nextOpen=getNextCandleOpen(candleTimestamp,input.timeframe||"m5"); const payload={eventId:crypto.randomUUID(),serverTimestamp:new Date().toISOString(),symbol:input.context?.symbol||input.symbol||null,timeframe:input.timeframe||"m5",candleTimestamp,pattern:pattern.displayName,direction:pattern.expectedDirection,state,strength:strength(score),score,confidence:Math.min(100,score),candleClosed:pattern.candleClosed,confirmationRequired:Boolean(pattern.confirmationRequired),confirmationPresent:Boolean(pattern.confirmationCandlePresent),trendContext:input.context?.trendContext||input.context?.mtf||null,structureContext:input.context?.structureContext||null,liquidityContext:input.context?.liquidityContext||null,supportResistanceContext:input.context?.supportResistanceContext||null,strategy:input.strategy?.name||null,suggestedEntryAt:nextOpen?.toISOString()||null,suggestedEntryBrasilia:nextOpen?formatBrasiliaTime(nextOpen):null,timeRemainingSeconds:nextOpen?calculateRemainingSeconds(nextOpen):0,explanation:state===STATES.WATCH?`${pattern.displayName} em formação; aguarda fechamento.`:analysis.conflicts.hardBlock?"Há evidências direcionais opostas.":`Possibilidade de ${pattern.expectedDirection} identificada por ${pattern.displayName}${input.strategy?.name?` pela estratégia ${input.strategy.name}`:""}.`}; payload.transportEvent = previous ? "candlestick:pattern:update" : state === STATES.WATCH ? "candlestick:forming" : "candlestick:pattern"; this.events.set(key,payload); this.latestByPattern.set(identity,payload); output.push(payload); } return {analysis,events:output}; } }
+const realtimeEngine=new CandlestickRealtimeEngine();
 function emitCandlestickPatternAudit(audit){ console.log(JSON.stringify(audit)); }
-
-module.exports = { analyzeCandlestickPatterns, emitCandlestickPatternAudit, detectors };
+module.exports={analyzeCandlestickPatterns,emitCandlestickPatternAudit,detectors,CandlestickRealtimeEngine,realtimeEngine,STATES};

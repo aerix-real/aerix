@@ -1,75 +1,21 @@
 const FAMILIES = Object.freeze({
-  BULLISH_REVERSAL: "bullish_reversal",
-  BEARISH_REVERSAL: "bearish_reversal",
-  BULLISH_CONTINUATION: "bullish_continuation",
-  BEARISH_CONTINUATION: "bearish_continuation",
-  INDECISION: "indecision",
-  EXHAUSTION: "exhaustion",
-  REJECTION: "rejection",
-  INSTITUTIONAL_CONTEXT: "institutional_context"
+  BULLISH_REVERSAL: "bullish_reversal", BEARISH_REVERSAL: "bearish_reversal",
+  BULLISH_CONTINUATION: "bullish_continuation", BEARISH_CONTINUATION: "bearish_continuation",
+  INDECISION: "indecision", EXHAUSTION: "exhaustion", REJECTION: "rejection", INSTITUTIONAL_CONTEXT: "institutional_context"
 });
-
 const DIRECTION = Object.freeze({ CALL: "CALL", PUT: "PUT", NEUTRAL: "NEUTRAL" });
-
 function pattern(name, displayName, family, expectedDirection, candleCount, baseWeight, options = {}) {
-  return {
-    name,
-    displayName,
-    family,
-    expectedDirection,
-    candleCount,
-    enabled: options.enabled !== false,
-    baseWeight,
-    confirmationRequired: Boolean(options.confirmationRequired),
-    preferredContexts: options.preferredContexts || [],
-    forbiddenContexts: options.forbiddenContexts || [],
-    handler: options.handler || name
-  };
+  return { name, displayName, family, expectedDirection, candleCount, enabled: options.enabled !== false,
+    baseWeight, confirmationRequired: Boolean(options.confirmationRequired), preferredContexts: options.preferredContexts || [],
+    forbiddenContexts: options.forbiddenContexts || [], handler: options.handler || name, gapRequired: Boolean(options.gapRequired) };
 }
-
-const candlestickPatternRegistry = [
-  pattern("hammer", "Hammer", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 1, 12, { preferredContexts: ["support", "liquidity_sweep", "bearish_exhaustion"] }),
-  pattern("invertedHammer", "Inverted Hammer", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 1, 9, { confirmationRequired: true }),
-  pattern("hangingMan", "Hanging Man", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 1, 10, { preferredContexts: ["resistance", "uptrend"] }),
-  pattern("shootingStar", "Shooting Star", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 1, 12, { preferredContexts: ["resistance", "liquidity_sweep"] }),
-  pattern("bullishPinBar", "Bullish Pin Bar", FAMILIES.REJECTION, DIRECTION.CALL, 1, 11),
-  pattern("bearishPinBar", "Bearish Pin Bar", FAMILIES.REJECTION, DIRECTION.PUT, 1, 11),
-  pattern("bullishMarubozu", "Bullish Marubozu", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 1, 9),
-  pattern("bearishMarubozu", "Bearish Marubozu", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 1, 9),
-  pattern("doji", "Doji", FAMILIES.INDECISION, DIRECTION.NEUTRAL, 1, 6),
-  pattern("spinningTop", "Spinning Top", FAMILIES.INDECISION, DIRECTION.NEUTRAL, 1, 5),
-  pattern("bullishEngulfing", "Bullish Engulfing", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 2, 16),
-  pattern("bearishEngulfing", "Bearish Engulfing", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 2, 16),
-  pattern("bullishHarami", "Bullish Harami", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 2, 9, { confirmationRequired: true }),
-  pattern("bearishHarami", "Bearish Harami", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 2, 9, { confirmationRequired: true }),
-  pattern("piercingLine", "Piercing Line", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 2, 12),
-  pattern("darkCloudCover", "Dark Cloud Cover", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 2, 12),
-  pattern("tweezerBottom", "Tweezer Bottom", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 2, 10, { confirmationRequired: true }),
-  pattern("tweezerTop", "Tweezer Top", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 2, 10),
-  pattern("bullishOutsideBar", "Bullish Outside Bar", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 2, 12),
-  pattern("bearishOutsideBar", "Bearish Outside Bar", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 2, 12),
-  pattern("bullishInsideBarBreak", "Bullish Inside Bar Break", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 3, 12, { confirmationRequired: true }),
-  pattern("bearishInsideBarBreak", "Bearish Inside Bar Break", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 3, 12, { confirmationRequired: true }),
-  pattern("morningStar", "Morning Star", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 3, 18),
-  pattern("eveningStar", "Evening Star", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 3, 18),
-  pattern("morningDojiStar", "Morning Doji Star", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 3, 19),
-  pattern("eveningDojiStar", "Evening Doji Star", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 3, 19),
-  pattern("threeWhiteSoldiers", "Three White Soldiers", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 3, 18),
-  pattern("threeBlackCrows", "Three Black Crows", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 3, 18),
-  pattern("threeInsideUp", "Three Inside Up", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 3, 14),
-  pattern("threeInsideDown", "Three Inside Down", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 3, 14),
-  pattern("threeOutsideUp", "Three Outside Up", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 3, 15),
-  pattern("threeOutsideDown", "Three Outside Down", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 3, 15),
-  pattern("bullishAbandonedBaby", "Bullish Abandoned Baby", FAMILIES.BULLISH_REVERSAL, DIRECTION.CALL, 3, 16),
-  pattern("bearishAbandonedBaby", "Bearish Abandoned Baby", FAMILIES.BEARISH_REVERSAL, DIRECTION.PUT, 3, 16),
-  pattern("risingThreeMethods", "Rising Three Methods", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 5, 18),
-  pattern("fallingThreeMethods", "Falling Three Methods", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 5, 18),
-  pattern("bullishFlagCandleSequence", "Bullish Flag Candle Sequence", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 5, 14),
-  pattern("bearishFlagCandleSequence", "Bearish Flag Candle Sequence", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 5, 14),
-  pattern("bullishConsolidationBreak", "Bullish Consolidation Break", FAMILIES.BULLISH_CONTINUATION, DIRECTION.CALL, 5, 13),
-  pattern("bearishConsolidationBreak", "Bearish Consolidation Break", FAMILIES.BEARISH_CONTINUATION, DIRECTION.PUT, 5, 13),
-  pattern("firstRetestBullishConfirmation", "First Retest Bullish Confirmation", FAMILIES.INSTITUTIONAL_CONTEXT, DIRECTION.CALL, 2, 16),
-  pattern("firstRetestBearishConfirmation", "First Retest Bearish Confirmation", FAMILIES.INSTITUTIONAL_CONTEXT, DIRECTION.PUT, 2, 16)
+const specs = [
+  ["hammer","Hammer","REJECTION","CALL",1,12], ["invertedHammer","Inverted Hammer","REJECTION","CALL",1,9,{confirmationRequired:true}], ["hangingMan","Hanging Man","REJECTION","PUT",1,10], ["shootingStar","Shooting Star","REJECTION","PUT",1,12], ["bullishPinBar","Bullish Pin Bar","REJECTION","CALL",1,11], ["bearishPinBar","Bearish Pin Bar","REJECTION","PUT",1,11], ["longLowerShadow","Long Lower Shadow","REJECTION","CALL",1,7], ["longUpperShadow","Long Upper Shadow","REJECTION","PUT",1,7],
+  ["bullishMarubozu","Bullish Marubozu","BULLISH_CONTINUATION","CALL",1,9], ["bearishMarubozu","Bearish Marubozu","BEARISH_CONTINUATION","PUT",1,9], ["doji","Doji","INDECISION","NEUTRAL",1,6], ["longLeggedDoji","Long Legged Doji","INDECISION","NEUTRAL",1,7], ["dragonflyDoji","Dragonfly Doji","REJECTION","CALL",1,9], ["gravestoneDoji","Gravestone Doji","REJECTION","PUT",1,9], ["spinningTop","Spinning Top","INDECISION","NEUTRAL",1,5], ["spinningTopWhite","Spinning Top White","INDECISION","NEUTRAL",1,5], ["spinningTopBlack","Spinning Top Black","INDECISION","NEUTRAL",1,5], ["highWave","High Wave","INDECISION","NEUTRAL",1,6],
+  ["bullishEngulfing","Bullish Engulfing","BULLISH_REVERSAL","CALL",2,16], ["bearishEngulfing","Bearish Engulfing","BEARISH_REVERSAL","PUT",2,16], ["bullishHarami","Bullish Harami","BULLISH_REVERSAL","CALL",2,9,{confirmationRequired:true}], ["bearishHarami","Bearish Harami","BEARISH_REVERSAL","PUT",2,9,{confirmationRequired:true}], ["haramiCrossBullish","Harami Cross Bullish","BULLISH_REVERSAL","CALL",2,11,{confirmationRequired:true}], ["haramiCrossBearish","Harami Cross Bearish","BEARISH_REVERSAL","PUT",2,11,{confirmationRequired:true}], ["piercingLine","Piercing Line","BULLISH_REVERSAL","CALL",2,12], ["darkCloudCover","Dark Cloud Cover","BEARISH_REVERSAL","PUT",2,12], ["tweezerBottom","Tweezer Bottom","BULLISH_REVERSAL","CALL",2,10], ["tweezerTop","Tweezer Top","BEARISH_REVERSAL","PUT",2,10], ["matchingLow","Matching Low","BULLISH_REVERSAL","CALL",2,8], ["matchingHigh","Matching High","BEARISH_REVERSAL","PUT",2,8], ["bullishKicker","Bullish Kicker","BULLISH_REVERSAL","CALL",2,15,{gapRequired:true}], ["bearishKicker","Bearish Kicker","BEARISH_REVERSAL","PUT",2,15,{gapRequired:true}], ["onNeck","On Neck","BEARISH_CONTINUATION","PUT",2,8], ["inNeck","In Neck","BEARISH_CONTINUATION","PUT",2,8], ["thrustingPattern","Thrusting Pattern","BEARISH_CONTINUATION","PUT",2,8], ["separatingLinesBullish","Separating Lines Bullish","BULLISH_CONTINUATION","CALL",2,9], ["separatingLinesBearish","Separating Lines Bearish","BEARISH_CONTINUATION","PUT",2,9], ["counterattackBullish","Counterattack Bullish","BULLISH_REVERSAL","CALL",2,9], ["counterattackBearish","Counterattack Bearish","BEARISH_REVERSAL","PUT",2,9], ["insideBarBullish","Inside Bar Bullish","BULLISH_CONTINUATION","CALL",2,7], ["insideBarBearish","Inside Bar Bearish","BEARISH_CONTINUATION","PUT",2,7], ["bullishOutsideBar","Bullish Outside Bar","BULLISH_REVERSAL","CALL",2,12], ["bearishOutsideBar","Bearish Outside Bar","BEARISH_REVERSAL","PUT",2,12],
+  ["morningStar","Morning Star","BULLISH_REVERSAL","CALL",3,18], ["eveningStar","Evening Star","BEARISH_REVERSAL","PUT",3,18], ["morningDojiStar","Morning Doji Star","BULLISH_REVERSAL","CALL",3,19], ["eveningDojiStar","Evening Doji Star","BEARISH_REVERSAL","PUT",3,19], ["threeWhiteSoldiers","Three White Soldiers","BULLISH_CONTINUATION","CALL",3,18], ["threeBlackCrows","Three Black Crows","BEARISH_CONTINUATION","PUT",3,18], ["threeInsideUp","Three Inside Up","BULLISH_REVERSAL","CALL",3,14], ["threeInsideDown","Three Inside Down","BEARISH_REVERSAL","PUT",3,14], ["threeOutsideUp","Three Outside Up","BULLISH_REVERSAL","CALL",3,15], ["threeOutsideDown","Three Outside Down","BEARISH_REVERSAL","PUT",3,15], ["threeLineStrikeBullish","Three Line Strike Bullish","BULLISH_REVERSAL","CALL",3,14], ["threeLineStrikeBearish","Three Line Strike Bearish","BEARISH_REVERSAL","PUT",3,14], ["threeStarsInSouth","Three Stars in the South","BULLISH_REVERSAL","CALL",3,13], ["threeAdvancingWhiteSoldiers","Three Advancing White Soldiers","BULLISH_CONTINUATION","CALL",3,18], ["threeDescendingCrows","Three Descending Crows","BEARISH_CONTINUATION","PUT",3,18], ["bullishAbandonedBaby","Bullish Abandoned Baby","BULLISH_REVERSAL","CALL",3,16,{gapRequired:true}], ["bearishAbandonedBaby","Bearish Abandoned Baby","BEARISH_REVERSAL","PUT",3,16,{gapRequired:true}], ["triStarBullish","Tri-Star Bullish","BULLISH_REVERSAL","CALL",3,13], ["triStarBearish","Tri-Star Bearish","BEARISH_REVERSAL","PUT",3,13],
+  ["risingThreeMethods","Rising Three Methods","BULLISH_CONTINUATION","CALL",5,18], ["fallingThreeMethods","Falling Three Methods","BEARISH_CONTINUATION","PUT",5,18], ["bullishFlagCandleSequence","Bullish Flag Candle Sequence","BULLISH_CONTINUATION","CALL",5,14], ["bearishFlagCandleSequence","Bearish Flag Candle Sequence","BEARISH_CONTINUATION","PUT",5,14], ["bullishConsolidationBreak","Bullish Consolidation Break","BULLISH_CONTINUATION","CALL",5,13], ["bearishConsolidationBreak","Bearish Consolidation Break","BEARISH_CONTINUATION","PUT",5,13], ["fiveCandleBreakoutBullish","Five Candle Breakout Bullish","BULLISH_CONTINUATION","CALL",5,13], ["fiveCandleBreakoutBearish","Five Candle Breakout Bearish","BEARISH_CONTINUATION","PUT",5,13],
+  ["firstRetestBullishConfirmation","First Retest Bullish Confirmation","INSTITUTIONAL_CONTEXT","CALL",2,16], ["firstRetestBearishConfirmation","First Retest Bearish Confirmation","INSTITUTIONAL_CONTEXT","PUT",2,16]
 ];
-
+const candlestickPatternRegistry = specs.map(([name, displayName, family, direction, candles, weight, options]) => pattern(name, displayName, FAMILIES[family], DIRECTION[direction], candles, weight, options));
 module.exports = { candlestickPatternRegistry, FAMILIES, DIRECTION };
