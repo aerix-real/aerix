@@ -62,9 +62,9 @@ test("detects morning star", () => {
   const candles = [
     candle(105, 106, 102, 103),
     candle(103, 104, 100, 101),
-    candle(101, 101.5, 100.5, 101.1),
-    candle(101.2, 105.5, 101, 105),
-    candle(105, 106, 104, 105.5)
+    candle(101, 102, 100.5, 101),
+    candle(101, 101.5, 100.8, 101.1),
+    candle(101.2, 105.5, 101, 105)
   ];
 
   const patterns = detectCandlestickPatterns(candles);
